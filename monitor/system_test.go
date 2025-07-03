@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -25,6 +26,15 @@ func (m *MockCPUUsageProvider) Percent(interval time.Duration, percpu bool) ([]f
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]float64), args.Error(1)
+}
+
+// Times is a mock implementation of the Times method
+func (m *MockCPUUsageProvider) Times(percpu bool) ([]cpu.TimesStat, error) {
+	args := m.Called(percpu)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]cpu.TimesStat), args.Error(1)
 }
 
 // MockMemoryUsageProvider is a mock implementation of MemoryUsageProvider
@@ -62,6 +72,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return([]float64{30.0}, nil)
+				m.On("Times", false).Return([]cpu.TimesStat{{
+					User:   100,
+					System: 50,
+					Idle:   850,
+				}}, nil)
 			},
 			setupMemMock: func(m *MockMemoryUsageProvider) {
 				m.On("VirtualMemory").Return(&mem.VirtualMemoryStat{
@@ -88,6 +103,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return([]float64{70.0}, nil)
+				m.On("Times", false).Return([]cpu.TimesStat{{
+					User:   350,
+					System: 350,
+					Idle:   300,
+				}}, nil)
 			},
 			setupMemMock: func(m *MockMemoryUsageProvider) {
 				m.On("VirtualMemory").Return(&mem.VirtualMemoryStat{
@@ -114,6 +134,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return([]float64{90.0}, nil)
+				m.On("Times", false).Return([]cpu.TimesStat{{
+					User:   450,
+					System: 450,
+					Idle:   100,
+				}}, nil)
 			},
 			setupMemMock: func(m *MockMemoryUsageProvider) {
 				m.On("VirtualMemory").Return(&mem.VirtualMemoryStat{
@@ -140,6 +165,7 @@ func TestSystemMonitor_Check(t *testing.T) {
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return(nil, errors.New("failed to get CPU usage"))
+				m.On("Times", false).Return(nil, errors.New("failed to get CPU times"))
 			},
 			setupMemMock: func(m *MockMemoryUsageProvider) {
 				// Memory provider should not be called if CPU check fails
@@ -157,6 +183,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return([]float64{30.0}, nil)
+				m.On("Times", false).Return([]cpu.TimesStat{{
+					User:   100,
+					System: 50,
+					Idle:   850,
+				}}, nil)
 			},
 			setupMemMock: func(m *MockMemoryUsageProvider) {
 				m.On("VirtualMemory").Return(nil, errors.New("failed to get memory usage"))
@@ -174,6 +205,7 @@ func TestSystemMonitor_Check(t *testing.T) {
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return([]float64{}, nil)
+				m.On("Times", false).Return([]cpu.TimesStat{}, nil)
 			},
 			setupMemMock: func(m *MockMemoryUsageProvider) {
 				// Memory provider should not be called if CPU check fails

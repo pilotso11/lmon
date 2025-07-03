@@ -93,6 +93,33 @@ All configuration options can be set using environment variables with the prefix
 
 ### As a Systemd Service
 
+#### Automatic Installation
+
+lmon provides built-in commands to install and uninstall the systemd service:
+
+```bash
+# Install the service (requires root privileges)
+sudo ./lmon --install-service
+
+# Uninstall the service (requires root privileges)
+sudo ./lmon --uninstall-service
+```
+
+The install command will:
+1. Copy the binary to `/opt/lmon/lmon`
+2. Copy the systemd service file to `/etc/systemd/system/lmon.service`
+3. Create a user and group for the service (`lmon`)
+4. Create the configuration directory at `/etc/lmon`
+5. Enable the service
+
+After installation, you'll need to:
+1. Copy your configuration file to `/etc/lmon/config.yaml`
+2. Start the service with `sudo systemctl start lmon`
+
+#### Manual Installation
+
+If you prefer to install the service manually:
+
 1. Copy the binary to `/opt/lmon/lmon`
 2. Copy the systemd service file to `/etc/systemd/system/lmon.service`
 3. Create a user and group for the service: `sudo useradd -r -s /bin/false lmon`
@@ -107,9 +134,82 @@ sudo systemctl start lmon
 
 ### Using Docker
 
+Basic usage:
 ```bash
 docker run -p 8080:8080 -v /path/to/config:/etc/lmon lmon
 ```
+
+To get accurate system-wide CPU and memory metrics (not just container metrics):
+```bash
+docker run -p 8080:8080 -v /path/to/config:/etc/lmon --pid=host --privileged -v /proc:/proc:ro lmon
+```
+
+The `--pid=host` and `--privileged` flags allow the container to access the host's process namespace, and mounting `/proc` gives access to the host's process information.
+
+### Using Docker Compose
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3'
+
+services:
+  lmon:
+    image: lmon
+    # Alternatively, build from source:
+    # build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/etc/lmon
+      # Mount proc for system-wide metrics:
+      - /proc:/proc:ro
+    environment:
+      - LMON_WEB_HOST=0.0.0.0
+      - LMON_WEB_PORT=8080
+      # Optional: Configure webhook
+      # - LMON_WEBHOOK_ENABLED=true
+      # - LMON_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
+    # For system-wide metrics:
+    pid: host
+    privileged: true
+    restart: unless-stopped
+```
+
+Run with:
+
+```bash
+docker-compose up -d
+```
+
+This configuration includes all necessary settings for accurate system monitoring and provides a persistent service that restarts automatically.
+
+### Using Podman
+
+Podman is a daemonless container engine that can be used as a drop-in replacement for Docker. You can run lmon with Podman using similar commands:
+
+Basic usage:
+```bash
+podman build -t lmon .
+podman run -p 8080:8080 -v /path/to/config:/etc/lmon lmon
+```
+
+To get accurate system-wide CPU and memory metrics:
+```bash
+podman run -p 8080:8080 -v /path/to/config:/etc/lmon --pid=host --privileged -v /proc:/proc:ro lmon
+```
+
+For rootless Podman, you may need to add `--userns=keep-id` to preserve user permissions:
+```bash
+podman run --userns=keep-id -p 8080:8080 -v /path/to/config:/etc/lmon --pid=host --privileged -v /proc:/proc:ro lmon
+```
+
+You can also use Podman Compose with the same docker-compose.yml file:
+```bash
+podman-compose up -d
+```
+
+Note: Depending on your system configuration, you might need to adjust SELinux settings or use additional flags for volume mounts when using Podman.
 
 ## Web UI
 

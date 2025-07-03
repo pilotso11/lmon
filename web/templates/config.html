@@ -211,16 +211,16 @@
             const toastEl = document.getElementById('toast');
             const toastTitle = document.getElementById('toast-title');
             const toastMessage = document.getElementById('toast-message');
-            
+
             toastTitle.textContent = title;
             toastMessage.textContent = message;
-            
+
             if (isError) {
                 toastEl.classList.add('bg-danger', 'text-white');
             } else {
                 toastEl.classList.remove('bg-danger', 'text-white');
             }
-            
+
             const toast = new bootstrap.Toast(toastEl);
             toast.show();
         }
@@ -232,13 +232,13 @@
                 .then(config => {
                     // Render disk config items
                     renderDiskConfig(config.monitoring.disk);
-                    
+
                     // Render system config
                     renderSystemConfig(config.monitoring.system);
-                    
+
                     // Render health check config items
                     renderHealthConfig(config.monitoring.healthchecks);
-                    
+
                     // Render webhook config
                     renderWebhookConfig(config.webhook);
                 })
@@ -254,9 +254,9 @@
                 document.getElementById('disk-config-items').innerHTML = '<div class="text-center">No disk monitors configured</div>';
                 return;
             }
-            
+
             let html = '';
-            
+
             diskItems.forEach(item => {
                 html += `
                     <div class="config-item">
@@ -273,9 +273,9 @@
                     </div>
                 `;
             });
-            
+
             document.getElementById('disk-config-items').innerHTML = html;
-            
+
             // Add delete event listeners
             document.querySelectorAll('.delete-btn[data-type="disk"]').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -291,37 +291,37 @@
                 document.getElementById('system-config-items').innerHTML = '<div class="text-center">No system monitoring configured</div>';
                 return;
             }
-            
+
             let html = `
                 <div class="config-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <span class="material-icons item-icon">${systemConfig.cpu_icon || 'memory'}</span>
+                            <span class="material-icons item-icon">${systemConfig.cpuicon || 'memory'}</span>
                             <strong>CPU Monitoring</strong>
                         </div>
                         <div>
-                            <span>Threshold: ${systemConfig.cpu_threshold}%</span>
+                            <span>Threshold: ${systemConfig.cputhreshold}%</span>
                         </div>
                     </div>
                 </div>
                 <div class="config-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <span class="material-icons item-icon">${systemConfig.memory_icon || 'memory'}</span>
+                            <span class="material-icons item-icon">${systemConfig.memoryicon || 'memory'}</span>
                             <strong>Memory Monitoring</strong>
                         </div>
                         <div>
-                            <span>Threshold: ${systemConfig.memory_threshold}%</span>
+                            <span>Threshold: ${systemConfig.memorythreshold}%</span>
                         </div>
                     </div>
                 </div>
             `;
-            
+
             document.getElementById('system-config-items').innerHTML = html;
-            
+
             // Set form values
-            document.getElementById('cpu-threshold').value = systemConfig.cpu_threshold;
-            document.getElementById('memory-threshold').value = systemConfig.memory_threshold;
+            document.getElementById('cpu-threshold').value = systemConfig.cputhreshold;
+            document.getElementById('memory-threshold').value = systemConfig.memorythreshold;
         }
 
         // Function to render health check config items
@@ -330,9 +330,9 @@
                 document.getElementById('health-config-items').innerHTML = '<div class="text-center">No health checks configured</div>';
                 return;
             }
-            
+
             let html = '';
-            
+
             healthItems.forEach(item => {
                 html += `
                     <div class="config-item">
@@ -351,9 +351,9 @@
                     </div>
                 `;
             });
-            
+
             document.getElementById('health-config-items').innerHTML = html;
-            
+
             // Add delete event listeners
             document.querySelectorAll('.delete-btn[data-type="healthcheck"]').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -369,7 +369,7 @@
                 document.getElementById('webhook-config').innerHTML = '<div class="text-center">No webhook configured</div>';
                 return;
             }
-            
+
             let html = `
                 <div class="config-item">
                     <div class="d-flex justify-content-between align-items-center">
@@ -386,9 +386,9 @@
                     ${webhookConfig.url ? `<div class="mt-2"><small class="text-muted">${webhookConfig.url}</small></div>` : ''}
                 </div>
             `;
-            
+
             document.getElementById('webhook-config').innerHTML = html;
-            
+
             // Set form values
             document.getElementById('webhook-enabled').checked = webhookConfig.enabled;
             document.getElementById('webhook-url').value = webhookConfig.url || '';
@@ -399,7 +399,7 @@
             if (!confirm(`Are you sure you want to delete this ${type} monitor?`)) {
                 return;
             }
-            
+
             fetch(`/api/config/${type}/${id}`, {
                 method: 'DELETE'
             })
@@ -423,17 +423,17 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Load configuration
             loadConfig();
-            
+
             // Add disk form submission
             document.getElementById('add-disk-form').addEventListener('submit', function(e) {
                 e.preventDefault();
-                
+
                 const diskConfig = {
                     path: document.getElementById('disk-path').value,
                     threshold: parseInt(document.getElementById('disk-threshold').value),
                     icon: document.getElementById('disk-icon').value
                 };
-                
+
                 fetch('/api/config/disk', {
                     method: 'POST',
                     headers: {
@@ -457,18 +457,18 @@
                     showToast('Error', 'Failed to add disk monitor', true);
                 });
             });
-            
+
             // Update system form submission
             document.getElementById('update-system-form').addEventListener('submit', function(e) {
                 e.preventDefault();
-                
+
                 fetch('/api/config')
                     .then(response => response.json())
                     .then(config => {
                         // Update system thresholds
-                        config.monitoring.system.cpu_threshold = parseInt(document.getElementById('cpu-threshold').value);
-                        config.monitoring.system.memory_threshold = parseInt(document.getElementById('memory-threshold').value);
-                        
+                        config.monitoring.system.cputhreshold = parseInt(document.getElementById('cpu-threshold').value);
+                        config.monitoring.system.memorythreshold = parseInt(document.getElementById('memory-threshold').value);
+
                         // Save updated config
                         return fetch('/api/config', {
                             method: 'POST',
@@ -493,11 +493,11 @@
                         showToast('Error', 'Failed to update system thresholds', true);
                     });
             });
-            
+
             // Add health check form submission
             document.getElementById('add-health-form').addEventListener('submit', function(e) {
                 e.preventDefault();
-                
+
                 const healthConfig = {
                     name: document.getElementById('health-name').value,
                     url: document.getElementById('health-url').value,
@@ -505,7 +505,7 @@
                     timeout: parseInt(document.getElementById('health-timeout').value),
                     icon: document.getElementById('health-icon').value
                 };
-                
+
                 fetch('/api/config/healthcheck', {
                     method: 'POST',
                     headers: {
@@ -529,16 +529,16 @@
                     showToast('Error', 'Failed to add health check', true);
                 });
             });
-            
+
             // Update webhook form submission
             document.getElementById('update-webhook-form').addEventListener('submit', function(e) {
                 e.preventDefault();
-                
+
                 const webhookConfig = {
                     enabled: document.getElementById('webhook-enabled').checked,
                     url: document.getElementById('webhook-url').value
                 };
-                
+
                 fetch('/api/config/webhook', {
                     method: 'POST',
                     headers: {

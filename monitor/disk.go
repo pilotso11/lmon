@@ -85,7 +85,7 @@ func (m *DiskMonitor) Check() ([]*Item, error) {
 			Unit:      "%",
 			Icon:      diskCfg.Icon,
 			LastCheck: time.Now(),
-			Message:   fmt.Sprintf("%.1f%% used (%.1f GB / %.1f GB)", usagePercent, float64(usage.Used)/1024/1024/1024, float64(usage.Total)/1024/1024/1024),
+			Message:   fmt.Sprintf("%.2f%% used (%.1f GB / %.1f GB)", usagePercent, float64(usage.Used)/1024/1024/1024, float64(usage.Total)/1024/1024/1024),
 		}
 
 		items = append(items, item)
