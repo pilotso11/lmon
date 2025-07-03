@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/material-icons@1.13.8/iconfont/material-icons.min.css" rel="stylesheet">
+    <style>
+        .card {
+            margin-bottom: 20px;
+        }
+        .card-header {
+            font-weight: bold;
+        }
+        .item-icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        .config-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+        .config-item:hover {
+            background-color: #f8f9fa;
+        }
+        .delete-btn {
+            color: #dc3545;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <span class="material-icons">monitoring</span>
+                lmon - Lightweight Monitoring
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/config">Configuration</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h1 class="mb-4">Configuration</h1>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Disk Monitoring</div>
+                    <div class="card-body">
+                        <div id="disk-config-items">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        <h5>Add Disk Monitor</h5>
+                        <form id="add-disk-form">
+                            <div class="mb-3">
+                                <label for="disk-path" class="form-label">Path</label>
+                                <input type="text" class="form-control" id="disk-path" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="disk-threshold" class="form-label">Threshold (%)</label>
+                                <input type="number" class="form-control" id="disk-threshold" min="1" max="100" value="80" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="disk-icon" class="form-label">Icon (Material Icon name)</label>
+                                <input type="text" class="form-control" id="disk-icon" value="storage">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add Disk Monitor</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">System Monitoring</div>
+                    <div class="card-body">
+                        <div id="system-config-items">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        <h5>Update System Thresholds</h5>
+                        <form id="update-system-form">
+                            <div class="mb-3">
+                                <label for="cpu-threshold" class="form-label">CPU Threshold (%)</label>
+                                <input type="number" class="form-control" id="cpu-threshold" min="1" max="100" value="80" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="memory-threshold" class="form-label">Memory Threshold (%)</label>
+                                <input type="number" class="form-control" id="memory-threshold" min="1" max="100" value="80" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Update System Thresholds</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Health Checks</div>
+                    <div class="card-body">
+                        <div id="health-config-items">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        <h5>Add Health Check</h5>
+                        <form id="add-health-form">
+                            <div class="mb-3">
+                                <label for="health-name" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="health-name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="health-url" class="form-label">URL</label>
+                                <input type="url" class="form-control" id="health-url" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="health-interval" class="form-label">Check Interval (seconds)</label>
+                                <input type="number" class="form-control" id="health-interval" min="5" value="60" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="health-timeout" class="form-label">Timeout (seconds)</label>
+                                <input type="number" class="form-control" id="health-timeout" min="1" value="10" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="health-icon" class="form-label">Icon (Material Icon name)</label>
+                                <input type="text" class="form-control" id="health-icon" value="health_and_safety">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add Health Check</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Webhook Notifications</div>
+                    <div class="card-body">
+                        <div id="webhook-config">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        <h5>Update Webhook</h5>
+                        <form id="update-webhook-form">
+                            <div class="mb-3 form-check">
+                                <input type="checkbox" class="form-check-input" id="webhook-enabled">
+                                <label class="form-check-label" for="webhook-enabled">Enable Webhook Notifications</label>
+                            </div>
+                            <div class="mb-3">
+                                <label for="webhook-url" class="form-label">Webhook URL</label>
+                                <input type="url" class="form-control" id="webhook-url">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Update Webhook</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success/Error Toast -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toast-title">Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" id="toast-message">
+                <!-- Message will be set by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Function to show toast notification
+        function showToast(title, message, isError = false) {
+            const toastEl = document.getElementById('toast');
+            const toastTitle = document.getElementById('toast-title');
+            const toastMessage = document.getElementById('toast-message');
+            
+            toastTitle.textContent = title;
+            toastMessage.textContent = message;
+            
+            if (isError) {
+                toastEl.classList.add('bg-danger', 'text-white');
+            } else {
+                toastEl.classList.remove('bg-danger', 'text-white');
+            }
+            
+            const toast = new bootstrap.Toast(toastEl);
+            toast.show();
+        }
+
+        // Function to load configuration
+        function loadConfig() {
+            fetch('/api/config')
+                .then(response => response.json())
+                .then(config => {
+                    // Render disk config items
+                    renderDiskConfig(config.monitoring.disk);
+                    
+                    // Render system config
+                    renderSystemConfig(config.monitoring.system);
+                    
+                    // Render health check config items
+                    renderHealthConfig(config.monitoring.healthchecks);
+                    
+                    // Render webhook config
+                    renderWebhookConfig(config.webhook);
+                })
+                .catch(error => {
+                    console.error('Error loading configuration:', error);
+                    showToast('Error', 'Failed to load configuration', true);
+                });
+        }
+
+        // Function to render disk config items
+        function renderDiskConfig(diskItems) {
+            if (!diskItems || diskItems.length === 0) {
+                document.getElementById('disk-config-items').innerHTML = '<div class="text-center">No disk monitors configured</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            diskItems.forEach(item => {
+                html += `
+                    <div class="config-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="material-icons item-icon">${item.icon || 'storage'}</span>
+                                <strong>${item.path}</strong>
+                            </div>
+                            <div>
+                                <span>Threshold: ${item.threshold}%</span>
+                                <span class="material-icons delete-btn ms-2" data-type="disk" data-id="${item.path}">delete</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('disk-config-items').innerHTML = html;
+            
+            // Add delete event listeners
+            document.querySelectorAll('.delete-btn[data-type="disk"]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const id = this.getAttribute('data-id');
+                    deleteMonitor('disk', id);
+                });
+            });
+        }
+
+        // Function to render system config
+        function renderSystemConfig(systemConfig) {
+            if (!systemConfig) {
+                document.getElementById('system-config-items').innerHTML = '<div class="text-center">No system monitoring configured</div>';
+                return;
+            }
+            
+            let html = `
+                <div class="config-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="material-icons item-icon">${systemConfig.cpu_icon || 'memory'}</span>
+                            <strong>CPU Monitoring</strong>
+                        </div>
+                        <div>
+                            <span>Threshold: ${systemConfig.cpu_threshold}%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="config-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="material-icons item-icon">${systemConfig.memory_icon || 'memory'}</span>
+                            <strong>Memory Monitoring</strong>
+                        </div>
+                        <div>
+                            <span>Threshold: ${systemConfig.memory_threshold}%</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('system-config-items').innerHTML = html;
+            
+            // Set form values
+            document.getElementById('cpu-threshold').value = systemConfig.cpu_threshold;
+            document.getElementById('memory-threshold').value = systemConfig.memory_threshold;
+        }
+
+        // Function to render health check config items
+        function renderHealthConfig(healthItems) {
+            if (!healthItems || healthItems.length === 0) {
+                document.getElementById('health-config-items').innerHTML = '<div class="text-center">No health checks configured</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            healthItems.forEach(item => {
+                html += `
+                    <div class="config-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="material-icons item-icon">${item.icon || 'health_and_safety'}</span>
+                                <strong>${item.name}</strong>
+                            </div>
+                            <div>
+                                <span class="material-icons delete-btn" data-type="healthcheck" data-id="${item.name}">delete</span>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">${item.url}</small>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('health-config-items').innerHTML = html;
+            
+            // Add delete event listeners
+            document.querySelectorAll('.delete-btn[data-type="healthcheck"]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const id = this.getAttribute('data-id');
+                    deleteMonitor('healthcheck', id);
+                });
+            });
+        }
+
+        // Function to render webhook config
+        function renderWebhookConfig(webhookConfig) {
+            if (!webhookConfig) {
+                document.getElementById('webhook-config').innerHTML = '<div class="text-center">No webhook configured</div>';
+                return;
+            }
+            
+            let html = `
+                <div class="config-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="material-icons item-icon">notifications</span>
+                            <strong>Webhook Notifications</strong>
+                        </div>
+                        <div>
+                            <span class="badge ${webhookConfig.enabled ? 'bg-success' : 'bg-secondary'}">
+                                ${webhookConfig.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                        </div>
+                    </div>
+                    ${webhookConfig.url ? `<div class="mt-2"><small class="text-muted">${webhookConfig.url}</small></div>` : ''}
+                </div>
+            `;
+            
+            document.getElementById('webhook-config').innerHTML = html;
+            
+            // Set form values
+            document.getElementById('webhook-enabled').checked = webhookConfig.enabled;
+            document.getElementById('webhook-url').value = webhookConfig.url || '';
+        }
+
+        // Function to delete a monitor
+        function deleteMonitor(type, id) {
+            if (!confirm(`Are you sure you want to delete this ${type} monitor?`)) {
+                return;
+            }
+            
+            fetch(`/api/config/${type}/${id}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to delete ${type} monitor`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                showToast('Success', data.message);
+                loadConfig();
+            })
+            .catch(error => {
+                console.error('Error deleting monitor:', error);
+                showToast('Error', `Failed to delete ${type} monitor`, true);
+            });
+        }
+
+        // Document ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load configuration
+            loadConfig();
+            
+            // Add disk form submission
+            document.getElementById('add-disk-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const diskConfig = {
+                    path: document.getElementById('disk-path').value,
+                    threshold: parseInt(document.getElementById('disk-threshold').value),
+                    icon: document.getElementById('disk-icon').value
+                };
+                
+                fetch('/api/config/disk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(diskConfig)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to add disk monitor');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showToast('Success', data.message);
+                    loadConfig();
+                    document.getElementById('add-disk-form').reset();
+                })
+                .catch(error => {
+                    console.error('Error adding disk monitor:', error);
+                    showToast('Error', 'Failed to add disk monitor', true);
+                });
+            });
+            
+            // Update system form submission
+            document.getElementById('update-system-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                fetch('/api/config')
+                    .then(response => response.json())
+                    .then(config => {
+                        // Update system thresholds
+                        config.monitoring.system.cpu_threshold = parseInt(document.getElementById('cpu-threshold').value);
+                        config.monitoring.system.memory_threshold = parseInt(document.getElementById('memory-threshold').value);
+                        
+                        // Save updated config
+                        return fetch('/api/config', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(config)
+                        });
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to update system thresholds');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        showToast('Success', data.message);
+                        loadConfig();
+                    })
+                    .catch(error => {
+                        console.error('Error updating system thresholds:', error);
+                        showToast('Error', 'Failed to update system thresholds', true);
+                    });
+            });
+            
+            // Add health check form submission
+            document.getElementById('add-health-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const healthConfig = {
+                    name: document.getElementById('health-name').value,
+                    url: document.getElementById('health-url').value,
+                    interval: parseInt(document.getElementById('health-interval').value),
+                    timeout: parseInt(document.getElementById('health-timeout').value),
+                    icon: document.getElementById('health-icon').value
+                };
+                
+                fetch('/api/config/healthcheck', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(healthConfig)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to add health check');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showToast('Success', data.message);
+                    loadConfig();
+                    document.getElementById('add-health-form').reset();
+                })
+                .catch(error => {
+                    console.error('Error adding health check:', error);
+                    showToast('Error', 'Failed to add health check', true);
+                });
+            });
+            
+            // Update webhook form submission
+            document.getElementById('update-webhook-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const webhookConfig = {
+                    enabled: document.getElementById('webhook-enabled').checked,
+                    url: document.getElementById('webhook-url').value
+                };
+                
+                fetch('/api/config/webhook', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(webhookConfig)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to update webhook');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showToast('Success', data.message);
+                    loadConfig();
+                })
+                .catch(error => {
+                    console.error('Error updating webhook:', error);
+                    showToast('Error', 'Failed to update webhook', true);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
