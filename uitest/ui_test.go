@@ -16,7 +16,7 @@ import (
 // TestUI runs UI tests for the lmon web interface
 func TestUI(t *testing.T) {
 	// Launch a new browser
-	launch := launcher.New().Headless(true)
+	launch := launcher.New().Headless(true).Set("no-sandbox")
 	url, err := launch.Launch()
 	if err != nil {
 		t.Fatalf("Failed to launch browser: %v", err)

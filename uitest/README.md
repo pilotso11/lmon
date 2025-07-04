@@ -72,3 +72,13 @@ launcher := launcher.New().Headless(false)
 ```
 
 This will open a visible browser window during test execution.
+
+## Running in Restricted Environments
+
+When running in environments with restricted permissions (like CI systems or containers), you may encounter sandbox-related errors. In these cases, add the `--no-sandbox` flag:
+
+```
+launcher := launcher.New().Headless(true).Set("no-sandbox")
+```
+
+This disables the Chrome sandbox, which is less secure but allows the browser to run in restricted environments.

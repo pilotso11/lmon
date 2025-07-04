@@ -22,9 +22,6 @@ jobs:
     - name: Build
       run: go build -v ./...
 
-    - name: Install rod
-      run: go install github.com/go-rod/rod@latest
-
     - name: Test
       run: go test -v -coverprofile=coverage.out ./...
 
