@@ -161,11 +161,17 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 		return
 	}
 
+	// Update the server's in-memory configuration
+	s.config = &cfg
+
 	// Save configuration
-	if err := config.Save(&cfg, "config.yaml"); err != nil {
+	if err := config.Save(s.config, "config.yaml"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
 		return
 	}
+
+	// Trigger immediate refresh of all checks to apply new thresholds
+	s.monitor.RefreshChecks()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Configuration updated successfully"})
 }
@@ -187,6 +193,9 @@ func (s *Server) handleAddDiskMonitor(c *gin.Context) {
 		return
 	}
 
+	// Trigger immediate refresh of all checks to apply new disk monitor
+	s.monitor.RefreshChecks()
+
 	c.JSON(http.StatusOK, gin.H{"message": "Disk monitor added successfully"})
 }
 
@@ -207,6 +216,9 @@ func (s *Server) handleAddHealthCheck(c *gin.Context) {
 		return
 	}
 
+	// Trigger immediate refresh of all checks to apply new health check
+	s.monitor.RefreshChecks()
+
 	c.JSON(http.StatusOK, gin.H{"message": "Health check added successfully"})
 }
 
@@ -226,6 +238,9 @@ func (s *Server) handleUpdateWebhook(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
 		return
 	}
+
+	// Trigger immediate refresh of all checks to apply new webhook configuration
+	s.monitor.RefreshChecks()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Webhook configuration updated successfully"})
 }
@@ -262,6 +277,9 @@ func (s *Server) handleDeleteMonitor(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
 		return
 	}
+
+	// Trigger immediate refresh of all checks to apply monitor deletion
+	s.monitor.RefreshChecks()
 
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%s monitor deleted successfully", monitorType)})
 }

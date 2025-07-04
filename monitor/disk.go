@@ -150,7 +150,7 @@ func (m *DiskMonitor) Check() ([]*Item, error) {
 
 			item := &Item{
 				ID:        fmt.Sprintf("disk-%s", diskCfg.Path),
-				Name:      fmt.Sprintf("Disk (%s)", name),
+				Name:      fmt.Sprintf("%s (%s)", name, diskCfg.Path),
 				Type:      "disk",
 				Status:    StatusCritical,
 				Value:     0,
@@ -203,7 +203,7 @@ func (m *DiskMonitor) Check() ([]*Item, error) {
 
 		item := &Item{
 			ID:        fmt.Sprintf("disk-%s", diskCfg.Path),
-			Name:      fmt.Sprintf("Disk (%s)", name),
+			Name:      fmt.Sprintf("%s (%s)", name, diskCfg.Path),
 			Type:      "disk",
 			Status:    status,
 			Value:     usagePercent,

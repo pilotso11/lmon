@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -113,6 +114,41 @@ func (s *Service) Stop() {
 	s.cancel()
 }
 
+// RefreshChecks triggers immediate checks for all monitors
+func (s *Service) RefreshChecks() {
+	log.Println("Refreshing all checks")
+
+	// Perform disk checks
+	items, err := s.diskMonitor.Check()
+	if err != nil {
+		log.Printf("Disk monitoring error during refresh: %v", err)
+	} else {
+		for _, item := range items {
+			s.UpdateItem(item)
+		}
+	}
+
+	// Perform system checks
+	items, err = s.sysMonitor.Check()
+	if err != nil {
+		log.Printf("System monitoring error during refresh: %v", err)
+	} else {
+		for _, item := range items {
+			s.UpdateItem(item)
+		}
+	}
+
+	// Perform health checks
+	items, err = s.healthMonitor.Check()
+	if err != nil {
+		log.Printf("Health check monitoring error during refresh: %v", err)
+	} else {
+		for _, item := range items {
+			s.UpdateItem(item)
+		}
+	}
+}
+
 // GetItems returns all monitored items
 func (s *Service) GetItems() []*Item {
 	s.mutex.RLock()
@@ -122,6 +158,11 @@ func (s *Service) GetItems() []*Item {
 	for _, item := range s.items {
 		items = append(items, item)
 	}
+
+	// Sort items by ID to ensure consistent order
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].ID < items[j].ID
+	})
 
 	return items
 }

@@ -338,7 +338,8 @@ func TestDiskMonitor_Check(t *testing.T) {
 			// Check specific items
 			for _, item := range items {
 				assert.Contains(t, item.ID, "disk-")
-				assert.Contains(t, item.Name, "Disk")
+				// Name format changed from "Disk (name)" to "Name (path)"
+				assert.Contains(t, item.Name, "(")
 				assert.Equal(t, "disk", item.Type)
 				assert.NotEmpty(t, item.Message)
 			}
