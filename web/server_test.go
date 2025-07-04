@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -288,6 +289,16 @@ func TestServer_HandleUpdateConfig(t *testing.T) {
 
 	// Create server with mock service
 	server := NewServer(cfg, mockService)
+
+	// Create a temporary file for the config
+	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
+	require.NoError(t, err)
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(tmpfile.Name()) // Clean up the temporary file when done
+
+	// Set the config path to the temporary file
+	server.SetConfigPath(tmpfile.Name())
 
 	// Create a test HTTP recorder and context
 	w := httptest.NewRecorder()

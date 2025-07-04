@@ -19,6 +19,7 @@ type Server struct {
 	router     *gin.Engine
 	httpServer *http.Server
 	ctx        context.Context
+	configPath string
 }
 
 // NewServer creates a new web server
@@ -40,10 +41,11 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, monitorServic
 
 	// Create server
 	server := &Server{
-		config:  cfg,
-		monitor: monitorService,
-		router:  router,
-		ctx:     ctx,
+		config:     cfg,
+		monitor:    monitorService,
+		router:     router,
+		ctx:        ctx,
+		configPath: "../config.yaml", // Save in the root directory instead of the web directory
 	}
 
 	// Set up routes
@@ -72,6 +74,11 @@ func (s *Server) Stop() error {
 		return s.httpServer.Shutdown(ctx)
 	}
 	return nil
+}
+
+// SetConfigPath sets the path where the configuration will be saved
+func (s *Server) SetConfigPath(path string) {
+	s.configPath = path
 }
 
 // setupRoutes sets up the HTTP routes
@@ -166,7 +173,7 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 	s.config = &cfg
 
 	// Save configuration
-	if err := config.Save(s.config, "config.yaml"); err != nil {
+	if err := config.Save(s.config, s.configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
 		return
 	}
@@ -189,7 +196,7 @@ func (s *Server) handleAddDiskMonitor(c *gin.Context) {
 	s.config.Monitoring.Disk = append(s.config.Monitoring.Disk, diskCfg)
 
 	// Save configuration
-	if err := config.Save(s.config, "config.yaml"); err != nil {
+	if err := config.Save(s.config, s.configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
 		return
 	}
@@ -212,7 +219,7 @@ func (s *Server) handleAddHealthCheck(c *gin.Context) {
 	s.config.Monitoring.Healthchecks = append(s.config.Monitoring.Healthchecks, healthCfg)
 
 	// Save configuration
-	if err := config.Save(s.config, "config.yaml"); err != nil {
+	if err := config.Save(s.config, s.configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
 		return
 	}
@@ -235,7 +242,7 @@ func (s *Server) handleUpdateWebhook(c *gin.Context) {
 	s.config.Webhook = webhookCfg
 
 	// Save configuration
-	if err := config.Save(s.config, "config.yaml"); err != nil {
+	if err := config.Save(s.config, s.configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
 		return
 	}
@@ -274,7 +281,7 @@ func (s *Server) handleDeleteMonitor(c *gin.Context) {
 	}
 
 	// Save configuration
-	if err := config.Save(s.config, "config.yaml"); err != nil {
+	if err := config.Save(s.config, s.configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
 		return
 	}
