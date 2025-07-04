@@ -324,12 +324,17 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 
 // testResponsiveNavbar tests that the hamburger menu is visible on small screens
 func testResponsiveNavbar(t *testing.T, browser *rod.Browser, baseURL string) {
-	// Navigate to the dashboard
-	page := browser.MustPage(baseURL)
+	// Create a new browser context with a small viewport size
+	// This avoids the "Object reference chain is too long" error by setting the viewport size
+	// before any DOM elements are loaded and tracked
+	page := browser.MustPage("")
 	defer page.MustClose()
 
-	// Set a small viewport size (mobile phone size)
+	// Set a small viewport size (mobile phone size) before navigating
 	page = page.MustSetWindow(0, 0, 375, 667) // x, y, width, height
+
+	// Navigate to the dashboard after setting the viewport size
+	page.MustNavigate(baseURL)
 
 	// Wait for the page to load
 	err := page.WaitLoad()
