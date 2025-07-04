@@ -51,6 +51,11 @@ func (m *MockMonitorService) Stop() {
 	m.Called()
 }
 
+// RefreshChecks is a mock implementation of the RefreshChecks method
+func (m *MockMonitorService) RefreshChecks() {
+	m.Called()
+}
+
 func TestServer_HandleGetItems(t *testing.T) {
 	// Set up Gin in test mode
 	gin.SetMode(gin.TestMode)
@@ -274,6 +279,9 @@ func TestServer_HandleUpdateConfig(t *testing.T) {
 
 	// Create mock monitor service
 	mockService := new(MockMonitorService)
+
+	// Set up mock expectations
+	mockService.On("RefreshChecks").Return()
 
 	// Create test configuration
 	cfg := config.DefaultConfig()

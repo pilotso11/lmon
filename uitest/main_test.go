@@ -53,6 +53,11 @@ func (m *MockMonitorService) Stop() {
 	m.Called()
 }
 
+// RefreshChecks is a mock implementation of the RefreshChecks method
+func (m *MockMonitorService) RefreshChecks() {
+	m.Called()
+}
+
 // findAvailablePort finds a random available port
 func findAvailablePort() (int, error) {
 	// Listen on port 0 to get a random available port
@@ -100,6 +105,7 @@ func TestMain(m *testing.M) {
 	// Set up mock expectations
 	mockService.On("Start").Return()
 	mockService.On("Stop").Return()
+	mockService.On("RefreshChecks").Return()
 	mockService.On("GetItems").Return([]*monitor.Item{
 		{
 			ID:        "cpu",

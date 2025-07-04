@@ -205,7 +205,11 @@ func Save(config *Config, path string) error {
 
 	// Set the config values
 	err := v.MergeConfigMap(map[string]interface{}{
-		"web":        config.Web,
+		"web": map[string]interface{}{
+			"host":            config.Web.Host,
+			"port":            config.Web.Port,
+			"dashboard_title": config.Web.DashboardTitle,
+		},
 		"monitoring": config.Monitoring,
 		"webhook":    config.Webhook,
 	})
