@@ -172,6 +172,7 @@ services:
     environment:
       - LMON_WEB_HOST=0.0.0.0
       - LMON_WEB_PORT=8080
+      - GIN_MODE=release
       # Optional: Configure webhook
       # - LMON_WEBHOOK_ENABLED=true
       # - LMON_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
