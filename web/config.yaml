@@ -7,10 +7,10 @@ monitoring:
     system:
         cpu:
             threshold: 90
-            icon: speed
+            icon: cpu
         memory:
             threshold: 90
-            icon: memory
+            icon: speedometer
     healthchecks: []
 web:
     host: updated-host

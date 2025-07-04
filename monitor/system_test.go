@@ -110,7 +110,7 @@ func TestSystemMonitor_Check(t *testing.T) {
 				},
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
-				m.On("Percent", mock.Anything, false).Return([]float64{89.0}, nil)
+				m.On("Percent", mock.Anything, false).Return([]float64{82.0}, nil)
 				m.On("Times", false).Return([]cpu.TimesStat{{
 					User:   350,
 					System: 350,
@@ -133,7 +133,7 @@ func TestSystemMonitor_Check(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "CPU Critical, Memory Warning",
+			name: "CPU Critical, Memory OK",
 			systemConfig: config.SystemConfig{
 				CPU: config.CPUItem{
 					Threshold: 90,
@@ -163,6 +163,41 @@ func TestSystemMonitor_Check(t *testing.T) {
 			expectedItems: 2,
 			expectedStatus: map[string]Status{
 				"cpu":    StatusCritical,
+				"memory": StatusOK,
+			},
+			expectError: false,
+		},
+		{
+			name: "Memory Warning with New Threshold",
+			systemConfig: config.SystemConfig{
+				CPU: config.CPUItem{
+					Threshold: 90,
+					Icon:      "cpu",
+				},
+				Memory: config.CPUItem{
+					Threshold: 90,
+					Icon:      "speedometer",
+				},
+			},
+			setupCPUMock: func(m *MockCPUUsageProvider) {
+				m.On("Percent", mock.Anything, false).Return([]float64{50.0}, nil)
+				m.On("Times", false).Return([]cpu.TimesStat{{
+					User:   200,
+					System: 200,
+					Idle:   600,
+				}}, nil)
+			},
+			setupMemMock: func(m *MockMemoryUsageProvider) {
+				m.On("VirtualMemory").Return(&mem.VirtualMemoryStat{
+					Total:       16000000000, // 16GB
+					Used:        13120000000, // 13.12GB
+					Free:        2880000000,  // 2.88GB
+					UsedPercent: 82.0,
+				}, nil)
+			},
+			expectedItems: 2,
+			expectedStatus: map[string]Status{
+				"cpu":    StatusOK,
 				"memory": StatusWarning,
 			},
 			expectError: false,

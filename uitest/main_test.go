@@ -137,6 +137,18 @@ func TestMain(m *testing.M) {
 			LastCheck: time.Now(),
 			Message:   "Disk usage is OK",
 		},
+		{
+			ID:        "disk-null-threshold",
+			Name:      "Disk Usage (null threshold)",
+			Type:      "disk",
+			Status:    monitor.StatusOK,
+			Value:     40.5,
+			Threshold: 0, // This will be treated as null/undefined in the UI
+			Unit:      "%",
+			Icon:      "hdd",
+			LastCheck: time.Now(),
+			Message:   "Disk with null threshold",
+		},
 	})
 	mockService.On("GetItem", mock.Anything).Return(nil)
 

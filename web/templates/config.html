@@ -267,7 +267,8 @@
                                 <strong>${item.path}</strong>
                             </div>
                             <div>
-                                <span>Threshold: ${item.threshold}%</span>
+                                <span>Threshold: ${item.threshold !== undefined && item.threshold !== null ? 
+                                    parseFloat(item.threshold).toFixed(2) : 'N/A'}%</span>
                                 ${item.path === '/' ? '' : `<i class="bi bi-trash delete-btn ms-2" data-type="disk" data-id="${item.path}"></i>`}
                             </div>
                         </div>
@@ -293,36 +294,40 @@
                 return;
             }
 
-            let html = `
+            // Access the nested CPU and Memory objects
+            const cpuConfig = systemConfig.cpu || {};
+            const memoryConfig = systemConfig.memory || {};
+
+            document.getElementById('system-config-items').innerHTML = `
                 <div class="config-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <i class="bi bi-${systemConfig.cpuicon || 'cpu'} item-icon"></i>
+                            <i class="bi bi-${cpuConfig.icon || 'cpu'} item-icon"></i>
                             <strong>CPU Monitoring</strong>
                         </div>
                         <div>
-                            <span>Threshold: ${systemConfig.cputhreshold}%</span>
+                            <span>Threshold: ${cpuConfig.threshold !== undefined && cpuConfig.threshold !== null ?
+                parseFloat(cpuConfig.threshold).toFixed(2) : 'N/A'}%</span>
                         </div>
                     </div>
                 </div>
                 <div class="config-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <i class="bi bi-${systemConfig.memoryicon || 'speedometer'} item-icon"></i>
+                            <i class="bi bi-${memoryConfig.icon || 'speedometer'} item-icon"></i>
                             <strong>Memory Monitoring</strong>
                         </div>
                         <div>
-                            <span>Threshold: ${systemConfig.memorythreshold}%</span>
+                            <span>Threshold: ${memoryConfig.threshold !== undefined && memoryConfig.threshold !== null ?
+                parseFloat(memoryConfig.threshold).toFixed(2) : 'N/A'}%</span>
                         </div>
                     </div>
                 </div>
             `;
 
-            document.getElementById('system-config-items').innerHTML = html;
-
             // Set form values
-            document.getElementById('cpu-threshold').value = systemConfig.cputhreshold;
-            document.getElementById('memory-threshold').value = systemConfig.memorythreshold;
+            document.getElementById('cpu-threshold').value = cpuConfig.threshold;
+            document.getElementById('memory-threshold').value = memoryConfig.threshold;
         }
 
         // Function to render health check config items
@@ -371,7 +376,7 @@
                 return;
             }
 
-            let html = `
+            document.getElementById('webhook-config').innerHTML = `
                 <div class="config-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -387,8 +392,6 @@
                     ${webhookConfig.url ? `<div class="mt-2"><small class="text-muted">${webhookConfig.url}</small></div>` : ''}
                 </div>
             `;
-
-            document.getElementById('webhook-config').innerHTML = html;
 
             // Set form values
             document.getElementById('webhook-enabled').checked = webhookConfig.enabled;
@@ -467,8 +470,15 @@
                     .then(response => response.json())
                     .then(config => {
                         // Update system thresholds
-                        config.monitoring.system.cputhreshold = parseInt(document.getElementById('cpu-threshold').value);
-                        config.monitoring.system.memorythreshold = parseInt(document.getElementById('memory-threshold').value);
+                        if (!config.monitoring.system.cpu) {
+                            config.monitoring.system.cpu = {};
+                        }
+                        if (!config.monitoring.system.memory) {
+                            config.monitoring.system.memory = {};
+                        }
+
+                        config.monitoring.system.cpu.threshold = parseInt(document.getElementById('cpu-threshold').value);
+                        config.monitoring.system.memory.threshold = parseInt(document.getElementById('memory-threshold').value);
 
                         // Save updated config
                         return fetch('/api/config', {

@@ -158,6 +158,36 @@ func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 		require.NoError(t, err, "Failed to get memory icon class")
 		assert.Contains(t, *classAttr, "bi-speedometer", "Memory icon should be speedometer")
 	}
+
+	// Test that null threshold is displayed as "N/A%"
+	nullThresholdItems, err := page.Elements(".list-group-item")
+	require.NoError(t, err, "Failed to find list items")
+	var nullThresholdElement *rod.Element
+	for _, item := range nullThresholdItems {
+		itemText, err := item.Text()
+		require.NoError(t, err, "Failed to get item text")
+		if strings.Contains(itemText, "Disk Usage (null threshold)") {
+			nullThresholdElement = item
+			break
+		}
+	}
+
+	// Click on the null threshold item to open the details modal
+	if nullThresholdElement != nil {
+		nullThresholdElement.MustClick()
+
+		// Wait for the modal to appear
+		time.Sleep(1 * time.Second)
+
+		// Find the threshold value in the modal
+		modalBody, err := page.Element("#modal-body")
+		require.NoError(t, err, "Failed to find modal body")
+		modalText, err := modalBody.Text()
+		require.NoError(t, err, "Failed to get modal text")
+
+		// Check that the threshold is displayed as "N/A"
+		assert.Contains(t, modalText, "Threshold: N/A", "Null threshold should be displayed as N/A")
+	}
 }
 
 // testConfiguration tests the configuration page
@@ -229,6 +259,7 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 
 	// Test that memory icon is correct in system configuration
 	var memoryMonitoringElement *rod.Element
+	var cpuMonitoringElement *rod.Element
 	configItems, err = page.Elements(".config-item")
 	require.NoError(t, err, "Failed to find config items")
 	for _, item := range configItems {
@@ -236,7 +267,8 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 		require.NoError(t, err, "Failed to get item text")
 		if strings.Contains(itemText, "Memory Monitoring") {
 			memoryMonitoringElement = item
-			break
+		} else if strings.Contains(itemText, "CPU Monitoring") {
+			cpuMonitoringElement = item
 		}
 	}
 
@@ -246,5 +278,19 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 		classAttr, err := memoryIcon.Attribute("class")
 		require.NoError(t, err, "Failed to get memory icon class")
 		assert.Contains(t, *classAttr, "bi-speedometer", "Memory icon should be speedometer")
+
+		// Test that memory threshold is displayed correctly and not as "N/A%"
+		thresholdText, err := memoryMonitoringElement.Text()
+		require.NoError(t, err, "Failed to get memory threshold text")
+		assert.NotContains(t, thresholdText, "Threshold: N/A%", "Memory threshold should not be displayed as N/A%")
+		assert.Regexp(t, `Threshold: \d+(\.\d+)?%`, thresholdText, "Memory threshold should be displayed as a percentage")
+	}
+
+	if cpuMonitoringElement != nil {
+		// Test that CPU threshold is displayed correctly and not as "N/A%"
+		thresholdText, err := cpuMonitoringElement.Text()
+		require.NoError(t, err, "Failed to get CPU threshold text")
+		assert.NotContains(t, thresholdText, "Threshold: N/A%", "CPU threshold should not be displayed as N/A%")
+		assert.Regexp(t, `Threshold: \d+(\.\d+)?%`, thresholdText, "CPU threshold should be displayed as a percentage")
 	}
 }

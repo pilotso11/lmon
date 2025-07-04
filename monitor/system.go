@@ -146,7 +146,7 @@ func (m *SystemMonitor) checkCPU() (*Item, error) {
 	status := StatusOK
 	if cpuPercent >= float64(m.config.Monitoring.System.CPU.Threshold) {
 		status = StatusCritical
-	} else if cpuPercent >= float64(m.config.Monitoring.System.CPU.Threshold)*0.8 {
+	} else if cpuPercent >= float64(m.config.Monitoring.System.CPU.Threshold)*0.9 {
 		status = StatusWarning
 	}
 
@@ -202,7 +202,7 @@ func (m *SystemMonitor) checkMemory() (*Item, error) {
 	status := StatusOK
 	if memPercent >= float64(m.config.Monitoring.System.Memory.Threshold) {
 		status = StatusCritical
-	} else if memPercent >= float64(m.config.Monitoring.System.Memory.Threshold)*0.8 {
+	} else if memPercent >= float64(m.config.Monitoring.System.Memory.Threshold)*0.9 {
 		status = StatusWarning
 	}
 

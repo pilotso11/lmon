@@ -83,11 +83,11 @@ func DefaultConfig() *Config {
 			System: SystemConfig{
 				CPU: CPUItem{
 					Threshold: 90,
-					Icon:      "speed",
+					Icon:      "cpu",
 				},
 				Memory: CPUItem{
 					Threshold: 90,
-					Icon:      "memory",
+					Icon:      "speedometer",
 				},
 			},
 			Healthchecks: []HealthcheckConfig{},

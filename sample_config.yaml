@@ -9,10 +9,10 @@ monitoring:
           icon: hdd
     system:
         cpu:
-            threshold: 80
+            threshold: 90
             icon: cpu
         memory:
-            threshold: 80
+            threshold: 90
             icon: speedometer
     healthchecks:
         - name: "Self Check"
