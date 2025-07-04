@@ -114,8 +114,10 @@ func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 	}
 	assert.NotNil(t, healthCard, "Health Checks card not found")
 
-	// Wait for data to load
-	time.Sleep(2 * time.Second)
+	// Wait for data to load by checking for a specific element that indicates data is present
+	// For example, wait for the first list-group-item to be visible
+	_, err = page.MustElement(".list-group-item").WaitVisible()
+	require.NoError(t, err, "Failed to wait for list group item to be visible")
 
 	// Test that percentages are properly rounded to 2 decimal places
 	// This assumes there's at least one percentage value displayed
@@ -181,12 +183,20 @@ func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 	if nullThresholdElement != nil {
 		nullThresholdElement.MustClick()
 
-		// Wait for the modal to appear
-		time.Sleep(1 * time.Second)
+		// Wait for the modal to appear and be visible
+		modal, err := page.Element("#detailsModal")
+		require.NoError(t, err, "Failed to find modal element")
+		err = modal.WaitVisible()
+		require.NoError(t, err, "Failed to wait for modal to be visible")
 
 		// Find the threshold value in the modal
-		modalBody, err := page.Element("#modal-body")
+		modalBody, err := modal.Element("#modal-body") // Search within the modal
 		require.NoError(t, err, "Failed to find modal body")
+
+		// It's good practice to wait for the text to be stable if it's dynamically loaded
+		err = modalBody.WaitStable(3 * time.Second) // Wait up to 3 seconds for text to stabilize
+		require.NoError(t, err, "Failed to wait for modal body text to stabilize")
+
 		modalText, err := modalBody.Text()
 		require.NoError(t, err, "Failed to get modal text")
 
@@ -261,8 +271,9 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 		assert.NotEmpty(t, *dashboardTitleValue, "Dashboard title value should not be empty")
 	}
 
-	// Wait for data to load
-	time.Sleep(2 * time.Second)
+	// Wait for config items to load
+	_, err = page.MustElement(".config-item").WaitVisible()
+	require.NoError(t, err, "Failed to wait for config items to be visible")
 
 	// Test that root partition doesn't have a delete icon
 	configItems, err := page.Elements(".config-item")
@@ -340,12 +351,11 @@ func testResponsiveNavbar(t *testing.T, browser *rod.Browser, baseURL string) {
 	err := page.WaitLoad()
 	require.NoError(t, err, "Failed to wait for page to load")
 
-	// Add a short wait to ensure all elements are rendered
-	time.Sleep(1 * time.Second)
-
-	// Check that the navbar-toggler (hamburger menu) exists
+	// Check that the navbar-toggler (hamburger menu) exists and is visible
 	navbarToggler, err := page.Element(".navbar-toggler")
 	require.NoError(t, err, "Failed to find navbar-toggler (hamburger menu)")
+	err = navbarToggler.WaitVisible()
+	require.NoError(t, err, "Navbar-toggler (hamburger menu) not visible")
 
 	// Check that the navbar-toggler has the correct attributes
 	togglerType, err := navbarToggler.Attribute("type")
@@ -358,10 +368,47 @@ func testResponsiveNavbar(t *testing.T, browser *rod.Browser, baseURL string) {
 	assert.Equal(t, "#navbarNav", *togglerTarget, "Navbar-toggler should target #navbarNav")
 
 	// Check that the navbar-brand exists
-	_, err = page.Element(".navbar-brand")
+	navbarBrand, err := page.Element(".navbar-brand")
 	require.NoError(t, err, "Failed to find navbar-brand")
+	err = navbarBrand.WaitVisible()
+	require.NoError(t, err, "Navbar-brand not visible")
 
-	// Skip the click test as it's causing timeouts
-	// This is enough to verify that the responsive navbar is properly implemented
-	// The navbar-toggler exists and has the correct attributes
+	// Attempt to click the navbar toggler and check if the menu expands
+	// The target #navbarNav should become visible or have a 'show' class
+	navCollapse, err := page.Element("#navbarNav")
+	require.NoError(t, err, "Failed to find #navbarNav element")
+
+	// Check initial state: navbarNav should not have 'show' class (i.e., be collapsed)
+	// Bootstrap 5 uses 'collapsing' during transition and 'show' when fully open.
+	// We can check that it's not 'show' and not 'collapsing' or simply that it's not visible.
+	isInitiallyVisible, _ := navCollapse.Visible()
+	assert.False(t, isInitiallyVisible, "#navbarNav should initially be collapsed on small screens")
+
+	navbarToggler.MustClick()
+
+	// Wait for the collapse element to be shown (Bootstrap adds 'show' class)
+	// It might also have 'collapsing' class during transition, so wait for 'show'
+	err = page.Wait(rod.Eval(`() => document.querySelector("#navbarNav").classList.contains("show")`))
+	// It's better to wait for an element inside the navCollapse to be visible
+	// For example, a link inside the navbar
+	// Let's assume there's a link with class .nav-link inside #navbarNav
+	// Example: Wait for a link with text "Dashboard" to be visible inside the expanded menu
+	dashboardLinkInMenu, err := navCollapse.Element(`a[href="/"]`) // Assuming Dashboard link goes to "/"
+	if err == nil {
+		err = dashboardLinkInMenu.WaitVisible()
+		require.NoError(t, err, "Dashboard link in collapsed menu did not become visible after click")
+	} else {
+		// Fallback if a specific link isn't easily identifiable, wait for #navbarNav to have style indicating it's open
+		// This is less robust than waiting for a specific child element.
+		// Consider adding a specific test ID to a menu item for better selection.
+		t.Log("Could not find specific link in navbar, relying on #navbarNav visibility state change")
+		err = navCollapse.WaitVisible() // This might be tricky if it's always in DOM but hidden by CSS
+		require.NoError(t, err, "#navbarNav did not become visible after click")
+	}
+
+
+	// Verify it's now expanded (has 'show' class or is visible)
+	hasClassShow, err := navCollapse.HasClass("show")
+	require.NoError(t, err, "Error checking for 'show' class on #navbarNav")
+	assert.True(t, hasClassShow, "#navbarNav should have 'show' class after clicking toggler")
 }

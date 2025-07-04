@@ -17,6 +17,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o lmon
 # Use a minimal alpine image for the final image
 FROM alpine:latest
 
+# Install wget for healthcheck and ca-certificates for HTTPS (if ever needed)
+RUN apk --no-cache add wget ca-certificates
+
 WORKDIR /app
 
 # Copy the binary from the builder stage
