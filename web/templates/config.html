@@ -31,6 +31,13 @@
             color: #dc3545;
             cursor: pointer;
         }
+
+        /* Responsive font size for navbar-brand on small screens */
+        @media (max-width: 575.98px) {
+            .navbar-brand {
+                font-size: 1rem; /* Reduce font size on small screens */
+            }
+        }
     </style>
 </head>
 <body>
@@ -178,7 +185,7 @@
                         <form id="update-web-form">
                             <div class="mb-3">
                                 <label for="dashboard-title" class="form-label">Dashboard Title</label>
-                                <input type="text" class="form-control" id="dashboard-title" placeholder="Monitoring Dashboard">
+                                <input type="text" class="form-control" id="dashboard-title" placeholder="Monitoring Dashboard" value="{{ .dashboard_title }}">
                             </div>
                             <button type="submit" class="btn btn-primary">Update Web Settings</button>
                         </form>

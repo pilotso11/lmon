@@ -127,7 +127,8 @@ func (s *Server) handleIndex(c *gin.Context) {
 // handleConfigPage handles the configuration page request
 func (s *Server) handleConfigPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "config.html", gin.H{
-		"title": "lmon - Configuration",
+		"title":           "lmon - Configuration",
+		"dashboard_title": s.config.Web.DashboardTitle,
 	})
 }
 
