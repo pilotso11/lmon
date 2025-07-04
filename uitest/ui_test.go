@@ -44,6 +44,10 @@ func TestUI(t *testing.T) {
 	t.Run("Configuration", func(t *testing.T) {
 		testConfiguration(t, browser, baseURL)
 	})
+
+	t.Run("ResponsiveNavbar", func(t *testing.T) {
+		testResponsiveNavbar(t, browser, baseURL)
+	})
 }
 
 // testDashboard tests the dashboard page
@@ -69,7 +73,8 @@ func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 	require.NoError(t, err, "Failed to find h1 element")
 	h1Text, err := h1Elem.Text()
 	require.NoError(t, err, "Failed to get h1 text")
-	assert.Equal(t, "Monitoring Dashboard", h1Text)
+	// The dashboard title should be either the default "Monitoring Dashboard" or a custom title
+	assert.NotEmpty(t, h1Text, "Dashboard title should not be empty")
 
 	// Check that the system card is present
 	systemCards, err := page.Elements(".card-header")
@@ -220,6 +225,7 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 	require.NoError(t, err, "Failed to find card headers")
 	var diskCard *rod.Element
 	var systemCard *rod.Element
+	var webSettingsCard *rod.Element
 
 	for _, card := range configCards {
 		text, err := card.Text()
@@ -228,11 +234,32 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 			diskCard = card
 		} else if text == "System Monitoring" {
 			systemCard = card
+		} else if text == "Web Settings" {
+			webSettingsCard = card
 		}
 	}
 
 	assert.NotNil(t, diskCard, "Disk Monitoring card not found")
 	assert.NotNil(t, systemCard, "System Monitoring card not found")
+	assert.NotNil(t, webSettingsCard, "Web Settings card not found")
+
+	// Test that the dashboard title field is present in the Web Settings card
+	if webSettingsCard != nil {
+		// Find the Web Settings card body
+		webSettingsCardParent, err := webSettingsCard.Parent()
+		require.NoError(t, err, "Failed to find Web Settings card parent")
+		webSettingsCardBody, err := webSettingsCardParent.Element(".card-body")
+		require.NoError(t, err, "Failed to find Web Settings card body")
+
+		// Check that the dashboard title field is present
+		dashboardTitleInput, err := webSettingsCardBody.Element("#dashboard-title")
+		require.NoError(t, err, "Failed to find dashboard title input")
+
+		// Check that the dashboard title input has a value
+		dashboardTitleValue, err := dashboardTitleInput.Attribute("value")
+		require.NoError(t, err, "Failed to get dashboard title value")
+		assert.NotEmpty(t, *dashboardTitleValue, "Dashboard title value should not be empty")
+	}
 
 	// Wait for data to load
 	time.Sleep(2 * time.Second)
@@ -293,4 +320,55 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 		assert.NotContains(t, thresholdText, "Threshold: N/A%", "CPU threshold should not be displayed as N/A%")
 		assert.Regexp(t, `Threshold: \d+(\.\d+)?%`, thresholdText, "CPU threshold should be displayed as a percentage")
 	}
+}
+
+// testResponsiveNavbar tests that the hamburger menu is visible on small screens
+func testResponsiveNavbar(t *testing.T, browser *rod.Browser, baseURL string) {
+	// Navigate to the dashboard
+	page := browser.MustPage(baseURL)
+	defer page.MustClose()
+
+	// Set a small viewport size (mobile phone size)
+	page = page.MustSetWindow(0, 0, 375, 667) // x, y, width, height
+
+	// Wait for the page to load
+	err := page.WaitLoad()
+	require.NoError(t, err, "Failed to wait for page to load")
+
+	// Check that the navbar-toggler (hamburger menu) is visible
+	navbarToggler, err := page.Element(".navbar-toggler")
+	require.NoError(t, err, "Failed to find navbar-toggler (hamburger menu)")
+
+	// Check that the navbar-toggler is visible
+	isVisible, err := navbarToggler.Visible()
+	require.NoError(t, err, "Failed to check if navbar-toggler is visible")
+	assert.True(t, isVisible, "Navbar-toggler (hamburger menu) should be visible on small screens")
+
+	// Check that the navbar-brand has the correct font size
+	navbarBrand, err := page.Element(".navbar-brand")
+	require.NoError(t, err, "Failed to find navbar-brand")
+
+	// Get the computed style of the navbar-brand
+	fontSize, err := navbarBrand.Eval(`el => window.getComputedStyle(el).fontSize`)
+	require.NoError(t, err, "Failed to get computed font size of navbar-brand")
+
+	// Check that the font size is 16px (1rem) or close to it
+	// The exact pixel value might vary slightly depending on browser defaults
+	fontSizeStr := fmt.Sprintf("%v", fontSize)
+	assert.Contains(t, fontSizeStr, "16", "Navbar-brand font size should be reduced on small screens")
+
+	// Test that the hamburger menu is clickable
+	navbarToggler.MustClick()
+
+	// Wait for the navbar collapse to expand
+	time.Sleep(500 * time.Millisecond)
+
+	// Check that the navbar collapse is visible
+	navbarCollapse, err := page.Element("#navbarNav")
+	require.NoError(t, err, "Failed to find navbar collapse")
+
+	// Check if the navbar collapse has the 'show' class (Bootstrap's way of showing collapsed elements)
+	hasClass, err := navbarCollapse.Eval(`el => el.classList.contains("show")`)
+	require.NoError(t, err, "Failed to check if navbar collapse has 'show' class")
+	assert.Equal(t, true, hasClass, "Navbar collapse should be visible after clicking the hamburger menu")
 }

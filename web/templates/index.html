@@ -45,6 +45,18 @@
             margin-right: 10px;
             vertical-align: middle;
         }
+        #refresh-countdown {
+            font-size: 0.85em;
+            opacity: 0.8;
+            font-weight: normal;
+        }
+
+        /* Responsive font size for navbar-brand on small screens */
+        @media (max-width: 575.98px) {
+            .navbar-brand {
+                font-size: 1rem; /* Reduce font size on small screens */
+            }
+        }
     </style>
 </head>
 <body>
@@ -72,9 +84,9 @@
 
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Monitoring Dashboard</h1>
-            <button id="refresh-btn" class="btn btn-primary">
-                <i class="bi bi-arrow-clockwise"></i> Refresh
+            <h1>{{ .dashboard_title }}</h1>
+            <button id="refresh-btn" class="btn btn-primary" data-refresh-interval="{{ .refresh_interval }}">
+                <i class="bi bi-arrow-clockwise"></i> Refresh <span id="refresh-countdown"></span>
             </button>
         </div>
 
@@ -353,15 +365,54 @@
             modal.show();
         }
 
+        // Variables for refresh countdown
+        let nextRefreshTime = 0;
+        let refreshInterval = 60000; // Default to 60 seconds (will be updated from server config)
+
+        // Function to update countdown display
+        function updateCountdown() {
+            const now = Date.now();
+            const timeLeft = Math.max(0, nextRefreshTime - now);
+            const secondsLeft = Math.ceil(timeLeft / 1000);
+
+            const countdownElement = document.getElementById('refresh-countdown');
+            if (secondsLeft > 0) {
+                countdownElement.textContent = `(${secondsLeft}s)`;
+            } else {
+                countdownElement.textContent = '';
+            }
+        }
+
+        // Function to reset countdown timer
+        function resetCountdown() {
+            nextRefreshTime = Date.now() + refreshInterval;
+            updateCountdown();
+        }
+
+        // Enhanced loadItems function that resets the countdown
+        function loadItemsWithCountdown() {
+            loadItems();
+            resetCountdown();
+        }
+
         // Load items on page load
         document.addEventListener('DOMContentLoaded', function() {
+            // Get refresh interval from data attribute (in seconds) and convert to milliseconds
+            const refreshBtn = document.getElementById('refresh-btn');
+            const refreshIntervalSeconds = parseInt(refreshBtn.getAttribute('data-refresh-interval')) || 60;
+            refreshInterval = refreshIntervalSeconds * 1000;
+
             loadItems();
+            resetCountdown();
 
             // Set up refresh button
-            document.getElementById('refresh-btn').addEventListener('click', loadItems);
+            refreshBtn.addEventListener('click', loadItemsWithCountdown);
 
-            // Auto-refresh every 60 seconds
-            setInterval(loadItems, 60000);
+            // Auto-refresh using the configured interval
+            setInterval(loadItemsWithCountdown, refreshInterval);
+
+            // Update countdown every second
+            setInterval(updateCountdown, 1000);
         });
     </script>
 </body>

@@ -164,6 +164,30 @@
 
             <div class="col-md-6">
                 <div class="card">
+                    <div class="card-header">Web Settings</div>
+                    <div class="card-body">
+                        <div id="web-config">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        <h5>Update Web Settings</h5>
+                        <form id="update-web-form">
+                            <div class="mb-3">
+                                <label for="dashboard-title" class="form-label">Dashboard Title</label>
+                                <input type="text" class="form-control" id="dashboard-title" placeholder="Monitoring Dashboard">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Update Web Settings</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
                     <div class="card-header">Webhook Notifications</div>
                     <div class="card-body">
                         <div id="webhook-config">
@@ -239,6 +263,9 @@
 
                     // Render health check config items
                     renderHealthConfig(config.monitoring.healthchecks);
+
+                    // Render web config
+                    renderWebConfig(config.web);
 
                     // Render webhook config
                     renderWebhookConfig(config.webhook);
@@ -367,6 +394,31 @@
                     deleteMonitor('healthcheck', id);
                 });
             });
+        }
+
+        // Function to render web config
+        function renderWebConfig(webConfig) {
+            if (!webConfig) {
+                document.getElementById('web-config').innerHTML = '<div class="text-center">No web settings configured</div>';
+                return;
+            }
+
+            document.getElementById('web-config').innerHTML = `
+                <div class="config-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-gear item-icon"></i>
+                            <strong>Dashboard Title</strong>
+                        </div>
+                        <div>
+                            <span>${webConfig.dashboard_title || 'Monitoring Dashboard'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Set form values
+            document.getElementById('dashboard-title').value = webConfig.dashboard_title || 'Monitoring Dashboard';
         }
 
         // Function to render webhook config
@@ -539,6 +591,41 @@
                     console.error('Error adding health check:', error);
                     showToast('Error', 'Failed to add health check', true);
                 });
+            });
+
+            // Update web settings form submission
+            document.getElementById('update-web-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                fetch('/api/config')
+                    .then(response => response.json())
+                    .then(config => {
+                        // Update web settings
+                        config.web.dashboard_title = document.getElementById('dashboard-title').value;
+
+                        // Save updated config
+                        return fetch('/api/config', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(config)
+                        });
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to update web settings');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        showToast('Success', data.message);
+                        loadConfig();
+                    })
+                    .catch(error => {
+                        console.error('Error updating web settings:', error);
+                        showToast('Error', 'Failed to update web settings', true);
+                    });
             });
 
             // Update webhook form submission

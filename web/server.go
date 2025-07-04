@@ -118,7 +118,9 @@ func (s *Server) setupRoutes() {
 // handleIndex handles the index page request
 func (s *Server) handleIndex(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"title": "lmon - Lightweight Monitoring",
+		"title":            "lmon - Lightweight Monitoring",
+		"dashboard_title":  s.config.Web.DashboardTitle,
+		"refresh_interval": s.config.Monitoring.Interval,
 	})
 }
 

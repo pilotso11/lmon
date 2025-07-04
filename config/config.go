@@ -19,8 +19,9 @@ type Config struct {
 
 // WebConfig represents the web server configuration
 type WebConfig struct {
-	Host string `mapstructure:"host" json:"host"`
-	Port int    `mapstructure:"port" json:"port"`
+	Host           string `mapstructure:"host" json:"host"`
+	Port           int    `mapstructure:"port" json:"port"`
+	DashboardTitle string `mapstructure:"dashboard_title" json:"dashboard_title"`
 }
 
 // MonitoringConfig represents the monitoring configuration
@@ -68,8 +69,9 @@ type WebhookConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Web: WebConfig{
-			Host: "0.0.0.0",
-			Port: 8080,
+			Host:           "0.0.0.0",
+			Port:           8080,
+			DashboardTitle: "Monitoring Dashboard",
 		},
 		Monitoring: MonitoringConfig{
 			Interval: 60, // seconds
@@ -186,6 +188,7 @@ func bindEnvVars(v *viper.Viper) {
 	// Web config
 	_ = v.BindEnv("web.host", "LMON_WEB_HOST")
 	_ = v.BindEnv("web.port", "LMON_WEB_PORT")
+	_ = v.BindEnv("web.dashboard_title", "LMON_WEB_DASHBOARD_TITLE")
 
 	// Monitoring config
 	_ = v.BindEnv("monitoring.interval", "LMON_MONITORING_INTERVAL")

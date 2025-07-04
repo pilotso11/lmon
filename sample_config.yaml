@@ -23,6 +23,7 @@ monitoring:
 web:
     host: 0.0.0.0
     port: 8080
+    dashboard_title: "Monitoring Dashboard"
 webhook:
     enabled: false
     url: ""

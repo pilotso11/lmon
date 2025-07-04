@@ -14,6 +14,7 @@ func TestDefaultConfig(t *testing.T) {
 	// Verify default values
 	assert.Equal(t, "0.0.0.0", cfg.Web.Host)
 	assert.Equal(t, 8080, cfg.Web.Port)
+	assert.Equal(t, "Monitoring Dashboard", cfg.Web.DashboardTitle)
 	assert.Equal(t, 60, cfg.Monitoring.Interval)
 	assert.Equal(t, 1, len(cfg.Monitoring.Disk))
 	assert.Equal(t, "/", cfg.Monitoring.Disk[0].Path)
@@ -40,6 +41,7 @@ func TestSaveAndLoad(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Web.Host = "127.0.0.1"
 	cfg.Web.Port = 9090
+	cfg.Web.DashboardTitle = "Custom Dashboard Title"
 	cfg.Monitoring.Interval = 30
 	cfg.Monitoring.Disk[0].Threshold = 90
 	cfg.Monitoring.System.CPU.Threshold = 70
@@ -75,6 +77,7 @@ func TestSaveAndLoad(t *testing.T) {
 	// Verify loaded values match saved values
 	assert.Equal(t, cfg.Web.Host, loadedCfg.Web.Host, "Web.Host mismatch")
 	assert.Equal(t, cfg.Web.Port, loadedCfg.Web.Port, "Web.Port mismatch")
+	assert.Equal(t, cfg.Web.DashboardTitle, loadedCfg.Web.DashboardTitle, "Web.DashboardTitle mismatch")
 	assert.Equal(t, cfg.Monitoring.Interval, loadedCfg.Monitoring.Interval, "Monitoring.Interval mismatch")
 	assert.Equal(t, cfg.Monitoring.Disk[0].Threshold, loadedCfg.Monitoring.Disk[0].Threshold, "Disk[0].Threshold mismatch")
 	assert.Equal(t, cfg.Monitoring.System.CPU.Threshold, loadedCfg.Monitoring.System.CPU.Threshold, "System.CPUThreshold mismatch")
@@ -91,12 +94,14 @@ func TestLoadWithEnvironmentVariables(t *testing.T) {
 	// Set environment variables
 	_ = os.Setenv("LMON_WEB_HOST", "192.168.1.1")
 	_ = os.Setenv("LMON_WEB_PORT", "8888")
+	_ = os.Setenv("LMON_WEB_DASHBOARD_TITLE", "Environment Dashboard Title")
 	_ = os.Setenv("LMON_MONITORING_INTERVAL", "45")
 	_ = os.Setenv("LMON_WEBHOOK_ENABLED", "true")
 	_ = os.Setenv("LMON_WEBHOOK_URL", "https://example.org/webhook")
 	defer func() {
 		_ = os.Unsetenv("LMON_WEB_HOST")
 		_ = os.Unsetenv("LMON_WEB_PORT")
+		_ = os.Unsetenv("LMON_WEB_DASHBOARD_TITLE")
 		_ = os.Unsetenv("LMON_MONITORING_INTERVAL")
 		_ = os.Unsetenv("LMON_WEBHOOK_ENABLED")
 		_ = os.Unsetenv("LMON_WEBHOOK_URL")
@@ -109,6 +114,7 @@ func TestLoadWithEnvironmentVariables(t *testing.T) {
 	// Verify environment variables were applied
 	assert.Equal(t, "192.168.1.1", cfg.Web.Host)
 	assert.Equal(t, 8888, cfg.Web.Port)
+	assert.Equal(t, "Environment Dashboard Title", cfg.Web.DashboardTitle)
 	assert.Equal(t, 45, cfg.Monitoring.Interval)
 	assert.True(t, cfg.Webhook.Enabled)
 	assert.Equal(t, "https://example.org/webhook", cfg.Webhook.URL)
