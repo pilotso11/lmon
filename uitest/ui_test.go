@@ -2,6 +2,7 @@ package uitest
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -9,13 +10,14 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestUI runs UI tests for the lmon web interface
 func TestUI(t *testing.T) {
 	// Launch a new browser
-	launcher := launcher.New().Headless(true)
-	url, err := launcher.Launch()
+	launch := launcher.New().Headless(true)
+	url, err := launch.Launch()
 	if err != nil {
 		t.Fatalf("Failed to launch browser: %v", err)
 	}
@@ -25,8 +27,14 @@ func TestUI(t *testing.T) {
 	// Set a timeout for the entire test
 	browser = browser.Timeout(30 * time.Second)
 
+	// Get the port from the environment variable
+	portStr := os.Getenv("LMON_TEST_PORT")
+	if portStr == "" {
+		t.Fatal("LMON_TEST_PORT environment variable not set")
+	}
+
 	// Base URL for the application
-	baseURL := "http://localhost:8080"
+	baseURL := fmt.Sprintf("http://localhost:%s", portStr)
 
 	// Run tests
 	t.Run("Dashboard", func(t *testing.T) {
@@ -45,21 +53,32 @@ func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 	defer page.MustClose()
 
 	// Wait for the page to load
-	page.MustWaitLoad()
+	err := page.WaitLoad()
+	require.NoError(t, err, "Failed to wait for page to load")
 
 	// Check the title
-	title := page.MustElement("title").MustText()
+	titleElem, err := page.Element("title")
+	require.NoError(t, err, "Failed to find title element")
+	title, err := titleElem.Text()
+	require.NoError(t, err, "Failed to get title text")
 	assert.Contains(t, title, "lmon")
 
 	// Check that the dashboard elements are present
 	assert.True(t, page.MustHas("h1"))
-	assert.Equal(t, "Monitoring Dashboard", page.MustElement("h1").MustText())
+	h1Elem, err := page.Element("h1")
+	require.NoError(t, err, "Failed to find h1 element")
+	h1Text, err := h1Elem.Text()
+	require.NoError(t, err, "Failed to get h1 text")
+	assert.Equal(t, "Monitoring Dashboard", h1Text)
 
 	// Check that the system card is present
-	systemCards := page.MustElements(".card-header")
+	systemCards, err := page.Elements(".card-header")
+	require.NoError(t, err, "Failed to find card headers")
 	var systemCard *rod.Element
 	for _, card := range systemCards {
-		if card.MustText() == "System" {
+		cardText, err := card.Text()
+		require.NoError(t, err, "Failed to get card text")
+		if cardText == "System" {
 			systemCard = card
 			break
 		}
@@ -69,7 +88,9 @@ func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 	// Check that the disk card is present
 	var diskCard *rod.Element
 	for _, card := range systemCards {
-		if card.MustText() == "Disk" {
+		cardText, err := card.Text()
+		require.NoError(t, err, "Failed to get card text")
+		if cardText == "Disk" {
 			diskCard = card
 			break
 		}
@@ -79,7 +100,9 @@ func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 	// Check that the health checks card is present
 	var healthCard *rod.Element
 	for _, card := range systemCards {
-		if card.MustText() == "Health Checks" {
+		cardText, err := card.Text()
+		require.NoError(t, err, "Failed to get card text")
+		if cardText == "Health Checks" {
 			healthCard = card
 			break
 		}
@@ -91,12 +114,15 @@ func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 
 	// Test that percentages are properly rounded to 2 decimal places
 	// This assumes there's at least one percentage value displayed
-	listItems := page.MustElements(".list-group-item")
+	listItems, err := page.Elements(".list-group-item")
+	require.NoError(t, err, "Failed to find list items")
 	var percentageElements []*rod.Element
 	for _, item := range listItems {
-		spans := item.MustElements("span")
+		spans, err := item.Elements("span")
+		require.NoError(t, err, "Failed to find spans in list item")
 		for _, span := range spans {
-			text := span.MustText()
+			text, err := span.Text()
+			require.NoError(t, err, "Failed to get span text")
 			if strings.Contains(text, "%") {
 				percentageElements = append(percentageElements, span)
 			}
@@ -105,25 +131,32 @@ func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 
 	if len(percentageElements) > 0 {
 		for _, elem := range percentageElements {
-			text := elem.MustText()
+			text, err := elem.Text()
+			require.NoError(t, err, "Failed to get percentage text")
 			// Check that the percentage has at most 2 decimal places
 			assert.Regexp(t, `\d+\.\d{1,2}%`, text, "Percentage should be rounded to 2 decimal places")
 		}
 	}
 
 	// Test that memory icon is correct
-	memoryListItems := page.MustElements(".list-group-item")
+	memoryListItems, err := page.Elements(".list-group-item")
+	require.NoError(t, err, "Failed to find memory list items")
 	var memoryElement *rod.Element
 	for _, item := range memoryListItems {
-		if strings.Contains(item.MustText(), "Memory Usage") {
+		itemText, err := item.Text()
+		require.NoError(t, err, "Failed to get memory item text")
+		if strings.Contains(itemText, "Memory Usage") {
 			memoryElement = item
 			break
 		}
 	}
 
 	if memoryElement != nil {
-		memoryIcon := memoryElement.MustElement(".material-icons")
-		assert.Equal(t, "memory", memoryIcon.MustText(), "Memory icon should be memory")
+		memoryIcon, err := memoryElement.Element(".bi")
+		require.NoError(t, err, "Failed to get memory icon")
+		classAttr, err := memoryIcon.Attribute("class")
+		require.NoError(t, err, "Failed to get memory icon class")
+		assert.Contains(t, *classAttr, "bi-speedometer", "Memory icon should be speedometer")
 	}
 }
 
@@ -134,23 +167,33 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 	defer page.MustClose()
 
 	// Wait for the page to load
-	page.MustWaitLoad()
+	err := page.WaitLoad()
+	require.NoError(t, err, "Failed to wait for page to load")
 
 	// Check the title
-	title := page.MustElement("title").MustText()
+	titleElem, err := page.Element("title")
+	require.NoError(t, err, "Failed to find title element")
+	title, err := titleElem.Text()
+	require.NoError(t, err, "Failed to get title text")
 	assert.Contains(t, title, "lmon")
 
 	// Check that the configuration elements are present
 	assert.True(t, page.MustHas("h1"))
-	assert.Equal(t, "Configuration", page.MustElement("h1").MustText())
+	h1Elem, err := page.Element("h1")
+	require.NoError(t, err, "Failed to find h1 element")
+	h1Text, err := h1Elem.Text()
+	require.NoError(t, err, "Failed to get h1 text")
+	assert.Equal(t, "Configuration", h1Text)
 
 	// Check that the disk configuration card is present
-	configCards := page.MustElements(".card-header")
+	configCards, err := page.Elements(".card-header")
+	require.NoError(t, err, "Failed to find card headers")
 	var diskCard *rod.Element
 	var systemCard *rod.Element
 
 	for _, card := range configCards {
-		text := card.MustText()
+		text, err := card.Text()
+		require.NoError(t, err, "Failed to get card text")
 		if text == "Disk Monitoring" {
 			diskCard = card
 		} else if text == "System Monitoring" {
@@ -165,18 +208,19 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 	time.Sleep(2 * time.Second)
 
 	// Test that root partition doesn't have a delete icon
-	configItems := page.MustElements(".config-item")
+	configItems, err := page.Elements(".config-item")
+	require.NoError(t, err, "Failed to find config items")
 	for _, elem := range configItems {
 		// Check if this element contains a strong tag with text "/"
-		strongElements := elem.MustElements("strong")
+		strongElements, err := elem.Elements("strong")
+		require.NoError(t, err, "Failed to find strong elements")
 		for _, strong := range strongElements {
-			pathText := strong.MustText()
+			pathText, err := strong.Text()
+			require.NoError(t, err, "Failed to get strong text")
 			if pathText == "/" {
 				// Check that there's no delete button
 				deleteButtons, err := elem.Elements(".delete-btn")
-				if err != nil {
-					t.Fatalf("Failed to get delete buttons: %v", err)
-				}
+				require.NoError(t, err, "Failed to get delete buttons")
 				assert.Equal(t, 0, len(deleteButtons), "Root partition should not have a delete button")
 				break
 			}
@@ -185,16 +229,22 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 
 	// Test that memory icon is correct in system configuration
 	var memoryMonitoringElement *rod.Element
-	configItems = page.MustElements(".config-item")
+	configItems, err = page.Elements(".config-item")
+	require.NoError(t, err, "Failed to find config items")
 	for _, item := range configItems {
-		if strings.Contains(item.MustText(), "Memory Monitoring") {
+		itemText, err := item.Text()
+		require.NoError(t, err, "Failed to get item text")
+		if strings.Contains(itemText, "Memory Monitoring") {
 			memoryMonitoringElement = item
 			break
 		}
 	}
 
 	if memoryMonitoringElement != nil {
-		memoryIcon := memoryMonitoringElement.MustElement(".material-icons")
-		assert.Equal(t, "memory", memoryIcon.MustText(), "Memory icon should be memory")
+		memoryIcon, err := memoryMonitoringElement.Element(".bi")
+		require.NoError(t, err, "Failed to find memory icon")
+		classAttr, err := memoryIcon.Attribute("class")
+		require.NoError(t, err, "Failed to get memory icon class")
+		assert.Contains(t, *classAttr, "bi-speedometer", "Memory icon should be speedometer")
 	}
 }

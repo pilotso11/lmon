@@ -1,14 +1,16 @@
 monitoring:
     interval: 60
     disk:
-        - path: /
-          threshold: 80
-          icon: hdd
+        - threshold: 80
+          icon: storage
+          path: /
     system:
-        cputhreshold: 80
-        memorythreshold: 80
-        cpuicon: cpu
-        memoryicon: speedometer
+        cpu:
+            threshold: 90
+            icon: speed
+        memory:
+            threshold: 90
+            icon: memory
     healthchecks: []
 web:
     host: updated-host

@@ -19,10 +19,10 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "/", cfg.Monitoring.Disk[0].Path)
 	assert.Equal(t, 80, cfg.Monitoring.Disk[0].Threshold)
 	assert.Equal(t, "storage", cfg.Monitoring.Disk[0].Icon)
-	assert.Equal(t, 80, cfg.Monitoring.System.CPUThreshold)
-	assert.Equal(t, 80, cfg.Monitoring.System.MemoryThreshold)
-	assert.Equal(t, "speed", cfg.Monitoring.System.CPUIcon)
-	assert.Equal(t, "memory", cfg.Monitoring.System.MemoryIcon)
+	assert.Equal(t, 90, cfg.Monitoring.System.CPU.Threshold)
+	assert.Equal(t, 90, cfg.Monitoring.System.Memory.Threshold)
+	assert.Equal(t, "speed", cfg.Monitoring.System.CPU.Icon)
+	assert.Equal(t, "memory", cfg.Monitoring.System.Memory.Icon)
 	assert.Equal(t, 0, len(cfg.Monitoring.Healthchecks))
 	assert.False(t, cfg.Webhook.Enabled)
 	assert.Equal(t, "", cfg.Webhook.URL)
@@ -32,7 +32,9 @@ func TestSaveAndLoad(t *testing.T) {
 	// Create a temporary file for testing
 	tmpfile, err := os.CreateTemp("", "config-*.yaml")
 	require.NoError(t, err)
-	defer os.Remove(tmpfile.Name())
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(tmpfile.Name())
 
 	// Create a test configuration
 	cfg := DefaultConfig()
@@ -40,7 +42,7 @@ func TestSaveAndLoad(t *testing.T) {
 	cfg.Web.Port = 9090
 	cfg.Monitoring.Interval = 30
 	cfg.Monitoring.Disk[0].Threshold = 90
-	cfg.Monitoring.System.CPUThreshold = 70
+	cfg.Monitoring.System.CPU.Threshold = 70
 	cfg.Webhook.Enabled = true
 	cfg.Webhook.URL = "https://example.com/webhook"
 
@@ -63,8 +65,8 @@ func TestSaveAndLoad(t *testing.T) {
 	t.Logf("Saved file contents:\n%s", string(data))
 
 	// Set up environment for Load
-	os.Setenv("LMON_WEB_HOST", "")
-	os.Setenv("LMON_WEB_PORT", "")
+	_ = os.Setenv("LMON_WEB_HOST", "")
+	_ = os.Setenv("LMON_WEB_PORT", "")
 
 	// Load the configuration from the temporary file
 	loadedCfg, err := LoadFromFile(tmpfile.Name())
@@ -75,7 +77,7 @@ func TestSaveAndLoad(t *testing.T) {
 	assert.Equal(t, cfg.Web.Port, loadedCfg.Web.Port, "Web.Port mismatch")
 	assert.Equal(t, cfg.Monitoring.Interval, loadedCfg.Monitoring.Interval, "Monitoring.Interval mismatch")
 	assert.Equal(t, cfg.Monitoring.Disk[0].Threshold, loadedCfg.Monitoring.Disk[0].Threshold, "Disk[0].Threshold mismatch")
-	assert.Equal(t, cfg.Monitoring.System.CPUThreshold, loadedCfg.Monitoring.System.CPUThreshold, "System.CPUThreshold mismatch")
+	assert.Equal(t, cfg.Monitoring.System.CPU.Threshold, loadedCfg.Monitoring.System.CPU.Threshold, "System.CPUThreshold mismatch")
 	assert.Equal(t, cfg.Webhook.Enabled, loadedCfg.Webhook.Enabled, "Webhook.Enabled mismatch")
 	assert.Equal(t, cfg.Webhook.URL, loadedCfg.Webhook.URL, "Webhook.URL mismatch")
 
@@ -87,17 +89,17 @@ func TestSaveAndLoad(t *testing.T) {
 
 func TestLoadWithEnvironmentVariables(t *testing.T) {
 	// Set environment variables
-	os.Setenv("LMON_WEB_HOST", "192.168.1.1")
-	os.Setenv("LMON_WEB_PORT", "8888")
-	os.Setenv("LMON_MONITORING_INTERVAL", "45")
-	os.Setenv("LMON_WEBHOOK_ENABLED", "true")
-	os.Setenv("LMON_WEBHOOK_URL", "https://example.org/webhook")
+	_ = os.Setenv("LMON_WEB_HOST", "192.168.1.1")
+	_ = os.Setenv("LMON_WEB_PORT", "8888")
+	_ = os.Setenv("LMON_MONITORING_INTERVAL", "45")
+	_ = os.Setenv("LMON_WEBHOOK_ENABLED", "true")
+	_ = os.Setenv("LMON_WEBHOOK_URL", "https://example.org/webhook")
 	defer func() {
-		os.Unsetenv("LMON_WEB_HOST")
-		os.Unsetenv("LMON_WEB_PORT")
-		os.Unsetenv("LMON_MONITORING_INTERVAL")
-		os.Unsetenv("LMON_WEBHOOK_ENABLED")
-		os.Unsetenv("LMON_WEBHOOK_URL")
+		_ = os.Unsetenv("LMON_WEB_HOST")
+		_ = os.Unsetenv("LMON_WEB_PORT")
+		_ = os.Unsetenv("LMON_MONITORING_INTERVAL")
+		_ = os.Unsetenv("LMON_WEBHOOK_ENABLED")
+		_ = os.Unsetenv("LMON_WEBHOOK_URL")
 	}()
 
 	// Load configuration

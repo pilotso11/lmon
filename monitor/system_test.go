@@ -65,10 +65,14 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU and Memory OK",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    90,
-				MemoryThreshold: 90,
-				CPUIcon:         "speed",
-				MemoryIcon:      "memory",
+				CPU: config.CPUItem{
+					Threshold: 90,
+					Icon:      "cpu",
+				},
+				Memory: config.CPUItem{
+					Threshold: 90,
+					Icon:      "speedometer",
+				},
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return([]float64{30.0}, nil)
@@ -96,13 +100,17 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU Warning, Memory OK",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    90,
-				MemoryThreshold: 90,
-				CPUIcon:         "speed",
-				MemoryIcon:      "memory",
+				CPU: config.CPUItem{
+					Threshold: 90,
+					Icon:      "cpu",
+				},
+				Memory: config.CPUItem{
+					Threshold: 90,
+					Icon:      "speedometer",
+				},
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
-				m.On("Percent", mock.Anything, false).Return([]float64{70.0}, nil)
+				m.On("Percent", mock.Anything, false).Return([]float64{89.0}, nil)
 				m.On("Times", false).Return([]cpu.TimesStat{{
 					User:   350,
 					System: 350,
@@ -127,13 +135,17 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU Critical, Memory Warning",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    90,
-				MemoryThreshold: 90,
-				CPUIcon:         "speed",
-				MemoryIcon:      "memory",
+				CPU: config.CPUItem{
+					Threshold: 90,
+					Icon:      "cpu",
+				},
+				Memory: config.CPUItem{
+					Threshold: 90,
+					Icon:      "speedometer",
+				},
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
-				m.On("Percent", mock.Anything, false).Return([]float64{90.0}, nil)
+				m.On("Percent", mock.Anything, false).Return([]float64{99.0}, nil)
 				m.On("Times", false).Return([]cpu.TimesStat{{
 					User:   450,
 					System: 450,
@@ -158,10 +170,14 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU Error",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    90,
-				MemoryThreshold: 90,
-				CPUIcon:         "speed",
-				MemoryIcon:      "memory",
+				CPU: config.CPUItem{
+					Threshold: 90,
+					Icon:      "cpu",
+				},
+				Memory: config.CPUItem{
+					Threshold: 90,
+					Icon:      "speedometer",
+				},
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return(nil, errors.New("failed to get CPU usage"))
@@ -176,10 +192,14 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "Memory Error",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    90,
-				MemoryThreshold: 90,
-				CPUIcon:         "speed",
-				MemoryIcon:      "memory",
+				CPU: config.CPUItem{
+					Threshold: 90,
+					Icon:      "cpu",
+				},
+				Memory: config.CPUItem{
+					Threshold: 90,
+					Icon:      "speedometer",
+				},
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return([]float64{30.0}, nil)
@@ -198,10 +218,14 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "Empty CPU data",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    90,
-				MemoryThreshold: 90,
-				CPUIcon:         "speed",
-				MemoryIcon:      "memory",
+				CPU: config.CPUItem{
+					Threshold: 90,
+					Icon:      "cpu",
+				},
+				Memory: config.CPUItem{
+					Threshold: 90,
+					Icon:      "speedometer",
+				},
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
 				m.On("Percent", mock.Anything, false).Return([]float64{}, nil)

@@ -255,10 +255,12 @@ func TestServer_HandleGetConfig(t *testing.T) {
 
 	// Check system fields
 	systemMap := monitoringMap["system"].(map[string]interface{})
-	assert.Contains(t, systemMap, "cputhreshold")
-	assert.Contains(t, systemMap, "memorythreshold")
-	assert.Contains(t, systemMap, "cpuicon")
-	assert.Contains(t, systemMap, "memoryicon")
+	require.Contains(t, systemMap, "cpu")
+	require.Contains(t, systemMap, "memory")
+	assert.Contains(t, systemMap["cpu"], "icon")
+	assert.Contains(t, systemMap["memory"], "icon")
+	assert.Contains(t, systemMap["cpu"], "threshold")
+	assert.Contains(t, systemMap["memory"], "threshold")
 
 	// Check webhook fields
 	webhookMap := jsonMap["webhook"].(map[string]interface{})

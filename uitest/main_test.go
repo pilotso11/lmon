@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"testing"
@@ -52,6 +53,21 @@ func (m *MockMonitorService) Stop() {
 	m.Called()
 }
 
+// findAvailablePort finds a random available port
+func findAvailablePort() (int, error) {
+	// Listen on port 0 to get a random available port
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+	defer func(listener net.Listener) {
+		_ = listener.Close()
+	}(listener)
+
+	// Get the port number
+	return listener.Addr().(*net.TCPAddr).Port, nil
+}
+
 // TestMain is the entry point for all tests in this package
 func TestMain(m *testing.M) {
 	// Check for a flag that indicates we should skip browser tests
@@ -67,9 +83,16 @@ func TestMain(m *testing.M) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Find a random available port
+	port, err := findAvailablePort()
+	if err != nil {
+		log.Fatalf("Failed to find available port: %v", err)
+	}
+	log.Printf("Using port %d for tests", port)
+
 	// Create a test configuration
 	cfg := config.DefaultConfig()
-	cfg.Web.Port = 8080 // Use the port expected by the UI tests
+	cfg.Web.Port = port // Use a random available port for the tests
 
 	// Create a mock monitor service
 	mockService := new(MockMonitorService)
@@ -86,7 +109,7 @@ func TestMain(m *testing.M) {
 			Value:     10.5,
 			Threshold: 80.0,
 			Unit:      "%",
-			Icon:      "speed",
+			Icon:      "cpu",
 			LastCheck: time.Now(),
 			Message:   "CPU usage is OK",
 		},
@@ -98,7 +121,7 @@ func TestMain(m *testing.M) {
 			Value:     20.5,
 			Threshold: 80.0,
 			Unit:      "%",
-			Icon:      "memory",
+			Icon:      "speedometer",
 			LastCheck: time.Now(),
 			Message:   "Memory usage is OK",
 		},
@@ -110,7 +133,7 @@ func TestMain(m *testing.M) {
 			Value:     30.5,
 			Threshold: 80.0,
 			Unit:      "%",
-			Icon:      "storage",
+			Icon:      "hdd",
 			LastCheck: time.Now(),
 			Message:   "Disk usage is OK",
 		},
@@ -126,6 +149,9 @@ func TestMain(m *testing.M) {
 			log.Fatalf("Web server error: %v", err)
 		}
 	}()
+
+	// Set the port as an environment variable for other tests to use
+	_ = os.Setenv("LMON_TEST_PORT", fmt.Sprintf("%d", cfg.Web.Port))
 
 	// Wait for the server to start
 	if err := waitForServer(fmt.Sprintf("http://localhost:%d", cfg.Web.Port), 30*time.Second); err != nil {
@@ -151,7 +177,7 @@ func waitForServer(url string, timeout time.Duration) error {
 	for {
 		resp, err := http.Get(url)
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return nil
 			}
@@ -167,8 +193,14 @@ func waitForServer(url string, timeout time.Duration) error {
 
 // TestServerHealth tests that the server is healthy
 func TestServerHealth(t *testing.T) {
-	resp, err := http.Get("http://localhost:8080")
+	// Get the port from the environment variable
+	portStr := os.Getenv("LMON_TEST_PORT")
+	if portStr == "" {
+		t.Fatal("LMON_TEST_PORT environment variable not set")
+	}
+
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%s", portStr))
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
