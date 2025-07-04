@@ -21,7 +21,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "storage", cfg.Monitoring.Disk[0].Icon)
 	assert.Equal(t, 80, cfg.Monitoring.System.CPUThreshold)
 	assert.Equal(t, 80, cfg.Monitoring.System.MemoryThreshold)
-	assert.Equal(t, "memory", cfg.Monitoring.System.CPUIcon)
+	assert.Equal(t, "speed", cfg.Monitoring.System.CPUIcon)
 	assert.Equal(t, "memory", cfg.Monitoring.System.MemoryIcon)
 	assert.Equal(t, 0, len(cfg.Monitoring.Healthchecks))
 	assert.False(t, cfg.Webhook.Enabled)

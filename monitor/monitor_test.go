@@ -132,7 +132,7 @@ func TestServiceMonitoring(t *testing.T) {
 			Value:     30.0,
 			Threshold: 80.0,
 			Unit:      "%",
-			Icon:      "memory",
+			Icon:      "speed",
 			LastCheck: time.Now(),
 			Message:   "30.0% used",
 		},

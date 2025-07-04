@@ -1,0 +1,28 @@
+monitoring:
+    interval: 60
+    disk:
+        - path: /
+          threshold: 80
+          icon: hdd
+        - path: /home
+          threshold: 80
+          icon: hdd
+    system:
+        cpu:
+            threshold: 80
+            icon: cpu
+        memory:
+            threshold: 80
+            icon: speedometer
+    healthchecks:
+        - name: "Self Check"
+          url: "http://localhost:8080/healthz"
+          interval: 60
+          timeout: 10
+          icon: "activity"
+web:
+    host: 0.0.0.0
+    port: 8080
+webhook:
+    enabled: false
+    url: ""

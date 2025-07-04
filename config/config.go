@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,53 +12,56 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Web       WebConfig       `mapstructure:"web"`
-	Monitoring MonitoringConfig `mapstructure:"monitoring"`
-	Webhook   WebhookConfig   `mapstructure:"webhook"`
+	Web        WebConfig        `mapstructure:"web" json:"web"`
+	Monitoring MonitoringConfig `mapstructure:"monitoring" json:"monitoring"`
+	Webhook    WebhookConfig    `mapstructure:"webhook" json:"webhook"`
 }
 
 // WebConfig represents the web server configuration
 type WebConfig struct {
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
+	Host string `mapstructure:"host" json:"host"`
+	Port int    `mapstructure:"port" json:"port"`
 }
 
 // MonitoringConfig represents the monitoring configuration
 type MonitoringConfig struct {
-	Interval   int                `mapstructure:"interval"`
-	Disk       []DiskConfig       `mapstructure:"disk"`
-	System     SystemConfig       `mapstructure:"system"`
-	Healthchecks []HealthcheckConfig `mapstructure:"healthchecks"`
+	Interval     int                 `mapstructure:"interval" json:"interval"`
+	Disk         []DiskConfig        `mapstructure:"disk" json:"disk"`
+	System       SystemConfig        `mapstructure:"system" json:"system"`
+	Healthchecks []HealthcheckConfig `mapstructure:"healthchecks" json:"healthchecks"`
+}
+
+type CPUItem struct {
+	Threshold int    `mapstructure:"threshold" json:"threshold"`
+	Icon      string `mapstructure:"icon" json:"icon"`
 }
 
 // DiskConfig represents disk monitoring configuration
 type DiskConfig struct {
-	Path      string `mapstructure:"path"`
-	Threshold int    `mapstructure:"threshold"`
-	Icon      string `mapstructure:"icon"`
+	Threshold int    `mapstructure:"threshold" json:"threshold"`
+	Icon      string `mapstructure:"icon" json:"icon"`
+	Path      string `mapstructure:"path" json:"path"`
 }
 
 // SystemConfig represents system monitoring configuration
 type SystemConfig struct {
-	CPUThreshold    int    `mapstructure:"cputhreshold"`
-	MemoryThreshold int    `mapstructure:"memorythreshold"`
-	CPUIcon         string `mapstructure:"cpuicon"`
-	MemoryIcon      string `mapstructure:"memoryicon"`
+	CPU    CPUItem `mapstructure:"cpu" json:"cpu"`
+	Memory CPUItem `mapstructure:"memory" json:"memory"`
 }
 
 // HealthcheckConfig represents health check monitoring configuration
 type HealthcheckConfig struct {
-	Name      string `mapstructure:"name"`
-	URL       string `mapstructure:"url"`
-	Interval  int    `mapstructure:"interval"`
-	Timeout   int    `mapstructure:"timeout"`
-	Icon      string `mapstructure:"icon"`
+	Name     string `mapstructure:"name" json:"name"`
+	URL      string `mapstructure:"url" json:"url"`
+	Interval int    `mapstructure:"interval" json:"interval"`
+	Timeout  int    `mapstructure:"timeout" json:"timeout"`
+	Icon     string `mapstructure:"icon" json:"icon"`
 }
 
 // WebhookConfig represents webhook notification configuration
 type WebhookConfig struct {
-	Enabled bool   `mapstructure:"enabled"`
-	URL     string `mapstructure:"url"`
+	Enabled bool   `mapstructure:"enabled" json:"enabled"`
+	URL     string `mapstructure:"url" json:"url"`
 }
 
 // DefaultConfig returns the default configuration
@@ -71,16 +75,20 @@ func DefaultConfig() *Config {
 			Interval: 60, // seconds
 			Disk: []DiskConfig{
 				{
-					Path:      "/",
 					Threshold: 80, // percentage
 					Icon:      "storage",
+					Path:      "/",
 				},
 			},
 			System: SystemConfig{
-				CPUThreshold:    80, // percentage
-				MemoryThreshold: 80, // percentage
-				CPUIcon:         "memory",
-				MemoryIcon:      "memory",
+				CPU: CPUItem{
+					Threshold: 90,
+					Icon:      "speed",
+				},
+				Memory: CPUItem{
+					Threshold: 90,
+					Icon:      "memory",
+				},
 			},
 			Healthchecks: []HealthcheckConfig{},
 		},
@@ -121,7 +129,8 @@ func LoadFromPaths(paths []string) (*Config, error) {
 	// Try to read config file
 	if err := v.ReadInConfig(); err != nil {
 		// It's okay if config file doesn't exist, we'll use defaults and env vars
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		var configFileNotFoundError viper.ConfigFileNotFoundError
+		if !errors.As(err, &configFileNotFoundError) {
 			return nil, fmt.Errorf("error reading config file: %w", err)
 		}
 	}
@@ -155,7 +164,9 @@ func LoadFromFile(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error opening config file: %w", err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		_ = file.Close()
+	}(file)
 
 	// Read the config
 	if err := v.ReadConfig(file); err != nil {
@@ -173,15 +184,15 @@ func LoadFromFile(path string) (*Config, error) {
 // bindEnvVars binds environment variables to viper
 func bindEnvVars(v *viper.Viper) {
 	// Web config
-	v.BindEnv("web.host", "LMON_WEB_HOST")
-	v.BindEnv("web.port", "LMON_WEB_PORT")
+	_ = v.BindEnv("web.host", "LMON_WEB_HOST")
+	_ = v.BindEnv("web.port", "LMON_WEB_PORT")
 
 	// Monitoring config
-	v.BindEnv("monitoring.interval", "LMON_MONITORING_INTERVAL")
+	_ = v.BindEnv("monitoring.interval", "LMON_MONITORING_INTERVAL")
 
 	// Webhook config
-	v.BindEnv("webhook.enabled", "LMON_WEBHOOK_ENABLED")
-	v.BindEnv("webhook.url", "LMON_WEBHOOK_URL")
+	_ = v.BindEnv("webhook.enabled", "LMON_WEBHOOK_ENABLED")
+	_ = v.BindEnv("webhook.url", "LMON_WEBHOOK_URL")
 }
 
 // Save saves the configuration to a file

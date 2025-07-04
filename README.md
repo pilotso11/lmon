@@ -59,7 +59,7 @@ monitoring:
   system:
     cpu_threshold: 80
     memory_threshold: 80
-    cpu_icon: "memory"
+    cpu_icon: "speed"
     memory_icon: "memory"
   healthchecks:
     - name: "Example API"
@@ -164,6 +164,11 @@ services:
       - ./config:/etc/lmon
       # Mount proc for system-wide metrics:
       - /proc:/proc:ro
+      # Mount root filesystem and other partitions for disk monitoring:
+      - /:/hostroot:ro
+      - /home:/hosthome:ro
+      # Add additional partitions as needed:
+      # - /var:/hostvar:ro
     environment:
       - LMON_WEB_HOST=0.0.0.0
       - LMON_WEB_PORT=8080
@@ -174,6 +179,13 @@ services:
     pid: host
     privileged: true
     restart: unless-stopped
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
 ```
 
 Run with:
@@ -196,12 +208,12 @@ podman run -p 8080:8080 -v /path/to/config:/etc/lmon lmon
 
 To get accurate system-wide CPU and memory metrics:
 ```bash
-podman run -p 8080:8080 -v /path/to/config:/etc/lmon --pid=host --privileged -v /proc:/proc:ro lmon
+podman run -p 8080:8080 -v /path/to/config:/etc/lmon --pid=host --privileged -v /proc:/proc:ro --healthcheck-cmd="wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1" --healthcheck-interval=30s --healthcheck-timeout=10s --healthcheck-retries=3 --healthcheck-start-period=5s lmon
 ```
 
 For rootless Podman, you may need to add `--userns=keep-id` to preserve user permissions:
 ```bash
-podman run --userns=keep-id -p 8080:8080 -v /path/to/config:/etc/lmon --pid=host --privileged -v /proc:/proc:ro lmon
+podman run --userns=keep-id -p 8080:8080 -v /path/to/config:/etc/lmon --pid=host --privileged -v /proc:/proc:ro --healthcheck-cmd="wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1" --healthcheck-interval=30s --healthcheck-timeout=10s --healthcheck-retries=3 --healthcheck-start-period=5s lmon
 ```
 
 You can also use Podman Compose with the same docker-compose.yml file:
@@ -245,6 +257,39 @@ When a monitored item becomes unhealthy, lmon can send a notification to a webho
 - Message
 
 This can be integrated with services like Slack, Discord, or custom notification systems.
+
+## Testing
+
+### Unit Tests
+
+To run the unit tests:
+
+```bash
+go test ./...
+```
+
+### UI Tests
+
+The project includes UI tests using the [go-rod](https://github.com/go-rod/rod) library to test the web interface. These tests verify:
+
+- Dashboard page functionality
+- Configuration page functionality
+- Proper display of icons and formatting
+- Specific UI fixes (root partition delete button, memory icon, percentage rounding)
+
+To run the UI tests:
+
+```bash
+go test -v ./uitest
+```
+
+The tests will:
+1. Start the lmon web server programmatically
+2. Check that the server is healthy
+3. Run the UI tests
+4. Shut down the server when tests are complete
+
+For more details, see the [UI testing documentation](./uitest/README.md).
 
 ## License
 

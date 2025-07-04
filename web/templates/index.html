@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ .title }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/material-icons@1.13.8/iconfont/material-icons.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
         .status-ok {
             background-color: #28a745;
@@ -42,6 +42,7 @@
         .item-icon {
             font-size: 24px;
             margin-right: 10px;
+            vertical-align: middle;
         }
     </style>
 </head>
@@ -49,7 +50,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="/">
-                <span class="material-icons">monitoring</span>
+                <i class="bi bi-graph-up"></i>
                 lmon - Lightweight Monitoring
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -72,7 +73,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>Monitoring Dashboard</h1>
             <button id="refresh-btn" class="btn btn-primary">
-                <span class="material-icons">refresh</span> Refresh
+                <i class="bi bi-arrow-clockwise"></i> Refresh
             </button>
         </div>
 
@@ -152,16 +153,16 @@
         // Function to get icon
         function getIcon(item) {
             if (item.icon) {
-                return `<span class="material-icons item-icon">${item.icon}</span>`;
+                return `<i class="bi bi-${item.icon} item-icon"></i>`;
             }
-            
+
             // Default icons based on type
             switch(item.type) {
-                case 'cpu': return '<span class="material-icons item-icon">memory</span>';
-                case 'memory': return '<span class="material-icons item-icon">memory</span>';
-                case 'disk': return '<span class="material-icons item-icon">storage</span>';
-                case 'health': return '<span class="material-icons item-icon">health_and_safety</span>';
-                default: return '<span class="material-icons item-icon">monitor_heart</span>';
+                case 'cpu': return '<i class="bi bi-cpu item-icon"></i>';
+                case 'memory': return '<i class="bi bi-speedometer item-icon"></i>';
+                case 'disk': return '<i class="bi bi-hdd item-icon"></i>';
+                case 'health': return '<i class="bi bi-activity item-icon"></i>';
+                default: return '<i class="bi bi-graph-up item-icon"></i>';
             }
         }
 
@@ -173,16 +174,16 @@
                     const systemItems = items.filter(item => item.type === 'cpu' || item.type === 'memory');
                     const diskItems = items.filter(item => item.type === 'disk');
                     const healthItems = items.filter(item => item.type === 'health');
-                    
+
                     // Render system items
                     document.getElementById('system-items').innerHTML = renderItems(systemItems);
-                    
+
                     // Render disk items
                     document.getElementById('disk-items').innerHTML = renderItems(diskItems);
-                    
+
                     // Render health items
                     document.getElementById('health-items').innerHTML = renderItems(healthItems);
-                    
+
                     // Add click handlers for item details
                     document.querySelectorAll('.item-row').forEach(row => {
                         row.addEventListener('click', function() {
@@ -204,33 +205,33 @@
             if (items.length === 0) {
                 return '<div class="text-center">No items to display</div>';
             }
-            
+
             let html = '<div class="list-group">';
-            
+
             items.forEach(item => {
                 const statusClass = getStatusClass(item.status);
                 const icon = getIcon(item);
-                
+
                 // Determine if item should be expanded (if status is not OK)
                 const expanded = item.status.toLowerCase() !== 'ok' ? 'show' : '';
-                
+
                 html += `
                     <div class="list-group-item item-row" data-id="${item.id}">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                ${icon}
+                                <span style="display: inline-block;">${icon}</span>
                                 <span class="status-indicator ${statusClass}"></span>
                                 ${item.name}
                             </div>
                             <div>
                                 <span class="badge ${statusClass}">${item.status}</span>
-                                <span class="ms-2">${item.value}${item.unit}</span>
+                                <span class="ms-2">${item.unit === '%' ? parseFloat(item.value).toFixed(2) : item.value}${item.unit}</span>
                             </div>
                         </div>
                     </div>
                 `;
             });
-            
+
             html += '</div>';
             return html;
         }
@@ -239,10 +240,10 @@
         function showItemDetails(itemId, items) {
             const item = items.find(i => i.id === itemId);
             if (!item) return;
-            
+
             const statusClass = getStatusClass(item.status);
             const icon = getIcon(item);
-            
+
             let html = `
                 <div class="d-flex align-items-center mb-3">
                     ${icon}
@@ -252,7 +253,7 @@
                     <span class="badge ${statusClass} fs-6">${item.status}</span>
                 </div>
                 <div class="mb-3">
-                    <strong>Value:</strong> ${item.value}${item.unit}
+                    <strong>Value:</strong> ${item.unit === '%' ? parseFloat(item.value).toFixed(2) : item.value}${item.unit}
                 </div>
                 <div class="mb-3">
                     <strong>Threshold:</strong> ${item.threshold}${item.unit}
@@ -264,10 +265,10 @@
                     <strong>Message:</strong> ${item.message}
                 </div>
             `;
-            
+
             document.getElementById('modal-title').textContent = item.name;
             document.getElementById('modal-body').innerHTML = html;
-            
+
             const modal = new bootstrap.Modal(document.getElementById('itemDetailModal'));
             modal.show();
         }
@@ -275,10 +276,10 @@
         // Load items on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadItems();
-            
+
             // Set up refresh button
             document.getElementById('refresh-btn').addEventListener('click', loadItems);
-            
+
             // Auto-refresh every 60 seconds
             setInterval(loadItems, 60000);
         });

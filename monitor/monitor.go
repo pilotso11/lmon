@@ -160,6 +160,16 @@ func (s *Service) notifyUnhealthy(item *Item) {
 
 // monitorDisk monitors disk space
 func (s *Service) monitorDisk() {
+	// Perform initial check immediately
+	items, err := s.diskMonitor.Check()
+	if err != nil {
+		log.Printf("Disk monitoring error: %v", err)
+	} else {
+		for _, item := range items {
+			s.UpdateItem(item)
+		}
+	}
+
 	ticker := time.NewTicker(time.Duration(s.config.Monitoring.Interval) * time.Second)
 	defer ticker.Stop()
 
@@ -183,6 +193,16 @@ func (s *Service) monitorDisk() {
 
 // monitorSystem monitors CPU and memory usage
 func (s *Service) monitorSystem() {
+	// Perform initial check immediately
+	items, err := s.sysMonitor.Check()
+	if err != nil {
+		log.Printf("System monitoring error: %v", err)
+	} else {
+		for _, item := range items {
+			s.UpdateItem(item)
+		}
+	}
+
 	ticker := time.NewTicker(time.Duration(s.config.Monitoring.Interval) * time.Second)
 	defer ticker.Stop()
 
@@ -206,6 +226,16 @@ func (s *Service) monitorSystem() {
 
 // monitorHealthChecks monitors health checks
 func (s *Service) monitorHealthChecks() {
+	// Perform initial check immediately
+	items, err := s.healthMonitor.Check()
+	if err != nil {
+		log.Printf("Health check monitoring error: %v", err)
+	} else {
+		for _, item := range items {
+			s.UpdateItem(item)
+		}
+	}
+
 	ticker := time.NewTicker(time.Duration(s.config.Monitoring.Interval) * time.Second)
 	defer ticker.Stop()
 

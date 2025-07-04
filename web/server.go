@@ -107,6 +107,9 @@ func (s *Server) setupRoutes() {
 		api.DELETE("/config/:type/:id", s.handleDeleteMonitor)
 	}
 
+	// Health check endpoint
+	s.router.GET("/healthz", s.handleHealthCheck)
+
 	// Web UI routes
 	s.router.GET("/", s.handleIndex)
 	s.router.GET("/config", s.handleConfigPage)
@@ -259,4 +262,36 @@ func (s *Server) handleDeleteMonitor(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%s monitor deleted successfully", monitorType)})
+}
+
+// handleHealthCheck handles the health check endpoint request
+func (s *Server) handleHealthCheck(c *gin.Context) {
+	// Get all monitored items to check overall system health
+	items := s.monitor.GetItems()
+
+	// Check if any item is in critical status
+	hasCritical := false
+	for _, item := range items {
+		if item.Status == "CRITICAL" {
+			hasCritical = true
+			break
+		}
+	}
+
+	// If any item is critical, return 503 Service Unavailable
+	// Otherwise return 200 OK
+	if hasCritical {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":  "unhealthy",
+			"message": "One or more monitored items are in CRITICAL state",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "healthy",
+		"message":   "All systems operational",
+		"timestamp": time.Now().Format(time.RFC3339),
+		"version":   "1.0.0", // You might want to get this from a version constant
+	})
 }

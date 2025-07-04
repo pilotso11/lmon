@@ -36,7 +36,14 @@ ENV LMON_WEB_HOST=0.0.0.0
 ENV LMON_WEB_PORT=8080
 
 # Note: To get accurate system-wide CPU and memory metrics, run the container with:
-# docker run --pid=host --privileged -v /proc:/proc:ro ...
+# docker run --pid=host --privileged -v /proc:/proc:ro -v /:/hostroot:ro ...
+# 
+# For monitoring disk partitions, mount the parent drives you want to monitor:
+# docker run -v /:/hostroot:ro -v /home:/hosthome:ro ...
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1
 
 # Run the application
 CMD ["/app/lmon"]

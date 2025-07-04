@@ -65,9 +65,9 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU and Memory OK",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    80,
-				MemoryThreshold: 80,
-				CPUIcon:         "memory",
+				CPUThreshold:    90,
+				MemoryThreshold: 90,
+				CPUIcon:         "speed",
 				MemoryIcon:      "memory",
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
@@ -96,9 +96,9 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU Warning, Memory OK",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    80,
-				MemoryThreshold: 80,
-				CPUIcon:         "memory",
+				CPUThreshold:    90,
+				MemoryThreshold: 90,
+				CPUIcon:         "speed",
 				MemoryIcon:      "memory",
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
@@ -127,9 +127,9 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU Critical, Memory Warning",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    80,
-				MemoryThreshold: 80,
-				CPUIcon:         "memory",
+				CPUThreshold:    90,
+				MemoryThreshold: 90,
+				CPUIcon:         "speed",
 				MemoryIcon:      "memory",
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
@@ -158,9 +158,9 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU Error",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    80,
-				MemoryThreshold: 80,
-				CPUIcon:         "memory",
+				CPUThreshold:    90,
+				MemoryThreshold: 90,
+				CPUIcon:         "speed",
 				MemoryIcon:      "memory",
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
@@ -176,9 +176,9 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "Memory Error",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    80,
-				MemoryThreshold: 80,
-				CPUIcon:         "memory",
+				CPUThreshold:    90,
+				MemoryThreshold: 90,
+				CPUIcon:         "speed",
 				MemoryIcon:      "memory",
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {
@@ -198,9 +198,9 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "Empty CPU data",
 			systemConfig: config.SystemConfig{
-				CPUThreshold:    80,
-				MemoryThreshold: 80,
-				CPUIcon:         "memory",
+				CPUThreshold:    90,
+				MemoryThreshold: 90,
+				CPUIcon:         "speed",
 				MemoryIcon:      "memory",
 			},
 			setupCPUMock: func(m *MockCPUUsageProvider) {

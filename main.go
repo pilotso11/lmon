@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -42,13 +43,17 @@ func installService() error {
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
 	}
-	defer sourceFile.Close()
+	defer func(sourceFile *os.File) {
+		_ = sourceFile.Close()
+	}(sourceFile)
 
 	targetFile, err := os.OpenFile(targetPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create target file: %w", err)
 	}
-	defer targetFile.Close()
+	defer func(targetFile *os.File) {
+		_ = targetFile.Close()
+	}(targetFile)
 
 	if _, err := io.Copy(targetFile, sourceFile); err != nil {
 		return fmt.Errorf("failed to copy file: %w", err)
@@ -90,13 +95,17 @@ WantedBy=multi-user.target
 		if err != nil {
 			return fmt.Errorf("failed to open service file: %w", err)
 		}
-		defer serviceFile.Close()
+		defer func(serviceFile *os.File) {
+			_ = serviceFile.Close()
+		}(serviceFile)
 
 		targetServiceFile, err := os.OpenFile("/etc/systemd/system/lmon.service", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to create target service file: %w", err)
 		}
-		defer targetServiceFile.Close()
+		defer func(targetServiceFile *os.File) {
+			_ = targetServiceFile.Close()
+		}(targetServiceFile)
 
 		if _, err := io.Copy(targetServiceFile, serviceFile); err != nil {
 			return fmt.Errorf("failed to copy service file: %w", err)
@@ -191,10 +200,10 @@ func main() {
 	log.Printf("Loaded configuration: Web: {Host: %s, Port: %d}", cfg.Web.Host, cfg.Web.Port)
 	log.Printf("Monitoring: {Interval: %d}", cfg.Monitoring.Interval)
 	log.Printf("System: {CPUThreshold: %d, MemoryThreshold: %d, CPUIcon: %s, MemoryIcon: %s}",
-		cfg.Monitoring.System.CPUThreshold,
-		cfg.Monitoring.System.MemoryThreshold,
-		cfg.Monitoring.System.CPUIcon,
-		cfg.Monitoring.System.MemoryIcon)
+		cfg.Monitoring.System.CPU.Threshold,
+		cfg.Monitoring.System.Memory.Threshold,
+		cfg.Monitoring.System.CPU.Icon,
+		cfg.Monitoring.System.Memory.Icon)
 	log.Printf("Disk monitors: %d", len(cfg.Monitoring.Disk))
 	for i, disk := range cfg.Monitoring.Disk {
 		log.Printf("  Disk[%d]: {Path: %s, Threshold: %d, Icon: %s}", i, disk.Path, disk.Threshold, disk.Icon)
@@ -219,7 +228,7 @@ func main() {
 	go func() {
 		addr := fmt.Sprintf("%s:%d", cfg.Web.Host, cfg.Web.Port)
 		log.Printf("Starting web server on %s", addr)
-		if err := webServer.Start(); err != nil && err != http.ErrServerClosed {
+		if err := webServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Web server error: %v", err)
 		}
 	}()
@@ -233,7 +242,7 @@ func main() {
 	stop()
 
 	// Wait for graceful shutdown
-	webServer.Stop()
+	_ = webServer.Stop()
 
 	log.Println("Shutdown complete")
 }

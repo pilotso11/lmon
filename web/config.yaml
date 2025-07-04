@@ -3,12 +3,12 @@ monitoring:
     disk:
         - path: /
           threshold: 80
-          icon: storage
+          icon: hdd
     system:
         cputhreshold: 80
         memorythreshold: 80
-        cpuicon: memory
-        memoryicon: memory
+        cpuicon: cpu
+        memoryicon: speedometer
     healthchecks: []
 web:
     host: updated-host

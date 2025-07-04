@@ -32,6 +32,9 @@ func TestDiskMonitor_Check(t *testing.T) {
 		name           string
 		diskConfig     []config.DiskConfig
 		setupMock      func(*MockDiskUsageProvider)
+		isZFSVolume    bool
+		zfsPoolHealth  *ZFSPoolHealth
+		zfsPoolError   error
 		expectedItems  int
 		expectedStatus Status
 		expectError    bool
@@ -54,6 +57,9 @@ func TestDiskMonitor_Check(t *testing.T) {
 					UsedPercent: 20.0,
 				}, nil)
 			},
+			isZFSVolume:    false,
+			zfsPoolHealth:  nil,
+			zfsPoolError:   nil,
 			expectedItems:  1,
 			expectedStatus: StatusOK,
 			expectError:    false,
@@ -76,6 +82,9 @@ func TestDiskMonitor_Check(t *testing.T) {
 					UsedPercent: 70.0,
 				}, nil)
 			},
+			isZFSVolume:    false,
+			zfsPoolHealth:  nil,
+			zfsPoolError:   nil,
 			expectedItems:  1,
 			expectedStatus: StatusWarning,
 			expectError:    false,
@@ -98,6 +107,9 @@ func TestDiskMonitor_Check(t *testing.T) {
 					UsedPercent: 90.0,
 				}, nil)
 			},
+			isZFSVolume:    false,
+			zfsPoolHealth:  nil,
+			zfsPoolError:   nil,
 			expectedItems:  1,
 			expectedStatus: StatusCritical,
 			expectError:    false,
@@ -132,6 +144,9 @@ func TestDiskMonitor_Check(t *testing.T) {
 					UsedPercent: 80.0,
 				}, nil)
 			},
+			isZFSVolume:   false,
+			zfsPoolHealth: nil,
+			zfsPoolError:  nil,
 			expectedItems: 2,
 			expectError:   false,
 		},
@@ -147,7 +162,135 @@ func TestDiskMonitor_Check(t *testing.T) {
 			setupMock: func(m *MockDiskUsageProvider) {
 				m.On("Usage", "/").Return(nil, errors.New("failed to get disk usage"))
 			},
-			expectError: true,
+			isZFSVolume:    false,
+			zfsPoolHealth:  nil,
+			zfsPoolError:   nil,
+			expectedItems:  1,
+			expectedStatus: StatusCritical,
+			expectError:    false,
+		},
+		{
+			name: "ZFS volume with ONLINE status",
+			diskConfig: []config.DiskConfig{
+				{
+					Path:      "/zfs/pool",
+					Threshold: 80,
+					Icon:      "storage",
+				},
+			},
+			setupMock: func(m *MockDiskUsageProvider) {
+				m.On("Usage", "/zfs/pool").Return(&disk.UsageStat{
+					Path:        "/zfs/pool",
+					Total:       1000000000,
+					Free:        800000000,
+					Used:        200000000,
+					UsedPercent: 20.0,
+				}, nil)
+			},
+			isZFSVolume: true,
+			zfsPoolHealth: &ZFSPoolHealth{
+				Pool:   "zpool",
+				Status: "ONLINE",
+			},
+			zfsPoolError:   nil,
+			expectedItems:  1,
+			expectedStatus: StatusOK,
+			expectError:    false,
+		},
+		{
+			name: "ZFS volume with DEGRADED status",
+			diskConfig: []config.DiskConfig{
+				{
+					Path:      "/zfs/pool",
+					Threshold: 80,
+					Icon:      "storage",
+				},
+			},
+			setupMock: func(m *MockDiskUsageProvider) {
+				m.On("Usage", "/zfs/pool").Return(&disk.UsageStat{
+					Path:        "/zfs/pool",
+					Total:       1000000000,
+					Free:        800000000,
+					Used:        200000000,
+					UsedPercent: 20.0,
+				}, nil)
+			},
+			isZFSVolume: true,
+			zfsPoolHealth: &ZFSPoolHealth{
+				Pool:   "zpool",
+				Status: "DEGRADED",
+			},
+			zfsPoolError:   nil,
+			expectedItems:  1,
+			expectedStatus: StatusCritical,
+			expectError:    false,
+		},
+		{
+			name: "ZFS volume with error getting pool health",
+			diskConfig: []config.DiskConfig{
+				{
+					Path:      "/zfs/pool",
+					Threshold: 80,
+					Icon:      "storage",
+				},
+			},
+			setupMock: func(m *MockDiskUsageProvider) {
+				m.On("Usage", "/zfs/pool").Return(&disk.UsageStat{
+					Path:        "/zfs/pool",
+					Total:       1000000000,
+					Free:        800000000,
+					Used:        200000000,
+					UsedPercent: 20.0,
+				}, nil)
+			},
+			isZFSVolume:    true,
+			zfsPoolHealth:  nil,
+			zfsPoolError:   errors.New("failed to get ZFS pool health"),
+			expectedItems:  1,
+			expectedStatus: StatusOK,
+			expectError:    false,
+		},
+		{
+			name: "Multiple disks with one failing",
+			diskConfig: []config.DiskConfig{
+				{
+					Path:      "/",
+					Threshold: 80,
+					Icon:      "storage",
+				},
+				{
+					Path:      "/missing",
+					Threshold: 80,
+					Icon:      "storage",
+				},
+				{
+					Path:      "/home",
+					Threshold: 70,
+					Icon:      "storage",
+				},
+			},
+			setupMock: func(m *MockDiskUsageProvider) {
+				m.On("Usage", "/").Return(&disk.UsageStat{
+					Path:        "/",
+					Total:       1000000000,
+					Free:        800000000,
+					Used:        200000000,
+					UsedPercent: 20.0,
+				}, nil)
+				m.On("Usage", "/missing").Return(nil, errors.New("disk not found"))
+				m.On("Usage", "/home").Return(&disk.UsageStat{
+					Path:        "/home",
+					Total:       1000000000,
+					Free:        200000000,
+					Used:        800000000,
+					UsedPercent: 80.0,
+				}, nil)
+			},
+			isZFSVolume:   false,
+			zfsPoolHealth: nil,
+			zfsPoolError:  nil,
+			expectedItems: 3,
+			expectError:   false,
 		},
 	}
 
@@ -163,8 +306,17 @@ func TestDiskMonitor_Check(t *testing.T) {
 			cfg := config.DefaultConfig()
 			cfg.Monitoring.Disk = tc.diskConfig
 
-			// Create disk monitor with mock provider
-			monitor := NewDiskMonitorWithProvider(cfg, mockProvider)
+			// Create custom ZFS functions
+			isZFSVolume := func(path string) bool {
+				return tc.isZFSVolume
+			}
+
+			getZFSPoolHealth := func(path string) (*ZFSPoolHealth, error) {
+				return tc.zfsPoolHealth, tc.zfsPoolError
+			}
+
+			// Create disk monitor with mock provider and custom ZFS functions
+			monitor := NewDiskMonitorWithCustomFuncs(cfg, mockProvider, isZFSVolume, getZFSPoolHealth)
 
 			// Check disk usage
 			items, err := monitor.Check()
@@ -189,6 +341,30 @@ func TestDiskMonitor_Check(t *testing.T) {
 				assert.Contains(t, item.Name, "Disk")
 				assert.Equal(t, "disk", item.Type)
 				assert.NotEmpty(t, item.Message)
+			}
+
+			// Check for specific test cases
+			if tc.name == "Multiple disks with one failing" {
+				// Find the missing disk item
+				var missingDiskItem *Item
+				for _, item := range items {
+					if item.ID == "disk-/missing" {
+						missingDiskItem = item
+						break
+					}
+				}
+
+				// Verify the missing disk is reported correctly
+				require.NotNil(t, missingDiskItem)
+				assert.Equal(t, StatusCritical, missingDiskItem.Status)
+				assert.Contains(t, missingDiskItem.Message, "not accessible")
+			} else if tc.name == "ZFS volume with ONLINE status" {
+				// Verify ZFS pool health is included in the message
+				assert.Contains(t, items[0].Message, "ZFS Pool 'zpool' health: ONLINE")
+			} else if tc.name == "ZFS volume with DEGRADED status" {
+				// Verify ZFS pool health is included in the message and status is CRITICAL
+				assert.Contains(t, items[0].Message, "ZFS Pool 'zpool' health: DEGRADED")
+				assert.Equal(t, StatusCritical, items[0].Status)
 			}
 
 			// Verify all expectations were met

@@ -230,6 +230,40 @@ func TestServer_HandleGetConfig(t *testing.T) {
 	// Verify response config
 	assert.Equal(t, cfg.Web.Host, responseConfig.Web.Host)
 	assert.Equal(t, cfg.Web.Port, responseConfig.Web.Port)
+
+	// Verify JSON field names match what the JavaScript code expects
+	var jsonMap map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &jsonMap)
+	require.NoError(t, err)
+
+	// Check top-level fields
+	assert.Contains(t, jsonMap, "web")
+	assert.Contains(t, jsonMap, "monitoring")
+	assert.Contains(t, jsonMap, "webhook")
+
+	// Check web fields
+	webMap := jsonMap["web"].(map[string]interface{})
+	assert.Contains(t, webMap, "host")
+	assert.Contains(t, webMap, "port")
+
+	// Check monitoring fields
+	monitoringMap := jsonMap["monitoring"].(map[string]interface{})
+	assert.Contains(t, monitoringMap, "interval")
+	assert.Contains(t, monitoringMap, "disk")
+	assert.Contains(t, monitoringMap, "system")
+	assert.Contains(t, monitoringMap, "healthchecks")
+
+	// Check system fields
+	systemMap := monitoringMap["system"].(map[string]interface{})
+	assert.Contains(t, systemMap, "cputhreshold")
+	assert.Contains(t, systemMap, "memorythreshold")
+	assert.Contains(t, systemMap, "cpuicon")
+	assert.Contains(t, systemMap, "memoryicon")
+
+	// Check webhook fields
+	webhookMap := jsonMap["webhook"].(map[string]interface{})
+	assert.Contains(t, webhookMap, "enabled")
+	assert.Contains(t, webhookMap, "url")
 }
 
 func TestServer_HandleUpdateConfig(t *testing.T) {
