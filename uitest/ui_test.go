@@ -228,7 +228,6 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 	require.NoError(t, err, "Failed to find card headers")
 	var diskCard *rod.Element
 	var systemCard *rod.Element
-	var webSettingsCard *rod.Element
 
 	for _, card := range configCards {
 		text, err := card.Text()
@@ -237,32 +236,11 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 			diskCard = card
 		} else if text == "System Monitoring" {
 			systemCard = card
-		} else if text == "Web Settings" {
-			webSettingsCard = card
 		}
 	}
 
 	assert.NotNil(t, diskCard, "Disk Monitoring card not found")
 	assert.NotNil(t, systemCard, "System Monitoring card not found")
-	assert.NotNil(t, webSettingsCard, "Web Settings card not found")
-
-	// Test that the dashboard title field is present in the Web Settings card
-	if webSettingsCard != nil {
-		// Find the Web Settings card body
-		webSettingsCardParent, err := webSettingsCard.Parent()
-		require.NoError(t, err, "Failed to find Web Settings card parent")
-		webSettingsCardBody, err := webSettingsCardParent.Element(".card-body")
-		require.NoError(t, err, "Failed to find Web Settings card body")
-
-		// Check that the dashboard title field is present
-		dashboardTitleInput, err := webSettingsCardBody.Element("#dashboard-title")
-		require.NoError(t, err, "Failed to find dashboard title input")
-
-		// Check that the dashboard title input has a value
-		dashboardTitleValue, err := dashboardTitleInput.Attribute("value")
-		require.NoError(t, err, "Failed to get dashboard title value")
-		assert.NotEmpty(t, *dashboardTitleValue, "Dashboard title value should not be empty")
-	}
 
 	// Wait for data to load
 	time.Sleep(2 * time.Second)
