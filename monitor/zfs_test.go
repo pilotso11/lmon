@@ -10,11 +10,7 @@ import (
 
 // TestIsZFSVolume tests the isZFSVolume function
 func TestIsZFSVolume(t *testing.T) {
-	// Skip test if ZFS is not installed
-	_, err := exec.LookPath("zfs")
-	if err != nil {
-		t.Skip("Skipping test because ZFS is not installed")
-	}
+	// Do not skip test if ZFS is not installed; always run with mocks
 	// Save the original exec.Command function
 	originalExecCommand := execCommand
 	defer func() { execCommand = originalExecCommand }()
@@ -73,11 +69,7 @@ func TestIsZFSVolume(t *testing.T) {
 
 // TestGetZFSPoolHealth tests the getZFSPoolHealth function
 func TestGetZFSPoolHealth(t *testing.T) {
-	// Skip test if ZFS is not installed
-	_, err := exec.LookPath("zfs")
-	if err != nil {
-		t.Skip("Skipping test because ZFS is not installed")
-	}
+	// Do not skip test if ZFS is not installed; always run with mocks
 	// Save the original exec.Command function
 	originalExecCommand := execCommand
 	defer func() { execCommand = originalExecCommand }()
@@ -104,7 +96,8 @@ func TestGetZFSPoolHealth(t *testing.T) {
 				func(command string, args ...string) *exec.Cmd {
 					assert.Equal(t, "zpool", command)
 					assert.Equal(t, []string{"status", "-H", "-p", "zpool"}, args)
-					return mockExecCommand("echo", "zpool\t1234567890\tONLINE\t0\t0\t0")
+					// Return two lines: header and the expected status line
+					return mockExecCommand("echo", "header\nzpool\t1234567890\tONLINE\t0\t0\t0")
 				},
 			},
 			expectedPool:   "zpool",
@@ -125,7 +118,8 @@ func TestGetZFSPoolHealth(t *testing.T) {
 				func(command string, args ...string) *exec.Cmd {
 					assert.Equal(t, "zpool", command)
 					assert.Equal(t, []string{"status", "-H", "-p", "zpool"}, args)
-					return mockExecCommand("echo", "zpool\t1234567890\tDEGRADED\t0\t0\t0")
+					// Return two lines: header and the expected status line
+					return mockExecCommand("echo", "header\nzpool\t1234567890\tDEGRADED\t0\t0\t0")
 				},
 			},
 			expectedPool:   "zpool",
@@ -197,7 +191,8 @@ func TestGetZFSPoolHealth(t *testing.T) {
 				func(command string, args ...string) *exec.Cmd {
 					assert.Equal(t, "zpool", command)
 					assert.Equal(t, []string{"status", "-H", "-p", "zpool"}, args)
-					return mockExecCommand("echo", "invalid format")
+					// Return two lines, but the second line is invalid
+					return mockExecCommand("echo", "header\ninvalid format")
 				},
 			},
 			expectedPool:   "",
@@ -242,8 +237,7 @@ func TestGetZFSPoolHealth(t *testing.T) {
 
 // Mock helpers
 
-// Override the exec.Command function
-var execCommand = exec.Command
+// (no longer needed; use package-level execCommand from disk.go)
 
 // mockExecCommand returns a mock exec.Command that executes the echo command with the given output
 func mockExecCommand(command string, output string) *exec.Cmd {

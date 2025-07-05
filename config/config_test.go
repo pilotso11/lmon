@@ -119,3 +119,25 @@ func TestLoadWithEnvironmentVariables(t *testing.T) {
 	assert.True(t, cfg.Webhook.Enabled)
 	assert.Equal(t, "https://example.org/webhook", cfg.Webhook.URL)
 }
+
+func TestLoadFromEmptyYAMLFile(t *testing.T) {
+	// Create a temporary empty YAML file
+	tmpfile, err := os.CreateTemp("", "empty-config-*.yaml")
+	require.NoError(t, err)
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(tmpfile.Name())
+
+	// Write nothing to the file (leave it empty)
+	require.NoError(t, tmpfile.Close())
+
+	// Load config from the empty file
+	cfg, err := LoadFromFile(tmpfile.Name())
+	require.NoError(t, err)
+
+	// Should fallback to defaults
+	assert.Equal(t, DefaultConfig().Web.Host, cfg.Web.Host)
+	assert.Equal(t, DefaultConfig().Web.Port, cfg.Web.Port)
+	assert.Equal(t, DefaultConfig().Monitoring.Interval, cfg.Monitoring.Interval)
+	assert.Equal(t, DefaultConfig().Webhook.Enabled, cfg.Webhook.Enabled)
+}

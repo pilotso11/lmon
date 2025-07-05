@@ -2,11 +2,14 @@ package web
 
 import (
 	"encoding/json"
+	"html/template"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -373,4 +376,283 @@ func TestServer_HandleConfigPage(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "Mock Config Page")
+}
+
+func TestTemplates_LoadAndParse(t *testing.T) {
+	// This test ensures that the embedded templates can be loaded and parsed without error
+	templFS, err := GetTemplatesFSWithRoot()
+	assert.NoError(t, err, "should load embedded templates FS")
+
+	// Try to parse all HTML templates in the embedded FS
+	_, err = template.ParseFS(templFS, "*.html")
+	assert.NoError(t, err, "should parse all embedded HTML templates")
+}
+
+func TestServer_StartAndStop(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Web.Port = 0 // random port
+	mockService := new(MockMonitorService)
+	server := NewServer(cfg, mockService)
+
+	// Start and Stop should not panic (we don't actually listen on a port in test)
+	err := server.Stop()
+	assert.NoError(t, err)
+}
+
+func TestServer_HandleHealthCheck_EdgeCases(t *testing.T) {
+	cfg := config.DefaultConfig()
+	mockService := new(MockMonitorService)
+	server := NewServer(cfg, mockService)
+
+	// Case 1: No items at all (should be healthy)
+	mockService.On("GetItems").Return([]*monitor.Item{})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	server.handleHealthCheck(c)
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "healthy", resp["status"])
+
+	// Case 2: All items healthy
+	mockService = new(MockMonitorService)
+	server = NewServer(cfg, mockService)
+	mockService.On("GetItems").Return([]*monitor.Item{
+		{ID: "1", Status: monitor.StatusOK},
+		{ID: "2", Status: monitor.StatusWarning},
+	})
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	server.handleHealthCheck(c)
+	assert.Equal(t, http.StatusOK, w.Code)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "healthy", resp["status"])
+
+	// Case 3: At least one item critical
+	mockService = new(MockMonitorService)
+	server = NewServer(cfg, mockService)
+	mockService.On("GetItems").Return([]*monitor.Item{
+		{ID: "1", Status: monitor.StatusOK},
+		{ID: "2", Status: monitor.StatusCritical},
+	})
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	server.handleHealthCheck(c)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "unhealthy", resp["status"])
+}
+
+func TestGetTemplatesFS(t *testing.T) {
+	fs := GetTemplatesFS()
+	// Should not be zero value
+	assert.NotNil(t, fs)
+}
+
+func TestGetHTTPFileSystem(t *testing.T) {
+	httpFS := GetHTTPFileSystem()
+	assert.NotNil(t, httpFS)
+}
+
+func TestWebServer_Integration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := config.DefaultConfig()
+	cfg.Web.Port = 0 // random port if we ever use ListenAndServe
+
+	// Use a mock monitor service
+	mockService := new(MockMonitorService)
+	mockService.On("GetItems").Return([]*monitor.Item{
+		{
+			ID:        "test-1",
+			Name:      "Test Item 1",
+			Type:      "test",
+			Status:    monitor.StatusOK,
+			Value:     42.0,
+			Threshold: 80.0,
+			Unit:      "%",
+			Icon:      "test",
+			Message:   "Integration test",
+		},
+	})
+	mockService.On("GetItem", "test-1").Return(&monitor.Item{
+		ID:        "test-1",
+		Name:      "Test Item 1",
+		Type:      "test",
+		Status:    monitor.StatusOK,
+		Value:     42.0,
+		Threshold: 80.0,
+		Unit:      "%",
+		Icon:      "test",
+		Message:   "Integration test",
+	})
+	mockService.On("GetItem", "notfound").Return(nil)
+	mockService.On("RefreshChecks").Return()
+
+	server := NewServer(cfg, mockService)
+
+	// Use httptest server for integration
+	ts := httptest.NewServer(server.router)
+	defer ts.Close()
+
+	// Test GET /api/items
+	resp, err := http.Get(ts.URL + "/api/items")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var items []*monitor.Item
+	require.NoError(t, json.Unmarshal(body, &items))
+	assert.Len(t, items, 1)
+	assert.Equal(t, "test-1", items[0].ID)
+
+	// Test GET /api/items/:id (found)
+	resp, err = http.Get(ts.URL + "/api/items/test-1")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ = io.ReadAll(resp.Body)
+	var item monitor.Item
+	require.NoError(t, json.Unmarshal(body, &item))
+	assert.Equal(t, "test-1", item.ID)
+
+	// Test GET /api/items/:id (not found)
+	resp, err = http.Get(ts.URL + "/api/items/notfound")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	// Test GET /api/config
+	resp, err = http.Get(ts.URL + "/api/config")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test GET /healthz
+	resp, err = http.Get(ts.URL + "/healthz")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test GET / (index page)
+	resp, err = http.Get(ts.URL + "/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test GET /config (config page)
+	resp, err = http.Get(ts.URL + "/config")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test GET /static (should return 404 or 200 depending on static files present)
+	resp, err = http.Get(ts.URL + "/static/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.True(t, resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotFound)
+
+	// Optionally, test a static file if any exist
+	staticDir := "web/static"
+	files, _ := os.ReadDir(staticDir)
+	for _, f := range files {
+		if !f.IsDir() {
+			resp, err := http.Get(ts.URL + "/static/" + f.Name())
+			require.NoError(t, err)
+			resp.Body.Close()
+			assert.True(t, resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotFound)
+		}
+		break
+	}
+
+	client := &http.Client{Timeout: 2 * time.Second}
+
+	// Test POST /api/config (update config)
+	updatedConfig := config.DefaultConfig()
+	updatedConfig.Web.Host = "integration-test"
+	jsonData, _ := json.Marshal(updatedConfig)
+	req, _ := http.NewRequest("POST", ts.URL+"/api/config", strings.NewReader(string(jsonData)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test POST /api/config (invalid JSON)
+	req, _ = http.NewRequest("POST", ts.URL+"/api/config", strings.NewReader("{invalid json"))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// Test POST /api/config/disk (valid)
+	mockService.On("RefreshChecks").Return()
+	diskPayload := `{"path":"/testdisk","threshold":90,"icon":"storage"}`
+	req, _ = http.NewRequest("POST", ts.URL+"/api/config/disk", strings.NewReader(diskPayload))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test POST /api/config/disk (invalid JSON)
+	req, _ = http.NewRequest("POST", ts.URL+"/api/config/disk", strings.NewReader("{bad json"))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// Test POST /api/config/healthcheck (valid)
+	healthPayload := `{"name":"testhc","url":"http://localhost","interval":10,"timeout":5,"expected_status":200}`
+	req, _ = http.NewRequest("POST", ts.URL+"/api/config/healthcheck", strings.NewReader(healthPayload))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test POST /api/config/healthcheck (invalid JSON)
+	req, _ = http.NewRequest("POST", ts.URL+"/api/config/healthcheck", strings.NewReader("{bad json"))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// Test POST /api/config/webhook (valid)
+	webhookPayload := `{"enabled":true,"url":"http://localhost/webhook"}`
+	req, _ = http.NewRequest("POST", ts.URL+"/api/config/webhook", strings.NewReader(webhookPayload))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test POST /api/config/webhook (invalid JSON)
+	req, _ = http.NewRequest("POST", ts.URL+"/api/config/webhook", strings.NewReader("{bad json"))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// Test DELETE /api/config/disk/:id (valid)
+	req, _ = http.NewRequest("DELETE", ts.URL+"/api/config/disk/testdisk", nil)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test DELETE /api/config/healthcheck/:id (valid)
+	req, _ = http.NewRequest("DELETE", ts.URL+"/api/config/healthcheck/testhc", nil)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Test DELETE /api/config/unknown/:id (invalid type)
+	req, _ = http.NewRequest("DELETE", ts.URL+"/api/config/unknown/something", nil)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }

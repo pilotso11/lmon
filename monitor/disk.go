@@ -12,6 +12,8 @@ import (
 	"lmon/config"
 )
 
+var execCommand = exec.Command
+
 // DiskUsageProvider is an interface for getting disk usage
 type DiskUsageProvider interface {
 	Usage(path string) (*disk.UsageStat, error)
@@ -78,7 +80,7 @@ func NewDiskMonitorWithCustomFuncs(cfg *config.Config, provider DiskUsageProvide
 
 // isZFSVolume checks if a path is a ZFS volume
 func isZFSVolume(path string) bool {
-	cmd := exec.Command("zfs", "list", "-H", "-o", "name", path)
+	cmd := execCommand("zfs", "list", "-H", "-o", "name", path)
 	output, err := cmd.Output()
 	if err != nil {
 		return false
@@ -89,7 +91,7 @@ func isZFSVolume(path string) bool {
 // getZFSPoolHealth gets the health of a ZFS pool
 func getZFSPoolHealth(path string) (*ZFSPoolHealth, error) {
 	// First, get the pool name from the path
-	cmd := exec.Command("zfs", "list", "-H", "-o", "name", path)
+	cmd := execCommand("zfs", "list", "-H", "-o", "name", path)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ZFS dataset name: %w", err)
@@ -107,7 +109,7 @@ func getZFSPoolHealth(path string) (*ZFSPoolHealth, error) {
 	}
 
 	// Get pool health
-	cmd = exec.Command("zpool", "status", "-H", "-p", poolName)
+	cmd = execCommand("zpool", "status", "-H", "-p", poolName)
 	output, err = cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ZFS pool status: %w", err)

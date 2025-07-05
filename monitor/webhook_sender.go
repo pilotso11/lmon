@@ -3,8 +3,11 @@ package monitor
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"testing"
 	"time"
 )
 
@@ -64,4 +67,81 @@ func (s *defaultWebhookSender) Send(url string, item *Item) error {
 	}
 
 	return nil
+}
+
+// --- TESTS ---
+
+type mockHTTPClient struct {
+	doFunc func(req *http.Request) (*http.Response, error)
+}
+
+func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	return m.doFunc(req)
+}
+
+func TestDefaultWebhookSender_Send_Errors(t *testing.T) {
+	item := &Item{
+		ID:        "id",
+		Name:      "name",
+		Type:      "type",
+		Status:    StatusOK,
+		Value:     1.23,
+		Threshold: 10,
+		Unit:      "%",
+		Icon:      "icon",
+		LastCheck: time.Now(),
+		Message:   "msg",
+	}
+
+	// Request creation error (invalid URL)
+	s := &defaultWebhookSender{client: &mockHTTPClient{}}
+	err := s.Send(":", item)
+	if err == nil {
+		t.Error("expected request creation error, got nil")
+	}
+
+	// Network error
+	s = &defaultWebhookSender{
+		client: &mockHTTPClient{
+			doFunc: func(req *http.Request) (*http.Response, error) {
+				return nil, errors.New("network error")
+			},
+		},
+	}
+	err = s.Send("http://example.com", item)
+	if err == nil || err.Error() != "failed to send webhook request: network error" {
+		t.Errorf("expected network error, got %v", err)
+	}
+
+	// Non-2xx status code
+	s = &defaultWebhookSender{
+		client: &mockHTTPClient{
+			doFunc: func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: 500,
+					Body:       io.NopCloser(bytes.NewBufferString("fail")),
+				}, nil
+			},
+		},
+	}
+	err = s.Send("http://example.com", item)
+	if err == nil || err.Error() != "webhook returned non-success status code: 500" {
+		t.Errorf("expected non-2xx error, got %v", err)
+	}
+
+	// Success
+	s = &defaultWebhookSender{
+		client: &mockHTTPClient{
+			doFunc: func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(bytes.NewBufferString("ok")),
+				}, nil
+			},
+		},
+	}
+	err = s.Send("http://example.com", item)
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
 }

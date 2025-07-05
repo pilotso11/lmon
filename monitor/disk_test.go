@@ -26,6 +26,21 @@ func (m *MockDiskUsageProvider) Usage(path string) (*disk.UsageStat, error) {
 	return args.Get(0).(*disk.UsageStat), args.Error(1)
 }
 
+func TestNewDiskMonitorWithProvider(t *testing.T) {
+	// Create a test configuration
+	cfg := config.DefaultConfig()
+
+	// Create a mock disk usage provider
+	mockProvider := new(MockDiskUsageProvider)
+
+	// Create a disk monitor with the mock provider
+	monitor := NewDiskMonitorWithProvider(cfg, mockProvider)
+
+	// Verify the monitor was created with the correct configuration and provider
+	assert.Equal(t, cfg, monitor.config)
+	assert.Equal(t, mockProvider, monitor.usageProvider)
+}
+
 func TestDiskMonitor_Check(t *testing.T) {
 	// Test cases
 	tests := []struct {

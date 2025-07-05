@@ -118,6 +118,11 @@ func (s *Service) Stop() {
 func (s *Service) RefreshChecks() {
 	log.Println("Refreshing all checks")
 
+	// Update monitors with current configuration
+	s.diskMonitor = NewDiskMonitor(s.config)
+	s.sysMonitor = NewSystemMonitor(s.config)
+	s.healthMonitor = NewHealthMonitor(s.config)
+
 	// Perform disk checks
 	items, err := s.diskMonitor.Check()
 	if err != nil {

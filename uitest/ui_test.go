@@ -205,6 +205,9 @@ func testConfiguration(t *testing.T, browser *rod.Browser, baseURL string) {
 	err := page.WaitLoad()
 	require.NoError(t, err, "Failed to wait for page to load")
 
+	// Add a short wait to ensure all elements are rendered
+	time.Sleep(1 * time.Second)
+
 	// Check the title
 	titleElem, err := page.Element("title")
 	require.NoError(t, err, "Failed to find title element")
