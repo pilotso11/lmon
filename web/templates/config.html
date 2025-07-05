@@ -111,8 +111,12 @@
                             </div>
                         </div>
                         <hr>
-                        <h5>Update System Thresholds</h5>
+                        <h5>Update System Settings</h5>
                         <form id="update-system-form">
+                            <div class="mb-3">
+                                <label for="dashboard-title" class="form-label">Dashboard Title</label>
+                                <input type="text" class="form-control" id="dashboard-title" placeholder="Monitoring Dashboard" value="{{ .dashboard_title }}">
+                            </div>
                             <div class="mb-3">
                                 <label for="cpu-threshold" class="form-label">CPU Threshold (%)</label>
                                 <input type="number" class="form-control" id="cpu-threshold" min="1" max="100" value="80" required>
@@ -121,7 +125,7 @@
                                 <label for="memory-threshold" class="form-label">Memory Threshold (%)</label>
                                 <input type="number" class="form-control" id="memory-threshold" min="1" max="100" value="80" required>
                             </div>
-                            <button type="submit" class="btn btn-primary">Update System Thresholds</button>
+                            <button type="submit" class="btn btn-primary">Update System Settings</button>
                         </form>
                     </div>
                 </div>
@@ -169,29 +173,6 @@
                 </div>
             </div>
 
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">Web Settings</div>
-                    <div class="card-body">
-                        <div id="web-config">
-                            <div class="text-center">
-                                <div class="spinner-border" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                            </div>
-                        </div>
-                        <hr>
-                        <h5>Update Web Settings</h5>
-                        <form id="update-web-form">
-                            <div class="mb-3">
-                                <label for="dashboard-title" class="form-label">Dashboard Title</label>
-                                <input type="text" class="form-control" id="dashboard-title" placeholder="Monitoring Dashboard" value="{{ .dashboard_title }}">
-                            </div>
-                            <button type="submit" class="btn btn-primary">Update Web Settings</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
 
             <div class="col-md-6">
                 <div class="card">
@@ -265,14 +246,11 @@
                     // Render disk config items
                     renderDiskConfig(config.monitoring.disk);
 
-                    // Render system config
-                    renderSystemConfig(config.monitoring.system);
+                    // Render system config (passing web config for dashboard title)
+                    renderSystemConfig(config.monitoring.system, config.web);
 
                     // Render health check config items
                     renderHealthConfig(config.monitoring.healthchecks);
-
-                    // Render web config
-                    renderWebConfig(config.web);
 
                     // Render webhook config
                     renderWebhookConfig(config.webhook);
@@ -322,7 +300,7 @@
         }
 
         // Function to render system config
-        function renderSystemConfig(systemConfig) {
+        function renderSystemConfig(systemConfig, webConfig) {
             if (!systemConfig) {
                 document.getElementById('system-config-items').innerHTML = '<div class="text-center">No system monitoring configured</div>';
                 return;
@@ -357,11 +335,23 @@
                         </div>
                     </div>
                 </div>
+                <div class="config-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-gear item-icon"></i>
+                            <strong>Dashboard Title</strong>
+                        </div>
+                        <div>
+                            <span>${webConfig.dashboard_title || 'Monitoring Dashboard'}</span>
+                        </div>
+                    </div>
+                </div>
             `;
 
             // Set form values
             document.getElementById('cpu-threshold').value = cpuConfig.threshold;
             document.getElementById('memory-threshold').value = memoryConfig.threshold;
+            document.getElementById('dashboard-title').value = webConfig.dashboard_title || 'Monitoring Dashboard';
         }
 
         // Function to render health check config items
@@ -403,30 +393,6 @@
             });
         }
 
-        // Function to render web config
-        function renderWebConfig(webConfig) {
-            if (!webConfig) {
-                document.getElementById('web-config').innerHTML = '<div class="text-center">No web settings configured</div>';
-                return;
-            }
-
-            document.getElementById('web-config').innerHTML = `
-                <div class="config-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <i class="bi bi-gear item-icon"></i>
-                            <strong>Dashboard Title</strong>
-                        </div>
-                        <div>
-                            <span>${webConfig.dashboard_title || 'Monitoring Dashboard'}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Set form values
-            document.getElementById('dashboard-title').value = webConfig.dashboard_title || 'Monitoring Dashboard';
-        }
 
         // Function to render webhook config
         function renderWebhookConfig(webhookConfig) {
@@ -536,6 +502,9 @@
                             config.monitoring.system.memory = {};
                         }
 
+                        // Update dashboard title
+                        config.web.dashboard_title = document.getElementById('dashboard-title').value;
+
                         config.monitoring.system.cpu.threshold = parseInt(document.getElementById('cpu-threshold').value);
                         config.monitoring.system.memory.threshold = parseInt(document.getElementById('memory-threshold').value);
 
@@ -550,7 +519,7 @@
                     })
                     .then(response => {
                         if (!response.ok) {
-                            throw new Error('Failed to update system thresholds');
+                            throw new Error('Failed to update system settings');
                         }
                         return response.json();
                     })
@@ -559,8 +528,8 @@
                         loadConfig();
                     })
                     .catch(error => {
-                        console.error('Error updating system thresholds:', error);
-                        showToast('Error', 'Failed to update system thresholds', true);
+                        console.error('Error updating system settings:', error);
+                        showToast('Error', 'Failed to update system settings', true);
                     });
             });
 
@@ -600,40 +569,6 @@
                 });
             });
 
-            // Update web settings form submission
-            document.getElementById('update-web-form').addEventListener('submit', function(e) {
-                e.preventDefault();
-
-                fetch('/api/config')
-                    .then(response => response.json())
-                    .then(config => {
-                        // Update web settings
-                        config.web.dashboard_title = document.getElementById('dashboard-title').value;
-
-                        // Save updated config
-                        return fetch('/api/config', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(config)
-                        });
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Failed to update web settings');
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        showToast('Success', data.message);
-                        loadConfig();
-                    })
-                    .catch(error => {
-                        console.error('Error updating web settings:', error);
-                        showToast('Error', 'Failed to update web settings', true);
-                    });
-            });
 
             // Update webhook form submission
             document.getElementById('update-webhook-form').addEventListener('submit', function(e) {
