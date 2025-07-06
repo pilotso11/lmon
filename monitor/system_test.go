@@ -65,11 +65,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU and Memory OK",
 			systemConfig: config.SystemConfig{
-				CPU: config.CPUItem{
+				CPU: config.SystemItem{
 					Threshold: 90,
 					Icon:      "cpu",
 				},
-				Memory: config.CPUItem{
+				Memory: config.SystemItem{
 					Threshold: 90,
 					Icon:      "speedometer",
 				},
@@ -100,11 +100,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU Warning, Memory OK",
 			systemConfig: config.SystemConfig{
-				CPU: config.CPUItem{
+				CPU: config.SystemItem{
 					Threshold: 90,
 					Icon:      "cpu",
 				},
-				Memory: config.CPUItem{
+				Memory: config.SystemItem{
 					Threshold: 90,
 					Icon:      "speedometer",
 				},
@@ -135,11 +135,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU Critical, Memory OK",
 			systemConfig: config.SystemConfig{
-				CPU: config.CPUItem{
+				CPU: config.SystemItem{
 					Threshold: 90,
 					Icon:      "cpu",
 				},
-				Memory: config.CPUItem{
+				Memory: config.SystemItem{
 					Threshold: 90,
 					Icon:      "speedometer",
 				},
@@ -170,11 +170,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "Memory Warning with New Threshold",
 			systemConfig: config.SystemConfig{
-				CPU: config.CPUItem{
+				CPU: config.SystemItem{
 					Threshold: 90,
 					Icon:      "cpu",
 				},
-				Memory: config.CPUItem{
+				Memory: config.SystemItem{
 					Threshold: 90,
 					Icon:      "speedometer",
 				},
@@ -205,11 +205,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "CPU Error",
 			systemConfig: config.SystemConfig{
-				CPU: config.CPUItem{
+				CPU: config.SystemItem{
 					Threshold: 90,
 					Icon:      "cpu",
 				},
-				Memory: config.CPUItem{
+				Memory: config.SystemItem{
 					Threshold: 90,
 					Icon:      "speedometer",
 				},
@@ -227,11 +227,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "Memory Error",
 			systemConfig: config.SystemConfig{
-				CPU: config.CPUItem{
+				CPU: config.SystemItem{
 					Threshold: 90,
 					Icon:      "cpu",
 				},
-				Memory: config.CPUItem{
+				Memory: config.SystemItem{
 					Threshold: 90,
 					Icon:      "speedometer",
 				},
@@ -253,11 +253,11 @@ func TestSystemMonitor_Check(t *testing.T) {
 		{
 			name: "Empty CPU data",
 			systemConfig: config.SystemConfig{
-				CPU: config.CPUItem{
+				CPU: config.SystemItem{
 					Threshold: 90,
 					Icon:      "cpu",
 				},
-				Memory: config.CPUItem{
+				Memory: config.SystemItem{
 					Threshold: 90,
 					Icon:      "speedometer",
 				},

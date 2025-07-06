@@ -6,8 +6,42 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	//go:embed test/default.yaml
+	defaultYaml string
+
+	//go:embed test/changed.yaml
+	changedYaml string
+
+	//go:embed test/changed_add_disk.yaml
+	changedYamlAddDisk string
+
+	//go:embed test/changed_edit_before.yaml
+	changedYamlEditBefore string
+
+	//go:embed test/changed_edit_disk.yaml
+	changedYamlEditDisk string
+
+	//go:embed test/changed_add_remove_disk.yaml
+	changedYamlAddRemoveDisk string
+
+	//go:embed test/changed_add_healthcheck.yaml
+	changedYamlAddHealthcheck string
+	//go:embed test/changed_add_remove_healthcheck.yaml
+	changedYamlAddRemoveHealthcheck string
+	//go:embed test/changed_edit_healthcheck.yaml
+	changedYamlEditHealthcheck string
+
+	//go:embed test/default.env
+	defaultEnv string
+
+	//go:embed test/bad.yaml
+	badYaml string
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -39,36 +73,6 @@ func TestDefaultConfig(t *testing.T) {
 	// Healthcheck settings
 	assert.Equal(t, 0, len(cfg.Monitoring.Healthcheck), "len(healthcheck)")
 }
-
-var (
-	//go:embed test/default.yaml
-	defaultYaml string
-
-	//go:embed test/changed.yaml
-	changedYaml string
-
-	//go:embed test/changed_add_disk.yaml
-	changedYamlAddDisk string
-
-	//go:embed test/changed_edit_before.yaml
-	changedYamlEditBefore string
-
-	//go:embed test/changed_edit_disk.yaml
-	changedYamlEditDisk string
-
-	//go:embed test/changed_add_remove_disk.yaml
-	changedYamlAddRemoveDisk string
-
-	//go:embed test/changed_add_healthcheck.yaml
-	changedYamlAddHealthcheck string
-	//go:embed test/changed_add_remove_healthcheck.yaml
-	changedYamlAddRemoveHealthcheck string
-	//go:embed test/changed_edit_healthcheck.yaml
-	changedYamlEditHealthcheck string
-
-	//go:embed test/default.env
-	defaultEnv string
-)
 
 func TestSaveDefaults(t *testing.T) {
 	testFiles := []string{"test.yaml", "test.env"}
@@ -226,5 +230,131 @@ func TestLoadChangeAndSave(t *testing.T) {
 	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, "test"}
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlEditHealthcheck)
+}
 
+func TestBadYaml(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+
+	// set pre-edit config
+	err := os.WriteFile(testFile, []byte(badYaml), 0644)
+	assert.NoError(t, err, "Error creating initial file")
+
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	var cfgError viper.ConfigParseError
+	assert.ErrorAs(t, err, &cfgError, "error loading config")
+	assert.Nil(t, cfg, "no config loaded")
+
+}
+
+func TestNewLoader(t *testing.T) {
+	type test struct {
+		name        string
+		cfgFilename string
+		paths       []string
+		envName     string
+		envPaths    string
+		expectName  string
+		exepctPaths []string
+		expectType  string
+	}
+	tests := []test{
+		{
+			name:        "config.yaml",
+			cfgFilename: "config.yaml",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "config",
+			cfgFilename: "config",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "empty",
+			cfgFilename: "",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "/etc/lmon",
+			cfgFilename: "",
+			paths:       []string{"/etc/lmon"},
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"/etc/lmon"},
+		},
+		{
+			name:        "/etc/lmon & ./config.env",
+			cfgFilename: "./config.env",
+			paths:       []string{"/etc/lmon"},
+			expectName:  "config",
+			expectType:  "env",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "/var/lib/lmon/config.env",
+			cfgFilename: "/var/lib/lmon/config.env",
+			paths:       []string{"."},
+			expectName:  "config",
+			expectType:  "env",
+			exepctPaths: []string{"/var/lib/lmon"},
+		},
+		{
+			name:        "env config.yaml",
+			envName:     "config.yaml",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "env ~/.lmon/config.yaml",
+			envName:     "~/.lmon/config.yaml",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"~/.lmon"},
+		},
+		{
+			name:        "env ~/.lmon & config.yaml",
+			envName:     "config.yaml",
+			envPaths:    "~/.lmon",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"~/.lmon"},
+		},
+		{
+			name:        "env ~/.lmon & ./config.toml",
+			envName:     "./config.toml",
+			envPaths:    "'~/.lmon",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "toml",
+			exepctPaths: []string{"."},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envName != "" {
+				t.Setenv("LMON_CONFIG_FILE", tt.envName)
+			}
+			if tt.envPaths != "" {
+				t.Setenv("LMON_CONFIG_PATH", tt.envPaths)
+			}
+			loadder := NewLoader(tt.cfgFilename, tt.paths)
+			assert.Equal(t, tt.expectName, loadder.name, "name")
+			assert.Equal(t, tt.exepctPaths, loadder.paths, "paths")
+			assert.Equal(t, tt.expectType, loadder.cfgType, "cfgType")
+		})
+	}
 }

@@ -65,9 +65,10 @@ type WebhookConfig struct {
 }
 
 type Loader struct {
-	v     *viper.Viper
-	paths []string
-	name  string
+	v       *viper.Viper
+	paths   []string
+	name    string
+	cfgType string
 }
 
 // NewLoader creates a new Loader instance.
@@ -109,23 +110,26 @@ func NewLoader(cfgFilename string, paths []string) *Loader {
 		paths = []string{"."}
 	}
 
+	parts := strings.Split(cfgFilename, ".")
+	cfgType := "yaml"
+	if len(parts) > 1 {
+		cfgType = parts[len(parts)-1]
+		cfgFilename = strings.Join(parts[:len(parts)-1], ".")
+	}
+
 	return &Loader{
-		v:     viper.New(),
-		paths: paths,
-		name:  cfgFilename,
+		v:       viper.New(),
+		paths:   paths,
+		name:    cfgFilename,
+		cfgType: cfgType,
 	}
 }
 
 func (l *Loader) init() {
 	// Set up Viper
-	parts := strings.Split(l.name, ".")
-	if len(parts) > 0 {
-		l.v.SetConfigType(parts[len(parts)-1])
-		l.v.SetConfigName(strings.Join(parts[:len(parts)-1], "."))
-	} else {
-		l.v.SetConfigName(l.name)
-		l.v.SetConfigType(".toml")
-	}
+
+	l.v.SetConfigType(l.cfgType)
+	l.v.SetConfigName(l.name)
 
 	// Add config paths
 	for _, path := range l.paths {
@@ -197,20 +201,8 @@ func (l *Loader) setDefaults() {
 // Save saves the configuration to a file
 func (l *Loader) Save(config *Config) error {
 	// create a new viper clearing the disk and healthcheck maps
-	configMap := viper.AllSettings()
-	for key := range configMap {
-		if strings.HasPrefix("monitoring.disk", key) || strings.HasPrefix("monitoring.healthcheck", key) {
-			delete(configMap, key)
-		}
-	}
 	l.v = viper.New()
 	l.init()
-
-	// load in the cleansed config
-	err := l.v.MergeConfigMap(configMap)
-	if err != nil {
-		return fmt.Errorf("error merging config map: %w", err)
-	}
 
 	l.v.Set("web.host", config.Web.Host)
 	l.v.Set("web.port", config.Web.Port)
@@ -237,8 +229,10 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.icon", name), healthcheck.Icon)
 	}
 
-	err = l.v.WriteConfig()
-	_, ok := err.(viper.ConfigFileNotFoundError)
+	// overwrite the config file or create it if it doesn't exist
+	err := l.v.WriteConfig()
+	var configFileNotFoundError viper.ConfigFileNotFoundError
+	ok := errors.As(err, &configFileNotFoundError)
 	if err != nil && ok {
 		err = l.v.SafeWriteConfig()
 	}
