@@ -8,6 +8,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.1
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.8.4
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (

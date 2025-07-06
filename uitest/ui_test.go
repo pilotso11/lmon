@@ -50,6 +50,94 @@ func TestUI(t *testing.T) {
 	})
 }
 
+// TestAddAndRemoveDisk tests adding and removing a disk via the config UI
+func TestAddAndRemoveDisk(t *testing.T) {
+	// Launch a new browser
+	launch := launcher.New().Headless(true).Set("no-sandbox")
+	url, err := launch.Launch()
+	require.NoError(t, err, "Failed to launch browser")
+	browser := rod.New().ControlURL(url).MustConnect()
+	defer browser.MustClose()
+	browser = browser.Timeout(30 * time.Second)
+
+	portStr := os.Getenv("LMON_TEST_PORT")
+	require.NotEmpty(t, portStr, "LMON_TEST_PORT environment variable not set")
+	baseURL := fmt.Sprintf("http://localhost:%s", portStr)
+
+	// Go to config page
+	page := browser.MustPage(fmt.Sprintf("%s/config", baseURL))
+	defer page.MustClose()
+	require.NoError(t, page.WaitLoad(), "Failed to wait for config page to load")
+	time.Sleep(1 * time.Second)
+
+	// Fill out disk path and threshold in the add disk form
+	diskPathInput, err := page.Element("#disk-path")
+	require.NoError(t, err, "Failed to find disk path input")
+	diskPathInput.MustInput("/testdisk")
+
+	diskThresholdInput, err := page.Element("#disk-threshold")
+	require.NoError(t, err, "Failed to find disk threshold input")
+	diskThresholdInput.MustInput("85")
+
+	// Click the submit button inside the add disk form
+	addDiskForm, err := page.Element("#add-disk-form")
+	require.NoError(t, err, "Failed to find add disk form")
+	submitBtn, err := addDiskForm.Element("button[type=submit]")
+	require.NoError(t, err, "Failed to find add disk submit button")
+	submitBtn.MustClick()
+	time.Sleep(1 * time.Second)
+
+	// Verify disk appears in config list
+	configItems, err := page.Elements(".config-item")
+	require.NoError(t, err, "Failed to find config items after adding disk")
+	for _, elem := range configItems {
+		text, _ := elem.Text()
+		fmt.Println("CONFIG ITEM AFTER ADD:", text)
+	}
+	found := false
+	for _, elem := range configItems {
+		text, _ := elem.Text()
+		if strings.Contains(text, "/testdisk") {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "Added disk /testdisk not found in config list")
+
+	// Remove the disk
+	var removeBtn *rod.Element
+	for _, elem := range configItems {
+		text, _ := elem.Text()
+		if strings.Contains(text, "/testdisk") {
+			btns, _ := elem.Elements(".delete-btn")
+			if len(btns) > 0 {
+				removeBtn = btns[0]
+			}
+			break
+		}
+	}
+	require.NotNil(t, removeBtn, "Remove button for /testdisk not found")
+	removeBtn.MustClick()
+	time.Sleep(1 * time.Second)
+
+	// Verify disk is removed
+	configItems, err = page.Elements(".config-item")
+	require.NoError(t, err, "Failed to find config items after removing disk")
+	for _, elem := range configItems {
+		text, _ := elem.Text()
+		fmt.Println("CONFIG ITEM AFTER REMOVE:", text)
+	}
+	stillFound := false
+	for _, elem := range configItems {
+		text, _ := elem.Text()
+		if strings.Contains(text, "/testdisk") {
+			stillFound = true
+			break
+		}
+	}
+	assert.False(t, stillFound, "Disk /testdisk should be removed from config list")
+}
+
 // testDashboard tests the dashboard page
 func testDashboard(t *testing.T, browser *rod.Browser, baseURL string) {
 	// Navigate to the dashboard

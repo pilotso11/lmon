@@ -159,7 +159,9 @@ func TestMain(m *testing.M) {
 	mockService.On("GetItem", mock.Anything).Return(nil)
 
 	// Create a web server with the mock service
-	webServer := web.NewServerWithContext(ctx, cfg, mockService)
+	tempFile, _ := os.CreateTemp("", "config*.yaml")
+	_ = tempFile.Close()
+	webServer := web.NewServerWithContext(ctx, cfg, mockService, tempFile.Name())
 
 	// Start the web server in a goroutine
 	go func() {

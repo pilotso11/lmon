@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"time"
 
@@ -23,12 +24,12 @@ type Server struct {
 }
 
 // NewServer creates a new web server
-func NewServer(cfg *config.Config, monitorService MonitorServiceInterface) *Server {
-	return NewServerWithContext(context.Background(), cfg, monitorService)
+func NewServer(cfg *config.Config, monitorService MonitorServiceInterface, cfgPath string) *Server {
+	return NewServerWithContext(context.Background(), cfg, monitorService, cfgPath)
 }
 
 // NewServerWithContext creates a new web server with the provided context
-func NewServerWithContext(ctx context.Context, cfg *config.Config, monitorService MonitorServiceInterface) *Server {
+func NewServerWithContext(ctx context.Context, cfg *config.Config, monitorService MonitorServiceInterface, configPath string) *Server {
 	// Create gin router
 	router := gin.Default()
 
@@ -45,7 +46,7 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, monitorServic
 		monitor:    monitorService,
 		router:     router,
 		ctx:        ctx,
-		configPath: "../config.yaml", // Save in the root directory instead of the web directory
+		configPath: configPath,
 	}
 
 	// Set up routes
@@ -158,6 +159,7 @@ func (s *Server) handleGetItem(c *gin.Context) {
 
 // handleGetConfig handles the request to get the configuration
 func (s *Server) handleGetConfig(c *gin.Context) {
+	log.Printf("handleGetConfig: returning config: %+v", s.config)
 	c.JSON(http.StatusOK, s.config)
 }
 
@@ -186,20 +188,25 @@ func (s *Server) handleUpdateConfig(c *gin.Context) {
 
 // handleAddDiskMonitor handles the request to add a disk monitor
 func (s *Server) handleAddDiskMonitor(c *gin.Context) {
+	log.Println("handleAddDiskMonitor called")
 	var diskCfg config.DiskConfig
 	if err := c.ShouldBindJSON(&diskCfg); err != nil {
+		log.Printf("handleAddDiskMonitor: invalid disk config: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid disk configuration: %v", err)})
 		return
 	}
 
 	// Add disk monitor to configuration
 	s.config.Monitoring.Disk = append(s.config.Monitoring.Disk, diskCfg)
+	log.Printf("handleAddDiskMonitor: disk added: %+v", diskCfg)
 
 	// Save configuration
 	if err := config.Save(s.config, s.configPath); err != nil {
+		log.Printf("handleAddDiskMonitor: config.Save error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
 		return
 	}
+	log.Println("handleAddDiskMonitor: config.Save completed")
 
 	// Trigger immediate refresh of all checks to apply new disk monitor
 	s.monitor.RefreshChecks()

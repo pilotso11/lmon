@@ -100,7 +100,7 @@ func TestServer_HandleGetItems(t *testing.T) {
 	cfg := config.DefaultConfig()
 
 	// Create server with mock service
-	server := NewServer(cfg, mockService)
+	server := NewServer(cfg, mockService, os.TempDir())
 
 	// Create a test HTTP recorder and context
 	w := httptest.NewRecorder()
@@ -154,7 +154,7 @@ func TestServer_HandleGetItem(t *testing.T) {
 	cfg := config.DefaultConfig()
 
 	// Create server with mock service
-	server := NewServer(cfg, mockService)
+	server := NewServer(cfg, mockService, os.TempDir())
 
 	// Test case 1: Existing item
 	t.Run("Existing item", func(t *testing.T) {
@@ -219,7 +219,7 @@ func TestServer_HandleGetConfig(t *testing.T) {
 	cfg.Web.Port = 9090
 
 	// Create server with mock service
-	server := NewServer(cfg, mockService)
+	server := NewServer(cfg, mockService, os.TempDir())
 
 	// Create a test HTTP recorder and context
 	w := httptest.NewRecorder()
@@ -291,7 +291,7 @@ func TestServer_HandleUpdateConfig(t *testing.T) {
 	cfg := config.DefaultConfig()
 
 	// Create server with mock service
-	server := NewServer(cfg, mockService)
+	server := NewServer(cfg, mockService, os.TempDir())
 
 	// Create a temporary file for the config
 	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
@@ -392,7 +392,7 @@ func TestServer_StartAndStop(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Web.Port = 0 // random port
 	mockService := new(MockMonitorService)
-	server := NewServer(cfg, mockService)
+	server := NewServer(cfg, mockService, os.TempDir())
 
 	// Start and Stop should not panic (we don't actually listen on a port in test)
 	err := server.Stop()
@@ -402,7 +402,7 @@ func TestServer_StartAndStop(t *testing.T) {
 func TestServer_HandleHealthCheck_EdgeCases(t *testing.T) {
 	cfg := config.DefaultConfig()
 	mockService := new(MockMonitorService)
-	server := NewServer(cfg, mockService)
+	server := NewServer(cfg, mockService, os.TempDir())
 
 	// Case 1: No items at all (should be healthy)
 	mockService.On("GetItems").Return([]*monitor.Item{})
@@ -416,7 +416,7 @@ func TestServer_HandleHealthCheck_EdgeCases(t *testing.T) {
 
 	// Case 2: All items healthy
 	mockService = new(MockMonitorService)
-	server = NewServer(cfg, mockService)
+	server = NewServer(cfg, mockService, os.TempDir())
 	mockService.On("GetItems").Return([]*monitor.Item{
 		{ID: "1", Status: monitor.StatusOK},
 		{ID: "2", Status: monitor.StatusWarning},
@@ -430,7 +430,7 @@ func TestServer_HandleHealthCheck_EdgeCases(t *testing.T) {
 
 	// Case 3: At least one item critical
 	mockService = new(MockMonitorService)
-	server = NewServer(cfg, mockService)
+	server = NewServer(cfg, mockService, os.TempDir())
 	mockService.On("GetItems").Return([]*monitor.Item{
 		{ID: "1", Status: monitor.StatusOK},
 		{ID: "2", Status: monitor.StatusCritical},
@@ -488,7 +488,7 @@ func TestWebServer_Integration(t *testing.T) {
 	mockService.On("GetItem", "notfound").Return(nil)
 	mockService.On("RefreshChecks").Return()
 
-	server := NewServer(cfg, mockService)
+	server := NewServer(cfg, mockService, os.TempDir())
 
 	// Use httptest server for integration
 	ts := httptest.NewServer(server.router)

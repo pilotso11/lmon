@@ -190,10 +190,37 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+	// In test mode, use a temp config file to isolate config changes
+	var cfg *config.Config
+	var err error
+	testMode := os.Getenv("LMON_TEST_MODE") == "1"
+	if testMode {
+		tmpConfigPath := os.Getenv("LMON_TEST_CONFIG_PATH")
+		if tmpConfigPath == "" {
+			tmpConfigPath = "./lmon-test-config.yaml"
+		}
+		log.Printf("LMON_TEST_MODE=1: Using temp config file: %s", tmpConfigPath)
+		// If the file doesn't exist, create it with defaults
+		if _, statErr := os.Stat(tmpConfigPath); os.IsNotExist(statErr) {
+			defaultCfg := config.DefaultConfig()
+			if saveErr := config.Save(defaultCfg, tmpConfigPath); saveErr != nil {
+				log.Fatalf("Failed to create temp config file: %v", saveErr)
+			}
+			log.Printf("Created temp config file at: %s", tmpConfigPath)
+		} else {
+			log.Printf("Temp config file already exists at: %s", tmpConfigPath)
+		}
+		cfg, err = config.LoadFromFile(tmpConfigPath)
+		if err != nil {
+			log.Fatalf("Failed to load temp config: %v", err)
+		}
+		// Patch the config path in the web server so all saves go to the temp file
+		os.Setenv("LMON_CONFIG_PATH", tmpConfigPath)
+	} else {
+		cfg, err = config.Load()
+		if err != nil {
+			log.Fatalf("Failed to load configuration: %v", err)
+		}
 	}
 
 	// Log the loaded configuration for debugging
@@ -215,14 +242,36 @@ func main() {
 	}
 	log.Printf("Webhook: {Enabled: %t, URL: %s}", cfg.Webhook.Enabled, cfg.Webhook.URL)
 
-	// Initialize monitoring service with context
-	monitoringService := monitor.NewServiceWithContext(ctx, cfg)
+	// Use real monitors with mock providers in test mode for integration tests
+	var monitoringService *monitor.Service
+	if os.Getenv("LMON_TEST_MODE") == "1" {
+		log.Println("LMON_TEST_MODE=1: Using real monitors with mock providers for integration tests")
+		monitoringService = monitor.NewServiceWithMonitors(
+			cfg,
+			monitor.NewDiskMonitorWithProvider(cfg, &monitor.AlwaysHealthyDiskUsageProvider{}),
+			monitor.NewSystemMonitor(cfg), // Optionally, you can mock CPU/mem providers too
+			monitor.NewHealthMonitor(cfg), // Optionally, you can mock HTTP client
+			&monitor.AlwaysNoopWebhookSender{},
+		)
+	} else {
+		// Initialize monitoring service with context
+		monitoringService = monitor.NewServiceWithContext(ctx, cfg)
+	}
 
 	// Start monitoring routines
 	monitoringService.Start()
 
-	// Initialize web server with context
-	webServer := web.NewServerWithContext(ctx, cfg, monitoringService)
+	// Initialize web server with context and correct config path
+	var configPath string
+	if testMode {
+		configPath = os.Getenv("LMON_TEST_CONFIG_PATH")
+		if configPath == "" {
+			configPath = "./lmon-test-config.yaml"
+		}
+	} else {
+		configPath = "../config.yaml"
+	}
+	webServer := web.NewServerWithContext(ctx, cfg, monitoringService, configPath)
 
 	// Start web server in a goroutine
 	go func() {

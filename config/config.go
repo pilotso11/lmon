@@ -3,11 +3,13 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
 )
 
 // Config represents the application configuration
@@ -200,6 +202,7 @@ func bindEnvVars(v *viper.Viper) {
 
 // Save saves the configuration to a file
 func Save(config *Config, path string) error {
+	log.Printf("config.Save called with path: %s", path)
 	v := viper.New()
 	v.SetConfigType("yaml")
 
@@ -214,19 +217,31 @@ func Save(config *Config, path string) error {
 		"webhook":    config.Webhook,
 	})
 	if err != nil {
+		log.Printf("config.Save merge error: %v", err)
 		return fmt.Errorf("failed to merge config: %w", err)
+	}
+
+	// Marshal to YAML for debug
+	yamlBytes, yamlErr := yaml.Marshal(config)
+	if yamlErr != nil {
+		log.Printf("config.Save marshal error: %v", yamlErr)
+	} else {
+		log.Printf("config.Save writing data:\n%s", string(yamlBytes))
 	}
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Printf("config.Save mkdir error: %v", err)
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	// Write config to file
 	if err := v.WriteConfigAs(path); err != nil {
+		log.Printf("config.Save write error: %v", err)
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
+	log.Printf("config.Save completed for path: %s", path)
 	return nil
 }
