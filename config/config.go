@@ -3,135 +3,152 @@ package config
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v2"
 )
 
 // Config represents the application configuration
 type Config struct {
-	Web        WebConfig        `mapstructure:"web" json:"web"`
-	Monitoring MonitoringConfig `mapstructure:"monitoring" json:"monitoring"`
-	Webhook    WebhookConfig    `mapstructure:"webhook" json:"webhook"`
+	Web        WebConfig
+	Monitoring MonitoringConfig
+	Webhook    WebhookConfig
 }
 
 // WebConfig represents the web server configuration
 type WebConfig struct {
-	Host           string `mapstructure:"host" json:"host"`
-	Port           int    `mapstructure:"port" json:"port"`
-	DashboardTitle string `mapstructure:"dashboard_title" json:"dashboard_title"`
+	Host  string
+	Port  int
+	Title string
 }
 
 // MonitoringConfig represents the monitoring configuration
 type MonitoringConfig struct {
-	Interval     int                 `mapstructure:"interval" json:"interval"`
-	Disk         []DiskConfig        `mapstructure:"disk" json:"disk"`
-	System       SystemConfig        `mapstructure:"system" json:"system"`
-	Healthchecks []HealthcheckConfig `mapstructure:"healthchecks" json:"healthchecks"`
+	Interval    int
+	Disk        map[string]DiskConfig
+	System      SystemConfig
+	Healthcheck map[string]HealthcheckConfig
 }
 
-type CPUItem struct {
-	Threshold int    `mapstructure:"threshold" json:"threshold"`
-	Icon      string `mapstructure:"icon" json:"icon"`
-}
-
-// DiskConfig represents disk monitoring configuration
+// DiskConfig represents disk monitoring configuration.
 type DiskConfig struct {
-	Threshold int    `mapstructure:"threshold" json:"threshold"`
-	Icon      string `mapstructure:"icon" json:"icon"`
-	Path      string `mapstructure:"path" json:"path"`
+	Threshold int
+	Icon      string
+	Path      string
 }
 
-// SystemConfig represents system monitoring configuration
+// SystemItem represents system monitoring configuration.
+type SystemItem struct {
+	Threshold int
+	Icon      string
+}
+
+// SystemConfig represents system monitoring configuration.
 type SystemConfig struct {
-	CPU    CPUItem `mapstructure:"cpu" json:"cpu"`
-	Memory CPUItem `mapstructure:"memory" json:"memory"`
+	CPU    SystemItem
+	Memory SystemItem
 }
 
 // HealthcheckConfig represents health check monitoring configuration
 type HealthcheckConfig struct {
-	Name     string `mapstructure:"name" json:"name"`
-	URL      string `mapstructure:"url" json:"url"`
-	Interval int    `mapstructure:"interval" json:"interval"`
-	Timeout  int    `mapstructure:"timeout" json:"timeout"`
-	Icon     string `mapstructure:"icon" json:"icon"`
+	URL     string
+	Timeout int
+	Icon    string
 }
 
 // WebhookConfig represents webhook notification configuration
 type WebhookConfig struct {
-	Enabled bool   `mapstructure:"enabled" json:"enabled"`
-	URL     string `mapstructure:"url" json:"url"`
+	Enabled bool
+	URL     string
 }
 
-// DefaultConfig returns the default configuration
-func DefaultConfig() *Config {
-	return &Config{
-		Web: WebConfig{
-			Host:           "0.0.0.0",
-			Port:           8080,
-			DashboardTitle: "Monitoring Dashboard",
-		},
-		Monitoring: MonitoringConfig{
-			Interval: 60, // seconds
-			Disk: []DiskConfig{
-				{
-					Threshold: 80, // percentage
-					Icon:      "storage",
-					Path:      "/",
-				},
-			},
-			System: SystemConfig{
-				CPU: CPUItem{
-					Threshold: 90,
-					Icon:      "cpu",
-				},
-				Memory: CPUItem{
-					Threshold: 90,
-					Icon:      "speedometer",
-				},
-			},
-			Healthchecks: []HealthcheckConfig{},
-		},
-		Webhook: WebhookConfig{
-			Enabled: false,
-			URL:     "",
-		},
+type Loader struct {
+	v     *viper.Viper
+	paths []string
+	name  string
+}
+
+// NewLoader creates a new Loader instance.
+// If cfgFilename is empty, it defaults to "config.yaml".
+// If cfgFilename is not empty, it will be used as the config file name.
+// If paths is nil or empty, it defaults to the current directory.
+// Passed in values can be overridden by environment variables LMON_CONFIG_PATH and LMON_CONFIG_FILE.
+// If LMON_CONFIG_FILE contains a path and config file, the path will be used as the config file path.
+func NewLoader(cfgFilename string, paths []string) *Loader {
+	envPath := os.Getenv("LMON_CONFIG_PATH")
+	envName := os.Getenv("LMON_CONFIG_FILE")
+
+	// If envName is not empty, use it as the config file cfgFilename
+	if envName != "" {
+		cfgFilename = envName
+	}
+
+	// Default config file cfgFilename
+	if cfgFilename == "" {
+		cfgFilename = "config.yaml"
+	}
+
+	// If envPath is not empty, use it as our only path.
+	if envPath != "" {
+		paths = []string{envPath}
+	}
+
+	// does envName have a path and config file? If so, extract them.
+	if strings.Contains(cfgFilename, string(os.PathSeparator)) {
+		p := filepath.Dir(cfgFilename)
+		cfgFilename = filepath.Base(cfgFilename)
+		if len(p) > 0 {
+			paths = []string{p}
+		}
+	}
+
+	// If paths is nil or empty, set it to the current directory
+	if paths == nil || len(paths) == 0 {
+		paths = []string{"."}
+	}
+
+	return &Loader{
+		v:     viper.New(),
+		paths: paths,
+		name:  cfgFilename,
 	}
 }
 
-// Load loads the configuration from file and environment variables
-func Load() (*Config, error) {
-	return LoadFromPaths([]string{".", "/etc/lmon"})
-}
-
-// LoadFromPaths loads the configuration from the specified paths
-func LoadFromPaths(paths []string) (*Config, error) {
-	config := DefaultConfig()
-
+func (l *Loader) init() {
 	// Set up Viper
-	v := viper.New()
-	v.SetConfigName("config")
-	v.SetConfigType("yaml")
+	parts := strings.Split(l.name, ".")
+	if len(parts) > 0 {
+		l.v.SetConfigType(parts[len(parts)-1])
+		l.v.SetConfigName(strings.Join(parts[:len(parts)-1], "."))
+	} else {
+		l.v.SetConfigName(l.name)
+		l.v.SetConfigType(".toml")
+	}
 
 	// Add config paths
-	for _, path := range paths {
-		v.AddConfigPath(path)
+	for _, path := range l.paths {
+		l.v.AddConfigPath(path)
 	}
 
 	// Set environment variable prefix
-	v.SetEnvPrefix("LMON")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
+	l.v.SetEnvPrefix("LMON")
+	l.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	l.v.AutomaticEnv()
 
-	// Bind environment variables
-	bindEnvVars(v)
+	// Set defualts
+	l.setDefaults()
+}
+
+// Load loads the configuration from file and environment variables
+func (l *Loader) Load() (*Config, error) {
+	config := Config{}
+
+	l.init()
 
 	// Try to read config file
-	if err := v.ReadInConfig(); err != nil {
+	if err := l.v.ReadInConfig(); err != nil {
 		// It's okay if config file doesn't exist, we'll use defaults and env vars
 		var configFileNotFoundError viper.ConfigFileNotFoundError
 		if !errors.As(err, &configFileNotFoundError) {
@@ -140,108 +157,93 @@ func LoadFromPaths(paths []string) (*Config, error) {
 	}
 
 	// Unmarshal config
-	if err := v.Unmarshal(config); err != nil {
+	if err := l.v.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("unable to decode config: %w", err)
 	}
 
-	return config, nil
+	if config.Monitoring.Disk == nil {
+		config.Monitoring.Disk = make(map[string]DiskConfig)
+	}
+	if config.Monitoring.Healthcheck == nil {
+		config.Monitoring.Healthcheck = make(map[string]HealthcheckConfig)
+	}
+
+	return &config, nil
 }
 
-// LoadFromFile loads the configuration from a specific file
-func LoadFromFile(path string) (*Config, error) {
-	config := DefaultConfig()
+func (l *Loader) setDefaults() {
+	l.v.SetDefault("web.host", "0.0.0.0")
+	l.v.SetDefault("web.port", 8080)
+	l.v.SetDefault("web.title", "LMON Dashboard")
+	l.v.SetDefault("monitoring.interval", 60)
 
-	// Set up Viper
-	v := viper.New()
-	v.SetConfigType("yaml")
+	l.v.SetDefault("monitoring.system.cpu.threshold", 90)
+	l.v.SetDefault("monitoring.system.memory.threshold", 90)
+	l.v.SetDefault("monitoring.system.cpu.icon", "cpu")
+	l.v.SetDefault("monitoring.system.memory.icon", "speedometer")
 
-	// Set environment variable prefix
-	v.SetEnvPrefix("LMON")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
+	l.v.SetDefault("webhook.enabled", true)
+	l.v.SetDefault("webhook.url", "http://localhost:8080/test_webhook")
 
-	// Bind environment variables
-	bindEnvVars(v)
-
-	// Read the file
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("error opening config file: %w", err)
-	}
-	defer func(file *os.File) {
-		_ = file.Close()
-	}(file)
-
-	// Read the config
-	if err := v.ReadConfig(file); err != nil {
-		return nil, fmt.Errorf("error reading config file: %w", err)
-	}
-
-	// Unmarshal config
-	if err := v.Unmarshal(config); err != nil {
-		return nil, fmt.Errorf("unable to decode config: %w", err)
-	}
-
-	return config, nil
-}
-
-// bindEnvVars binds environment variables to viper
-func bindEnvVars(v *viper.Viper) {
-	// Web config
-	_ = v.BindEnv("web.host", "LMON_WEB_HOST")
-	_ = v.BindEnv("web.port", "LMON_WEB_PORT")
-	_ = v.BindEnv("web.dashboard_title", "LMON_WEB_DASHBOARD_TITLE")
-
-	// Monitoring config
-	_ = v.BindEnv("monitoring.interval", "LMON_MONITORING_INTERVAL")
-
-	// Webhook config
-	_ = v.BindEnv("webhook.enabled", "LMON_WEBHOOK_ENABLED")
-	_ = v.BindEnv("webhook.url", "LMON_WEBHOOK_URL")
+	// l.v.SetDefault("monitoring.disk.root.path", "/")
+	// l.v.SetDefault("monitoring.disk.root.threshold", 80)
+	// l.v.SetDefault("monitoring.disk.root.icon", "storage")
+	//
+	// l.v.SetDefault("monitoring.healthcheck.self.url", "http://localhost:8080/healthz")
+	// l.v.SetDefault("monitoring.healthcheck.self.timeout", 5)
+	// l.v.SetDefault("monitoring.healthcheck.self.icon", "activity")
 }
 
 // Save saves the configuration to a file
-func Save(config *Config, path string) error {
-	log.Printf("config.Save called with path: %s", path)
-	v := viper.New()
-	v.SetConfigType("yaml")
+func (l *Loader) Save(config *Config) error {
+	// create a new viper clearing the disk and healthcheck maps
+	configMap := viper.AllSettings()
+	for key := range configMap {
+		if strings.HasPrefix("monitoring.disk", key) || strings.HasPrefix("monitoring.healthcheck", key) {
+			delete(configMap, key)
+		}
+	}
+	l.v = viper.New()
+	l.init()
 
-	// Set the config values
-	err := v.MergeConfigMap(map[string]interface{}{
-		"web": map[string]interface{}{
-			"host":            config.Web.Host,
-			"port":            config.Web.Port,
-			"dashboard_title": config.Web.DashboardTitle,
-		},
-		"monitoring": config.Monitoring,
-		"webhook":    config.Webhook,
-	})
+	// load in the cleansed config
+	err := l.v.MergeConfigMap(configMap)
 	if err != nil {
-		log.Printf("config.Save merge error: %v", err)
-		return fmt.Errorf("failed to merge config: %w", err)
+		return fmt.Errorf("error merging config map: %w", err)
 	}
 
-	// Marshal to YAML for debug
-	yamlBytes, yamlErr := yaml.Marshal(config)
-	if yamlErr != nil {
-		log.Printf("config.Save marshal error: %v", yamlErr)
-	} else {
-		log.Printf("config.Save writing data:\n%s", string(yamlBytes))
+	l.v.Set("web.host", config.Web.Host)
+	l.v.Set("web.port", config.Web.Port)
+	l.v.Set("web.title", config.Web.Title)
+	l.v.Set("monitoring.interval", config.Monitoring.Interval)
+
+	l.v.Set("monitoring.system.cpu.threshold", config.Monitoring.System.CPU.Threshold)
+	l.v.Set("monitoring.system.memory.threshold", config.Monitoring.System.Memory.Threshold)
+	l.v.Set("monitoring.system.cpu.icon", config.Monitoring.System.CPU.Icon)
+	l.v.Set("monitoring.system.memory.icon", config.Monitoring.System.Memory.Icon)
+
+	l.v.Set("webhook.enabled", config.Webhook.Enabled)
+	l.v.Set("webhook.url", config.Webhook.URL)
+
+	for name, disk := range config.Monitoring.Disk {
+		l.v.Set(fmt.Sprintf("monitoring.disk.%s.path", name), disk.Path)
+		l.v.Set(fmt.Sprintf("monitoring.disk.%s.threshold", name), disk.Threshold)
+		l.v.Set(fmt.Sprintf("monitoring.disk.%s.icon", name), disk.Icon)
 	}
 
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		log.Printf("config.Save mkdir error: %v", err)
-		return fmt.Errorf("failed to create directory: %w", err)
+	for name, healthcheck := range config.Monitoring.Healthcheck {
+		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.url", name), healthcheck.URL)
+		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.timeout", name), healthcheck.Timeout)
+		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.icon", name), healthcheck.Icon)
 	}
 
-	// Write config to file
-	if err := v.WriteConfigAs(path); err != nil {
-		log.Printf("config.Save write error: %v", err)
-		return fmt.Errorf("failed to write config: %w", err)
+	err = l.v.WriteConfig()
+	_, ok := err.(viper.ConfigFileNotFoundError)
+	if err != nil && ok {
+		err = l.v.SafeWriteConfig()
 	}
-
-	log.Printf("config.Save completed for path: %s", path)
+	if err != nil {
+		return fmt.Errorf("error saving config: %w", err)
+	}
 	return nil
 }
