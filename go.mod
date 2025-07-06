@@ -5,10 +5,10 @@ go 1.24
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-rod/rod v0.116.2
+	github.com/puzpuzpuz/xsync/v4 v4.1.0
 	github.com/shirou/gopsutil/v3 v3.24.1
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.8.4
-	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -55,7 +55,7 @@ require (
 	github.com/ysmood/gson v0.7.3 // indirect
 	github.com/ysmood/leakless v0.9.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
+	go.uber.org/atomic v1.9.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/arch v0.3.0 // indirect

@@ -2,72 +2,28 @@ package monitors
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
-
-	"lmon/config"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
 
-type MockMonitor struct {
-	name   string
-	status []struct {
-		rag RAG
-		msg string
-	}
-	group  string
-	checks int
-}
-
-// Check implements Monitor.
-func (m *MockMonitor) Check(ctx context.Context) Result {
-	m.checks++
-	if len(m.status) > 0 {
-		rag := m.status[0].rag
-		msg := m.status[0].msg
-		m.status = m.status[1:]
-		return Result{Status: rag, Value: msg}
-	}
-	return Result{Status: GREEN, Value: fmt.Sprintf("ok check %d", m.checks)}
-}
-
-// DisplayName implements Monitor.
-func (m *MockMonitor) DisplayName() string {
-	return fmt.Sprintf("MockMonitor %s", m.name)
-}
-
-// Group implements Monitor.
-func (m *MockMonitor) Group() string {
-	return m.group
-}
-
-// Name implements Monitor.
-func (m *MockMonitor) Name() string {
-	return m.name
-}
-
-// Save implements Monitor.
-func (m *MockMonitor) Save(_ *config.Config) {
-	// noop
-}
-
 func TestNewService(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithCancel(t.Context())
-	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond)
+	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
 	assert.NotNil(t, svc, "service started")
-	svc.Add(&MockMonitor{name: "test", group: "test"})
-	_, ok := svc.monitors["test"]
+	err := svc.Add(ctx, NewMockMonitor("test", "test"))
+	assert.NoError(t, err, "monitor added")
+	_, ok := svc.Monitors["test"]
 	require.True(t, ok, "monitor added")
 	time.Sleep(15 * time.Millisecond)
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
-	assert.Equal(t, 1, svc.monitors["test"].(*MockMonitor).checks, "checks called")
+	assert.Equal(t, 2, svc.Monitors["test"].(*MockMonitor).Checks, "checks called add + timer")
 	assert.Equal(t, 1, len(svc.result), "len result")
 
 	cancel()
@@ -78,23 +34,26 @@ func TestService_Add(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	svc := NewService(ctx, time.Second, time.Second)
-	m1 := &MockMonitor{name: "test1", group: "test"}
-	m2 := &MockMonitor{name: "test2", group: "test"}
+	svc := NewService(ctx, time.Second, time.Second, nil)
+	m1 := NewMockMonitor("test1", "test")
+	m2 := NewMockMonitor("test2", "test")
 
-	svc.Add(m1)
-	assert.Len(t, svc.monitors, 1, "one monitor added")
-	assert.Contains(t, svc.monitors, "test1", "monitor test1 added")
+	err := svc.Add(ctx, m1)
+	assert.NoError(t, err, "add should succeed")
+	assert.Len(t, svc.Monitors, 1, "one monitor added")
+	assert.Contains(t, svc.Monitors, "test1", "monitor test1 added")
 
-	svc.Add(m2)
-	assert.Len(t, svc.monitors, 2, "two monitors added")
-	assert.Contains(t, svc.monitors, "test2", "monitor test2 added")
+	err = svc.Add(ctx, m2)
+	assert.NoError(t, err, "add should succeed")
+	assert.Len(t, svc.Monitors, 2, "two monitors added")
+	assert.Contains(t, svc.Monitors, "test2", "monitor test2 added")
 
 	// Test overwriting existing monitor
-	m3 := &MockMonitor{name: "test1", group: "test"}
-	svc.Add(m3)
-	assert.Len(t, svc.monitors, 2, "monitor count unchanged")
-	assert.Same(t, m3, svc.monitors["test1"], "monitor was replaced")
+	m3 := NewMockMonitor("test1", "test")
+	err = svc.Add(ctx, m3)
+	assert.NoError(t, err, "add should succeed")
+	assert.Len(t, svc.Monitors, 2, "monitor count unchanged")
+	assert.Same(t, m3, svc.Monitors["test1"], "monitor was replaced")
 }
 
 func TestService_Remove(t *testing.T) {
@@ -102,21 +61,21 @@ func TestService_Remove(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	svc := NewService(ctx, time.Second, time.Second)
-	m1 := &MockMonitor{name: "test1", group: "test"}
-	m2 := &MockMonitor{name: "test2", group: "test"}
+	svc := NewService(ctx, time.Second, time.Second, nil)
+	m1 := NewMockMonitor("test1", "test")
+	m2 := NewMockMonitor("test2", "test")
 
 	// Add monitors
-	svc.Add(m1)
-	svc.Add(m2)
-	assert.Len(t, svc.monitors, 2, "two monitors added")
+	_ = svc.Add(ctx, m1)
+	_ = svc.Add(ctx, m2)
+	assert.Len(t, svc.Monitors, 2, "two monitors added")
 
 	// Test successful removal
 	err := svc.Remove(m1)
 	assert.NoError(t, err, "remove should succeed")
-	assert.Len(t, svc.monitors, 1, "one monitor should remain")
-	assert.NotContains(t, svc.monitors, "test1", "monitor test1 should be removed")
-	assert.Contains(t, svc.monitors, "test2", "monitor test2 should remain")
+	assert.Len(t, svc.Monitors, 1, "one monitor should remain")
+	assert.NotContains(t, svc.Monitors, "test1", "monitor test1 should be removed")
+	assert.Contains(t, svc.Monitors, "test2", "monitor test2 should remain")
 
 	// Test removing non-existent monitor
 	err = svc.Remove(m1)
@@ -127,7 +86,7 @@ func TestService_Remove(t *testing.T) {
 	// Test removing the last monitor
 	err = svc.Remove(m2)
 	assert.NoError(t, err, "remove should succeed")
-	assert.Len(t, svc.monitors, 0, "no monitors should remain")
+	assert.Len(t, svc.Monitors, 0, "no monitors should remain")
 }
 
 func TestService_Results_CloneAndRace(t *testing.T) {
@@ -135,9 +94,9 @@ func TestService_Results_CloneAndRace(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond)
-	mon := &MockMonitor{name: "race", group: "race"}
-	svc.Add(mon)
+	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
+	mon := NewMockMonitor("race", "race")
+	_ = svc.Add(ctx, mon)
 
 	// Wait for at least one check to occur
 	time.Sleep(15 * time.Millisecond)
@@ -195,14 +154,14 @@ func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	svc := NewService(ctx, 50*time.Millisecond, time.Millisecond)
-	mon := &MockMonitor{name: "period", group: "period"}
-	svc.Add(mon)
+	svc := NewService(ctx, 50*time.Millisecond, time.Millisecond, nil)
+	mon := NewMockMonitor("period", "period")
+	_ = svc.Add(ctx, mon)
 
 	// Wait for at least one check
 	time.Sleep(60 * time.Millisecond)
 	svc.mu.Lock()
-	initialChecks := mon.checks
+	initialChecks := mon.Checks
 	initialPeriod := svc.period
 	svc.mu.Unlock()
 	require.GreaterOrEqual(t, initialChecks, 1, "should have at least one check")
@@ -217,7 +176,7 @@ func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 	// Wait for more checks to accumulate
 	time.Sleep(35 * time.Millisecond)
 	svc.mu.Lock()
-	newChecks := mon.checks
+	newChecks := mon.Checks
 	svc.mu.Unlock()
 	assert.Greater(t, newChecks, initialChecks+2, "checks should increase after period change")
 	assert.NotEqual(t, initialPeriod, updatedPeriod, "period should have changed")
@@ -228,9 +187,9 @@ func TestService_SetPeriod_Race(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond)
-	mon := &MockMonitor{name: "race", group: "race"}
-	svc.Add(mon)
+	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
+	mon := NewMockMonitor("race", "race")
+	_ = svc.Add(ctx, mon)
 
 	done := make(chan struct{})
 	go func() {
@@ -254,11 +213,11 @@ func TestRAG_String(t *testing.T) {
 		rag      RAG
 		expected string
 	}{
-		{UNKNOWN, "Unknown"},
-		{GREEN, "Green"},
-		{YELLOW, "Yellow"},
-		{RED, "Red"},
-		{ERROR, "Error"},
+		{RAGUnknown, "Unknown"},
+		{RAGGreen, "Green"},
+		{RAGAmber, "Amber"},
+		{RAGRed, "Red"},
+		{RAGError, "Error"},
 		{RAG(99), "Unknown"},
 		{RAG(-1), "Unknown"},
 	}
