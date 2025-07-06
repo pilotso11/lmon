@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
+	"lmon/config"
 	"lmon/monitors"
 )
 
@@ -113,7 +114,17 @@ func TestDisk_Name(t *testing.T) {
 }
 
 func TestDisk_Save(t *testing.T) {
-	t.Failed()
+	l := config.NewLoader("", []string{t.TempDir()})
+	cfg, _ := l.Load()
+
+	d := NewDisk("test", "/test", 66, "", nil)
+	d.Save(cfg)
+	assert.Equal(t, 1, len(cfg.Monitoring.Disk), "len disk")
+	dc, ok := cfg.Monitoring.Disk["test"]
+	require.True(t, ok, "disk config exists")
+	assert.Equal(t, "/test", dc.Path)
+	assert.Equal(t, Icon, dc.Icon)
+	assert.Equal(t, 66, dc.Threshold)
 }
 
 func TestDisk_Check_DefaultImpl(t *testing.T) {
