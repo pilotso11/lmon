@@ -87,7 +87,7 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 	// Automatically stop the server when the context is cancelled.
 	go func() {
 		<-ctx.Done()
-		_ = server.Stop()
+		log.Printf("Shutting down")
 	}()
 
 	return server, nil
