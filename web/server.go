@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,7 +96,10 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 // Start launches the web server in a separate goroutine.
 // Returns immediately after starting the server. The server will listen for incoming HTTP requests.
 func (s *Server) Start() {
-	log.Printf("Starting webserver on: %v", s.serverUrl)
+	rootUrl := "http://[::]"
+	url := strings.Replace(s.serverUrl, rootUrl, "http://localhost", 1)
+
+	log.Printf("Starting webserver on: %v", url)
 	go func() {
 		_ = s.httpServer.Serve(s.listener)
 	}()

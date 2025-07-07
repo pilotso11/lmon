@@ -29,6 +29,7 @@ package system
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -124,7 +125,7 @@ func NewCpu(threshold int, icon string, provider CpuProvider) Cpu {
 	if icon == "" {
 		icon = CpuIcon
 	}
-	if provider == nil {
+	if provider == nil || reflect.ValueOf(provider).IsNil() {
 		provider = newDefaultCpuProvider()
 	}
 	return Cpu{

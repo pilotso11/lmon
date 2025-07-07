@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"time"
 
 	"lmon/config"
@@ -92,7 +93,7 @@ func NewHealthcheck(name string, urlRaw string, timeout int, icon string, impl U
 	if icon == "" {
 		icon = Icon
 	}
-	if impl == nil {
+	if impl == nil || reflect.ValueOf(impl).IsNil() {
 		impl = NewDefaultHealthcheckProvider(0)
 	}
 	parsedUrl, err := url.Parse(urlRaw)

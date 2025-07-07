@@ -32,6 +32,7 @@ package disk
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/shirou/gopsutil/v3/disk"
 
@@ -88,7 +89,7 @@ func NewDisk(name string, path string, threshold int, icon string, impl UsagePro
 	if icon == "" {
 		icon = Icon
 	}
-	if impl == nil {
+	if impl == nil || reflect.ValueOf(impl).IsNil() {
 		// todo: is the filesystem zfs?
 		impl = &DefaultDiskUsageProvider{}
 	}

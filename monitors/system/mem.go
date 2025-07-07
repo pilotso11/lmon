@@ -29,6 +29,7 @@ package system
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/shirou/gopsutil/v3/mem"
 
@@ -73,7 +74,7 @@ func NewMem(threshold int, icon string, provider MemProvider) Mem {
 	if icon == "" {
 		icon = MemIcon
 	}
-	if provider == nil {
+	if provider == nil || reflect.ValueOf(provider).IsNil() {
 		provider = defaultMemProvider{}
 	}
 	return Mem{

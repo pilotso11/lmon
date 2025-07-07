@@ -139,7 +139,7 @@ func (s *Service) Remove(m Monitor) error {
 	return nil
 }
 
-// Results returns a clone of the current monitor results map.
+// Results return a clone of the current monitor results map.
 // The returned map can be safely mutated by the caller.
 func (s *Service) Results() map[string]Result {
 	s.mu.Lock()
