@@ -14,8 +14,8 @@ const Icon = "storage"
 const Group = "filesystem"
 const gigabyte = 1024 * 1024 * 1024
 
-// DiskUsageProvider is an interface for getting disk usage
-type DiskUsageProvider interface {
+// UsageProvider is an interface for getting disk usage
+type UsageProvider interface {
 	Usage(path string) (*disk.UsageStat, error)
 }
 
@@ -32,10 +32,10 @@ type Disk struct {
 	path      string
 	threshold int
 	icon      string
-	impl      DiskUsageProvider
+	impl      UsageProvider
 }
 
-func NewDisk(name string, path string, threshold int, icon string, impl DiskUsageProvider) Disk {
+func NewDisk(name string, path string, threshold int, icon string, impl UsageProvider) Disk {
 	if icon == "" {
 		icon = Icon
 	}
