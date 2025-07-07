@@ -65,7 +65,7 @@ func (c Mem) Check(_ context.Context) monitors.Result {
 	if err != nil {
 		return monitors.Result{
 			Status: monitors.RAGError,
-			Value:  fmt.Sprintf("error getting mem usage: %v", err),
+			Value:  fmt.Sprintf("error getting mem Current: %v", err),
 		}
 	}
 	val := fmt.Sprintf("%.1f%%", usage.UsedPercent)

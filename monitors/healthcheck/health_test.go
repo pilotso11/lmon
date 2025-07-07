@@ -1,10 +1,8 @@
 package healthcheck
 
 import (
-	"context"
 	"net"
 	"net/http"
-	"net/url"
 	"testing"
 	"time"
 
@@ -15,28 +13,13 @@ import (
 	"lmon/monitors"
 )
 
-type MockHealthcheckProvider struct {
-	result *atomic.Int32
-	err    error
-}
-
-func (m MockHealthcheckProvider) Check(_ context.Context, _ *url.URL, _ int) (*http.Response, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	return &http.Response{
-		StatusCode: int(m.result.Load()),
-		Status:     http.StatusText(int(m.result.Load())),
-	}, nil
-}
-
 func TestNewHealthcheck(t *testing.T) {
 	push := monitors.NewMockPush()
-	h, err := NewHealthcheck("local", "http://localhost/health", 5, "", MockHealthcheckProvider{result: atomic.NewInt32(http.StatusOK)})
+	h, err := NewHealthcheck("local", "http://localhost/health", 5, "", MockHealthcheckProvider{Result: atomic.NewInt32(http.StatusOK)})
 	assert.NoError(t, err)
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
 	_ = svc.Add(t.Context(), h)
-	assert.Equal(t, 1, len(svc.Monitors), "one monitor added")
+	assert.Equal(t, 1, svc.Size(), "one monitor added")
 }
 
 func TestHealthcheck_DisplayName(t *testing.T) {

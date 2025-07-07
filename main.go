@@ -237,7 +237,7 @@ func main() {
 	}
 	log.Printf("Health checks: %d", len(cfg.Monitoring.Healthchecks))
 	for i, health := range cfg.Monitoring.Healthchecks {
-		log.Printf("  Health[%d]: {Name: %s, URL: %s, Interval: %d, Timeout: %d, Icon: %s}",
+		log.Printf("  Health[%d]: {Name: %s, URL: %s, Interval: %d, timeout: %d, Icon: %s}",
 			i, health.Name, health.URL, health.Interval, health.Timeout, health.Icon)
 	}
 	log.Printf("Webhook: {Enabled: %t, URL: %s}", cfg.Webhook.Enabled, cfg.Webhook.URL)

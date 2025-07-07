@@ -3,6 +3,7 @@ package monitors
 import (
 	"context"
 	"fmt"
+	"log"
 	"maps"
 	"sync"
 	"time"
@@ -68,8 +69,8 @@ type PushFunc func(ctx context.Context, m Monitor, prev, result Result)
 type Service struct {
 	mu       sync.Mutex
 	period   time.Duration
-	Timeout  time.Duration
-	Monitors map[string]Monitor
+	timeout  time.Duration
+	monitors map[string]Monitor
 	result   map[string]Result
 	cancel   context.CancelFunc
 	push     PushFunc
@@ -80,8 +81,8 @@ type Service struct {
 func NewService(ctx context.Context, period time.Duration, timeout time.Duration, push PushFunc) *Service {
 	s := Service{
 		period:   period,
-		Timeout:  timeout,
-		Monitors: make(map[string]Monitor),
+		timeout:  timeout,
+		monitors: make(map[string]Monitor),
 		result:   make(map[string]Result),
 		push:     push,
 	}
@@ -101,7 +102,7 @@ func (s *Service) Add(ctx context.Context, m Monitor) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.Monitors[m.Name()] = m
+	s.monitors[m.Name()] = m
 
 	// synchronously so any error can be reported back to the user
 	result := m.Check(ctx)
@@ -117,11 +118,11 @@ func (s *Service) Remove(m Monitor) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, ok := s.Monitors[m.Name()]
+	_, ok := s.monitors[m.Name()]
 	if !ok {
 		return ErrNotFound{Name: m.Name()}
 	}
-	delete(s.Monitors, m.Name())
+	delete(s.monitors, m.Name())
 	return nil
 }
 
@@ -134,9 +135,10 @@ func (s *Service) Results() map[string]Result {
 }
 
 // SetPeriod changes the refresh period and restarts the monitors with the new period.
-func (s *Service) SetPeriod(ctx context.Context, period time.Duration) {
+func (s *Service) SetPeriod(ctx context.Context, period time.Duration, timeout time.Duration) {
 	s.mu.Lock()
 	s.period = period
+	s.timeout = timeout
 	s.mu.Unlock()
 
 	s.stopMonitors()
@@ -146,6 +148,7 @@ func (s *Service) SetPeriod(ctx context.Context, period time.Duration) {
 // stopMonitors stops the Monitors and waits for them to stop.
 func (s *Service) stopMonitors() {
 	// cancel the current monitors.
+	log.Printf("Stopping monitors")
 	s.cancel()
 
 	// wait for running monitors to stop.
@@ -154,7 +157,7 @@ func (s *Service) stopMonitors() {
 
 // startMonitors starts the Monitors in a go routine.
 // Monitors are checked Service.period using a ticker.
-// Each check is run with a timeout context based on Service.Timeout.
+// Each check is run with a timeout context based on Service.timeout.
 func (s *Service) startMonitors(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
@@ -163,9 +166,10 @@ func (s *Service) startMonitors(ctx context.Context) {
 		defer s.wg.Done()
 		s.mu.Lock()
 		// validate timeout length
-		if s.Timeout > s.period/2 || s.Timeout == 0 {
-			s.Timeout = s.period / 2
+		if s.timeout > s.period/2 || s.timeout == 0 {
+			s.timeout = s.period / 2
 		}
+		log.Printf("Starting monitors with period %v and timeout %v", s.period, s.timeout)
 		ticker := time.NewTicker(s.period)
 		s.mu.Unlock()
 		defer ticker.Stop()
@@ -176,7 +180,7 @@ func (s *Service) startMonitors(ctx context.Context) {
 			case <-ticker.C:
 				// Safely clone the timeout
 				s.mu.Lock()
-				to := s.Timeout
+				to := s.timeout
 				s.mu.Unlock()
 				timeout, toCancel := context.WithTimeout(ctx, to)
 				s.checkMonitors(timeout)
@@ -195,7 +199,7 @@ func (s *Service) checkMonitors(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, m := range s.Monitors {
+	for _, m := range s.monitors {
 		go func(ctx context.Context, m Monitor) {
 			result := m.Check(ctx)
 			result.Key = m
@@ -219,4 +223,10 @@ func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Resul
 		!ok && result.Status != RAGGreen && s.push != nil:
 		s.push(ctx, m, prev, result)
 	}
+}
+
+func (s *Service) Size() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.monitors)
 }

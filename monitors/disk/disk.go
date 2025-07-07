@@ -14,7 +14,7 @@ const Icon = "storage"
 const Group = "filesystem"
 const gigabyte = 1024 * 1024 * 1024
 
-// UsageProvider is an interface for getting disk usage
+// UsageProvider is an interface for getting disk Current
 type UsageProvider interface {
 	Usage(path string) (*disk.UsageStat, error)
 }
@@ -22,7 +22,7 @@ type UsageProvider interface {
 // DefaultDiskUsageProvider is the default implementation of DiskUsageProvider
 type DefaultDiskUsageProvider struct{}
 
-// Usage returns disk usage statistics
+// Usage returns disk Current statistics
 func (p *DefaultDiskUsageProvider) Usage(path string) (*disk.UsageStat, error) {
 	return disk.Usage(path)
 }
@@ -77,7 +77,7 @@ func (d Disk) Check(_ context.Context) monitors.Result {
 	if err != nil {
 		return monitors.Result{
 			Status: monitors.RAGError,
-			Value:  fmt.Sprintf("error getting disk usage: %v", err),
+			Value:  fmt.Sprintf("error getting disk Current: %v", err),
 		}
 	}
 

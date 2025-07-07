@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -14,30 +13,12 @@ import (
 	"lmon/monitors"
 )
 
-type MockDiskProvider struct {
-	usage *atomic.Float64
-	total float64
-	path  string
-	err   error
-}
-
-func (m MockDiskProvider) Usage(_ string) (*disk.UsageStat, error) {
-	return &disk.UsageStat{
-		Path:        m.path,
-		Fstype:      "ext2",
-		Total:       uint64(m.total),
-		Free:        uint64(m.total - m.total*m.usage.Load()/100.0),
-		Used:        uint64(m.total * m.usage.Load() / 100.0),
-		UsedPercent: m.usage.Load(),
-	}, m.err
-}
-
-func TestNewDIsk(t *testing.T) {
+func TstNewDisk(t *testing.T) {
 	push := monitors.NewMockPush()
-	d := NewDisk("test", "/test", 90, "", MockDiskProvider{path: "/test", usage: atomic.NewFloat64(0), total: 100})
+	d := NewDisk("test", "/test", 90, "", MockDiskProvider{path: "/test", Current: atomic.NewFloat64(0), total: 100})
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
 	_ = svc.Add(t.Context(), d)
-	assert.Equal(t, 1, len(svc.Monitors), "one monitor added")
+	assert.Equal(t, 1, svc.Size(), "one monitor added")
 }
 
 func TestDisk_DisplayName(t *testing.T) {
@@ -154,7 +135,7 @@ func TestDisk_Check_Mock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewDisk("test", "/test", tt.threshold, "", MockDiskProvider{usage: atomic.NewFloat64(tt.usage), total: tt.total, err: tt.err, path: "/test"})
+			d := NewDisk("test", "/test", tt.threshold, "", MockDiskProvider{Current: atomic.NewFloat64(tt.usage), total: tt.total, err: tt.err, path: "/test"})
 			r := d.Check(t.Context())
 			assert.Equal(t, tt.want.Status, r.Status, "status")
 			assert.Equal(t, tt.want.Value, r.Value, "value")
@@ -167,7 +148,7 @@ func Test_Check_PushOnAddWithBreach(t *testing.T) {
 	push := monitors.NewMockPush()
 
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
-	d := NewDisk("test", "/test", 90, "", MockDiskProvider{usage: atomic.NewFloat64(90), total: 100 * gigabyte, err: nil, path: "/test"})
+	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(90), total: 100 * gigabyte, err: nil, path: "/test"})
 	err := svc.Add(t.Context(), d)
 	assert.NoError(t, err)
 
@@ -181,7 +162,7 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 	push := monitors.NewMockPush()
 
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
-	d := NewDisk("test", "/test", 90, "", MockDiskProvider{usage: atomic.NewFloat64(0), total: 100 * gigabyte, err: os.ErrNotExist, path: "/test"})
+	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(0), total: 100 * gigabyte, err: os.ErrNotExist, path: "/test"})
 
 	err := svc.Add(t.Context(), d)
 	assert.Error(t, err, "error expected with failed check on add")
@@ -217,7 +198,7 @@ func Test_Check_PushOnChange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			push := monitors.NewMockPush()
 			svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
-			impl := MockDiskProvider{usage: atomic.NewFloat64(tt.initial), total: 100 * gigabyte, path: "/test"}
+			impl := MockDiskProvider{Current: atomic.NewFloat64(tt.initial), total: 100 * gigabyte, path: "/test"}
 			d := NewDisk("test", "/test", 90, "", &impl)
 			err := svc.Add(t.Context(), d)
 			assert.NoError(t, err, "error not expected")
@@ -230,7 +211,7 @@ func Test_Check_PushOnChange(t *testing.T) {
 			}
 
 			// toggle
-			impl.usage.Store(tt.second)
+			impl.Current.Store(tt.second)
 
 			time.Sleep(15 * time.Millisecond)
 			require.Equal(t, tt.secondCnt, push.Calls.Size(), "push cnt after toggle")

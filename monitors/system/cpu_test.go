@@ -12,24 +12,12 @@ import (
 	"lmon/monitors"
 )
 
-type MockCpuProvider struct {
-	usage *atomic.Float64
-	err   error
-}
-
-func (m MockCpuProvider) Usage() (float64, error) {
-	if m.err != nil {
-		return 0, m.err
-	}
-	return m.usage.Load(), nil
-}
-
 func TestNewCpu(t *testing.T) {
 	push := monitors.NewMockPush()
-	cpu := NewCpu(90, "", MockCpuProvider{usage: atomic.NewFloat64(0)})
+	cpu := NewCpu(90, "", MockCpuProvider{Current: atomic.NewFloat64(0)})
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
 	_ = svc.Add(t.Context(), cpu)
-	assert.Equal(t, 1, len(svc.Monitors), "one monitor added")
+	assert.Equal(t, 1, svc.Size(), "one monitor added")
 }
 
 func TestCpu_DisplayName(t *testing.T) {
@@ -94,12 +82,12 @@ func TestCpu_Check_Mock(t *testing.T) {
 		{"amber 89", 89, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "89.0%"}},
 		{"red 90", 90, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "90.0%"}},
 		{"red 100", 100, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "100.0%"}},
-		{"err", 100, os.ErrPermission, 90, monitors.Result{Status: monitors.RAGError, Value: "error getting CPU usage: permission denied"}},
+		{"err", 100, os.ErrPermission, 90, monitors.Result{Status: monitors.RAGError, Value: "error getting CPU Current: permission denied"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewCpu(tt.threshold, "", MockCpuProvider{usage: atomic.NewFloat64(tt.usage), err: tt.err})
+			c := NewCpu(tt.threshold, "", MockCpuProvider{Current: atomic.NewFloat64(tt.usage), err: tt.err})
 			r := c.Check(t.Context())
 			assert.Equal(t, tt.want.Status, r.Status, "status")
 			assert.Equal(t, tt.want.Value, r.Value, "value")

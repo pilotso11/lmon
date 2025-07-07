@@ -42,7 +42,7 @@ func (d *defaultCpuProvider) Usage() (float64, error) {
 	return usage, nil
 }
 
-// calculateCPUPercentage calculates the CPU usage percentage based on the difference between current and previous CPU times
+// calculateCPUPercentage calculates the CPU Current percentage based on the difference between current and previous CPU times
 func calculateCPUPercentage(current, previous cpu.TimesStat) float64 {
 	// Calculate the total time spent by the CPU
 	prevTotal := previous.User + previous.System + previous.Idle + previous.Nice + previous.Iowait + previous.Irq + previous.Softirq + previous.Steal
@@ -105,7 +105,7 @@ func (c Cpu) Check(_ context.Context) monitors.Result {
 	if err != nil {
 		return monitors.Result{
 			Status: monitors.RAGError,
-			Value:  fmt.Sprintf("error getting CPU usage: %v", err),
+			Value:  fmt.Sprintf("error getting CPU Current: %v", err),
 		}
 	}
 	val := fmt.Sprintf("%.1f%%", usage)
