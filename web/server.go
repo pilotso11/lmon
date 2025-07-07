@@ -117,10 +117,15 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("GET /api/config", s.handleGetConfig)
 	s.router.HandleFunc("POST /api/config/interval", s.handleIntervalUpdate(ctx))
 	s.router.HandleFunc("POST /api/config/system", s.handleUpdateSystemConfig(ctx))
-	s.router.HandleFunc("POST /api/config/disk", s.handleAddDiskMonitor)
-	s.router.HandleFunc("POST /api/config/healthcheck", s.handleAddHealthCheck)
-	s.router.HandleFunc("POST /api/config/webhook", s.handleUpdateWebhook)
-	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor)
+	s.router.HandleFunc("POST /api/config/disk/{id}", s.handleAddDiskMonitor(ctx))
+	s.router.HandleFunc("POST /api/config/healthcheck/{id}", s.handleAddHealthCheck(ctx))
+	s.router.HandleFunc("POST /api/config/webhook", s.handleUpdateWebhook(ctx))
+	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor(ctx))
+}
+
+// handleHealthCheck responds with HTTP 200 OK for health check probes.
+func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
 }
 
 //go:embed static/*
@@ -253,7 +258,7 @@ func (s *Server) unmarshallBody(w http.ResponseWriter, r *http.Request, data any
 
 // handleUpdateSystemConfig processes a request to update the system configuration.
 // Expects a JSON body with the new configuration.
-func (s *Server) handleUpdateSystemConfig(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -315,8 +320,11 @@ func (s *Server) saveConfig(w http.ResponseWriter) {
 }
 
 // handleIntervalUpdate processes an HTTP request to update the monitoring interval configuration dynamically.
-func (s *Server) handleIntervalUpdate(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleIntervalUpdate(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
 		var cfg struct {
 			Interval int
 		}
@@ -331,31 +339,95 @@ func (s *Server) handleIntervalUpdate(ctx context.Context) func(w http.ResponseW
 
 // handleAddDiskMonitor processes a request to add a new disk monitor.
 // Expects a JSON body describing the disk monitor to add.
-func (s *Server) handleAddDiskMonitor(w http.ResponseWriter, r *http.Request) {
-	// todo: implement me
+func (s *Server) handleAddDiskMonitor(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
 
+		id := r.PathValue("id")
+		var cfg config.DiskConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		d, err := s.mapper.NewDisk(ctx, id, cfg)
+		if err != nil {
+			log.Printf("handleAddDiskMonitor %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = s.monitor.Add(ctx, d)
+		if err != nil {
+			log.Printf("handleAddDiskMonitor %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.saveConfig(w)
+	}
 }
 
 // handleAddHealthCheck processes a request to add a new health check monitor.
 // Expects a JSON body describing the health check to add.
-func (s *Server) handleAddHealthCheck(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAddHealthCheck(ctx context.Context) http.HandlerFunc {
 	// todo: implement me
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
 
+		id := r.PathValue("id")
+		var cfg config.HealthcheckConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		d, err := s.mapper.NewHealthcheck(ctx, id, cfg)
+		if err != nil {
+			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = s.monitor.Add(ctx, d)
+		if err != nil {
+			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.saveConfig(w)
+	}
 }
 
 // handleUpdateWebhook processes a request to update the webhook configuration.
 // Expects a JSON body with the new webhook settings.
-func (s *Server) handleUpdateWebhook(w http.ResponseWriter, r *http.Request) {
-	// todo: implement me
+func (s *Server) handleUpdateWebhook(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		var cfg config.WebhookConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		// save webhook config
+		s.config.Webhook = cfg
+
+		s.saveConfig(w)
+	}
 
 }
 
 // handleDeleteMonitor processes a request to delete a monitor by type and ID.
-func (s *Server) handleDeleteMonitor(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 	// todo: implement me
-}
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
+	}
 
-// handleHealthCheck responds with HTTP 200 OK for health check probes.
-func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
 }

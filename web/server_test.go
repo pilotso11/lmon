@@ -232,3 +232,68 @@ func TestSetInterval(t *testing.T) {
 
 	assert.Equal(t, 10, s.config.Monitoring.Interval, "config applied")
 }
+
+func TestAddDisk(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s := startTestServer(ctx, t, "")
+	err := s.Start()
+	require.NoError(t, err, "start")
+
+	data := config.DiskConfig{
+		Threshold: 77,
+		Icon:      "disk-icon",
+		Path:      ".",
+	}
+	id := "test-disk"
+	resp, body := postRequest(ctx, t, s, "/api/config/disk/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	assert.Equal(t, 1, len(s.config.Monitoring.Disk), "number of disk entries")
+	d2, ok := s.config.Monitoring.Disk[id]
+	assert.True(t, ok, "disk entry exists")
+	assert.Equal(t, data, d2, "disk entry applied")
+}
+
+func TestAddHealthcheck(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s := startTestServer(ctx, t, "")
+	err := s.Start()
+	require.NoError(t, err, "start")
+
+	data := config.HealthcheckConfig{
+		Timeout: 77,
+		Icon:    "disk-icon",
+		URL:     s.serverUrl + "/healthz",
+	}
+	id := "test-health"
+	resp, body := postRequest(ctx, t, s, "/api/config/healthcheck/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	assert.Equal(t, 1, len(s.config.Monitoring.Healthcheck), "number of healthcheck entries")
+	d2, ok := s.config.Monitoring.Healthcheck[id]
+	assert.True(t, ok, "healthcheck entry exists")
+	assert.Equal(t, data, d2, "healthcheck entry applied")
+}
+
+func TestSetWebhook(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s := startTestServer(ctx, t, "")
+	err := s.Start()
+	require.NoError(t, err, "start")
+
+	data := config.WebhookConfig{
+		Enabled: true,
+		URL:     s.serverUrl + "/hook",
+	}
+
+	resp, body := postRequest(ctx, t, s, "/api/config/webhook", data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	assert.Equal(t, data, s.config.Webhook, "healthcheck entry applied")
+}
