@@ -72,7 +72,7 @@ func (d Disk) Save(cfg *config.Config) {
 	}
 }
 
-func (d Disk) Check(ctx context.Context) monitors.Result {
+func (d Disk) Check(_ context.Context) monitors.Result {
 	usage, err := d.impl.Usage(d.path)
 	if err != nil {
 		return monitors.Result{

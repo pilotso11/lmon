@@ -21,7 +21,7 @@ type MockDiskProvider struct {
 	err   error
 }
 
-func (m MockDiskProvider) Usage(path string) (*disk.UsageStat, error) {
+func (m MockDiskProvider) Usage(_ string) (*disk.UsageStat, error) {
 	return &disk.UsageStat{
 		Path:        m.path,
 		Fstype:      "ext2",

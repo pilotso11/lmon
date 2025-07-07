@@ -100,7 +100,7 @@ func (c Cpu) Save(cfg *config.Config) {
 	cfg.Monitoring.System.CPU.Icon = c.icon
 }
 
-func (c Cpu) Check(ctx context.Context) monitors.Result {
+func (c Cpu) Check(_ context.Context) monitors.Result {
 	usage, err := c.impl.Usage()
 	if err != nil {
 		return monitors.Result{

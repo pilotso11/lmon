@@ -20,7 +20,7 @@ type MockHealthcheckProvider struct {
 	err    error
 }
 
-func (m MockHealthcheckProvider) Check(_ context.Context, path *url.URL, _ int) (*http.Response, error) {
+func (m MockHealthcheckProvider) Check(_ context.Context, _ *url.URL, _ int) (*http.Response, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -148,7 +148,7 @@ type testServer struct {
 	url     string
 }
 
-func (ts *testServer) handler(w http.ResponseWriter, r *http.Request) {
+func (ts *testServer) handler(w http.ResponseWriter, _ *http.Request) {
 	delay := ts.msDelay.Load()
 	code := int(ts.code.Load())
 	if delay > 0 {

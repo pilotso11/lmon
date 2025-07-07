@@ -60,7 +60,7 @@ func (c Mem) Save(cfg *config.Config) {
 	cfg.Monitoring.System.Memory.Icon = c.icon
 }
 
-func (c Mem) Check(ctx context.Context) monitors.Result {
+func (c Mem) Check(_ context.Context) monitors.Result {
 	usage, err := c.impl.Usage()
 	if err != nil {
 		return monitors.Result{

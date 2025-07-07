@@ -52,7 +52,7 @@ func NewMockMonitor(name string, group string) *MockMonitor {
 }
 
 // Check implements Monitor.
-func (m *MockMonitor) Check(ctx context.Context) Result {
+func (m *MockMonitor) Check(_ context.Context) Result {
 	m.Checks++
 	if len(m.status) > 0 {
 		rag := m.status[0].rag
