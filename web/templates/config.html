@@ -133,6 +133,17 @@
                             <h5>Add Disk Monitor</h5>
                             <form id="add-disk-form">
                                 <div class="mb-3">
+                                    <label for="disk-name" class="form-label"
+                                        >Name (ID)</label
+                                    >
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        id="disk-name"
+                                        required
+                                    />
+                                </div>
+                                <div class="mb-3">
                                     <label for="disk-path" class="form-label"
                                         >Path</label
                                     >
@@ -167,7 +178,7 @@
                                         type="text"
                                         class="form-control"
                                         id="disk-icon"
-                                        value="hdd"
+                                        value="{{ .default_disk_icon }}"
                                     />
                                 </div>
                                 <button type="submit" class="btn btn-primary">
@@ -435,22 +446,47 @@
             // Function to load configuration
             function loadConfig() {
                 fetch("/api/config")
-                    .then((response) => response.json())
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error("Failed to load configuration");
+                        }
+                        const contentType =
+                            response.headers.get("content-type") || "";
+                        if (contentType.includes("application/json")) {
+                            return response.json();
+                        } else {
+                            return response.text();
+                        }
+                    })
                     .then((config) => {
                         // Render disk config items
-                        renderDiskConfig(config.monitoring.disk);
+                        // Convert disk map to array of {name, ...props}
+                        const diskArray = Object.entries(
+                            config.Monitoring.Disk || {},
+                        ).map(([name, props]) => ({
+                            name,
+                            ...props,
+                        }));
+                        renderDiskConfig(diskArray);
 
                         // Render system config (passing web config for dashboard title)
                         renderSystemConfig(
-                            config.monitoring.system,
-                            config.web,
+                            config.Monitoring.System,
+                            config.Web,
                         );
 
                         // Render health check config items
-                        renderHealthConfig(config.monitoring.healthchecks);
+                        // Convert healthcheck map to array of {name, ...props}
+                        const healthArray = Object.entries(
+                            config.Monitoring.Healthcheck || {},
+                        ).map(([name, props]) => ({
+                            name,
+                            ...props,
+                        }));
+                        renderHealthConfig(healthArray);
 
                         // Render webhook config
-                        renderWebhookConfig(config.webhook);
+                        renderWebhookConfig(config.Webhook);
                     })
                     .catch((error) => {
                         console.error("Error loading configuration:", error);
@@ -477,17 +513,17 @@
                     <div class="config-item">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <i class="bi bi-${item.icon || "hdd"} item-icon"></i>
-                                <strong>${item.path}</strong>
+                                <i class="bi bi-${item.Icon || default_disk_icon} item-icon"></i>
+                                <strong>${item.name} (${item.Path || "(no path)"})</strong>
                             </div>
                             <div>
                                 <span>Threshold: ${
-                                    item.threshold !== undefined &&
-                                    item.threshold !== null
-                                        ? parseFloat(item.threshold).toFixed(2)
+                                    item.Threshold !== undefined &&
+                                    item.Threshold !== null
+                                        ? parseFloat(item.Threshold).toFixed(2)
                                         : "N/A"
                                 }%</span>
-                                ${item.path === "/" ? "" : `<i class="bi bi-trash delete-btn ms-2" data-type="disk" data-id="${item.path}"></i>`}
+                                <i class="bi bi-trash delete-btn ms-2" data-type="disk" data-id="${item.name}"></i>
                             </div>
                         </div>
                     </div>
@@ -515,22 +551,22 @@
                     return;
                 }
 
-                // Access the nested CPU and Memory objects
-                const cpuConfig = systemConfig.cpu || {};
-                const memoryConfig = systemConfig.memory || {};
+                // Access the nested CPU and Memory objects (capitalized for backend JSON)
+                const cpuConfig = systemConfig.CPU || {};
+                const memoryConfig = systemConfig.Memory || {};
 
                 document.getElementById("system-config-items").innerHTML = `
                 <div class="config-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <i class="bi bi-${cpuConfig.icon || "cpu"} item-icon"></i>
+                            <i class="bi bi-${cpuConfig.Icon || "cpu"} item-icon"></i>
                             <strong>CPU Monitoring</strong>
                         </div>
                         <div>
                             <span>Threshold: ${
-                                cpuConfig.threshold !== undefined &&
-                                cpuConfig.threshold !== null
-                                    ? parseFloat(cpuConfig.threshold).toFixed(2)
+                                cpuConfig.Threshold !== undefined &&
+                                cpuConfig.Threshold !== null
+                                    ? parseFloat(cpuConfig.Threshold).toFixed(2)
                                     : "N/A"
                             }%</span>
                         </div>
@@ -539,15 +575,15 @@
                 <div class="config-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <i class="bi bi-${memoryConfig.icon || "speedometer"} item-icon"></i>
+                            <i class="bi bi-${memoryConfig.Icon || "speedometer"} item-icon"></i>
                             <strong>Memory Monitoring</strong>
                         </div>
                         <div>
                             <span>Threshold: ${
-                                memoryConfig.threshold !== undefined &&
-                                memoryConfig.threshold !== null
+                                memoryConfig.Threshold !== undefined &&
+                                memoryConfig.Threshold !== null
                                     ? parseFloat(
-                                          memoryConfig.threshold,
+                                          memoryConfig.Threshold,
                                       ).toFixed(2)
                                     : "N/A"
                             }%</span>
@@ -569,9 +605,13 @@
 
                 // Set form values
                 document.getElementById("cpu-threshold").value =
-                    cpuConfig.threshold;
+                    cpuConfig.Threshold !== undefined
+                        ? cpuConfig.Threshold
+                        : "";
                 document.getElementById("memory-threshold").value =
-                    memoryConfig.threshold;
+                    memoryConfig.Threshold !== undefined
+                        ? memoryConfig.Threshold
+                        : "";
                 document.getElementById("dashboard-title").value =
                     webConfig.dashboard_title || "Monitoring Dashboard";
             }
@@ -667,7 +707,13 @@
                         if (!response.ok) {
                             throw new Error(`Failed to delete ${type} monitor`);
                         }
-                        return response.json();
+                        const contentType =
+                            response.headers.get("content-type") || "";
+                        if (contentType.includes("application/json")) {
+                            return response.json();
+                        } else {
+                            return response.text();
+                        }
                     })
                     .then((data) => {
                         showToast("Success", data.message);
@@ -694,41 +740,60 @@
                     .addEventListener("submit", function (e) {
                         e.preventDefault();
 
+                        const diskName = document
+                            .getElementById("disk-name")
+                            .value.trim();
+                        const diskPath = document
+                            .getElementById("disk-path")
+                            .value.trim();
+                        const diskIcon = document
+                            .getElementById("disk-icon")
+                            .value.trim();
+                        const diskThreshold = parseInt(
+                            document.getElementById("disk-threshold").value,
+                        );
+
+                        if (!diskName) {
+                            showToast("Error", "Disk name is required", true);
+                            return;
+                        }
+
                         const diskConfig = {
-                            path: document.getElementById("disk-path").value,
-                            threshold: parseInt(
-                                document.getElementById("disk-threshold").value,
-                            ),
-                            icon: document.getElementById("disk-icon").value,
+                            path: diskPath,
+                            icon: diskIcon,
+                            threshold: diskThreshold,
                         };
 
                         console.log("Submitting diskConfig:", diskConfig);
 
-                        fetch("/api/config/disk", {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
+                        // diskConfig must have a name property for the ID
+                        fetch(
+                            `/api/config/disk/${encodeURIComponent(diskName)}`,
+                            {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify(diskConfig),
                             },
-                            body: JSON.stringify(diskConfig),
-                        })
+                        )
                             .then((response) => {
-                                console.log(
-                                    "POST /api/config/disk response:",
-                                    response,
-                                );
                                 if (!response.ok) {
                                     throw new Error(
                                         "Failed to add disk monitor",
                                     );
                                 }
-                                return response.json();
+                                // Try to parse JSON, but fallback to text for "OK\n"
+                                const contentType =
+                                    response.headers.get("content-type") || "";
+                                if (contentType.includes("application/json")) {
+                                    return response.json();
+                                } else {
+                                    return response.text();
+                                }
                             })
                             .then((data) => {
-                                console.log(
-                                    "POST /api/config/disk response data:",
-                                    data,
-                                );
-                                showToast("Success", data.message);
+                                showToast("Success", "Disk monitor added");
                                 loadConfig();
                                 document
                                     .getElementById("add-disk-form")
@@ -754,41 +819,67 @@
                         e.preventDefault();
 
                         fetch("/api/config")
-                            .then((response) => response.json())
+                            .then((response) => {
+                                if (!response.ok) {
+                                    throw new Error(
+                                        "Failed to load configuration",
+                                    );
+                                }
+                                const contentType =
+                                    response.headers.get("content-type") || "";
+                                if (contentType.includes("application/json")) {
+                                    return response.json();
+                                } else {
+                                    return response.text();
+                                }
+                            })
                             .then((config) => {
-                                // Update system thresholds
-                                if (!config.monitoring.system.cpu) {
-                                    config.monitoring.system.cpu = {};
-                                }
-                                if (!config.monitoring.system.memory) {
-                                    config.monitoring.system.memory = {};
-                                }
-
-                                // Update dashboard title
-                                config.web.dashboard_title =
+                                // Update system thresholds and dashboard title
+                                const cpuThreshold = parseInt(
+                                    document.getElementById("cpu-threshold")
+                                        .value,
+                                );
+                                const memThreshold = parseInt(
+                                    document.getElementById("memory-threshold")
+                                        .value,
+                                );
+                                const dashboardTitle =
                                     document.getElementById(
                                         "dashboard-title",
                                     ).value;
 
-                                config.monitoring.system.cpu.threshold =
-                                    parseInt(
-                                        document.getElementById("cpu-threshold")
-                                            .value,
-                                    );
-                                config.monitoring.system.memory.threshold =
-                                    parseInt(
-                                        document.getElementById(
-                                            "memory-threshold",
-                                        ).value,
-                                    );
+                                // Compose new system config
+                                const newSystemConfig = {
+                                    ...config.Monitoring.System,
+                                    cpu: {
+                                        ...config.Monitoring.System.cpu,
+                                        threshold: cpuThreshold,
+                                    },
+                                    memory: {
+                                        ...config.Monitoring.System.memory,
+                                        threshold: memThreshold,
+                                    },
+                                    title: dashboardTitle,
+                                };
+
+                                // Compose new config object
+                                const newConfig = {
+                                    ...config,
+                                    Monitoring: {
+                                        ...config.Monitoring,
+                                        System: newSystemConfig,
+                                    },
+                                };
 
                                 // Save updated config
-                                return fetch("/api/config", {
+                                return fetch("/api/config/system", {
                                     method: "POST",
                                     headers: {
                                         "Content-Type": "application/json",
                                     },
-                                    body: JSON.stringify(config),
+                                    body: JSON.stringify(
+                                        newConfig.Monitoring.System,
+                                    ),
                                 });
                             })
                             .then((response) => {
@@ -797,7 +888,13 @@
                                         "Failed to update system settings",
                                     );
                                 }
-                                return response.json();
+                                const contentType =
+                                    response.headers.get("content-type") || "";
+                                if (contentType.includes("application/json")) {
+                                    return response.json();
+                                } else {
+                                    return response.text();
+                                }
                             })
                             .then((data) => {
                                 showToast("Success", data.message);
@@ -835,20 +932,43 @@
                             icon: document.getElementById("health-icon").value,
                         };
 
-                        fetch("/api/config/healthcheck", {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
+                        // healthConfig must have a name property for the ID
+                        fetch(
+                            `/api/config/healthcheck/${encodeURIComponent(healthConfig.name)}`,
+                            {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                    url: healthConfig.url,
+                                    icon: healthConfig.icon,
+                                    timeout: parseInt(healthConfig.timeout),
+                                }),
                             },
-                            body: JSON.stringify(healthConfig),
-                        })
+                        )
                             .then((response) => {
                                 if (!response.ok) {
                                     throw new Error(
                                         "Failed to add health check",
                                     );
                                 }
-                                return response.json();
+                                const contentType =
+                                    response.headers.get("content-type") || "";
+                                if (contentType.includes("application/json")) {
+                                    const contentType =
+                                        response.headers.get("content-type") ||
+                                        "";
+                                    if (
+                                        contentType.includes("application/json")
+                                    ) {
+                                        return response.json();
+                                    } else {
+                                        return response.text();
+                                    }
+                                } else {
+                                    return response.text();
+                                }
                             })
                             .then((data) => {
                                 showToast("Success", data.message);

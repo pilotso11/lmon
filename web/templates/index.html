@@ -5,43 +5,42 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>{{ .title }}</title>
-
         <link
             rel="icon"
             type="image/png"
             sizes="64x64"
-            href="/static/icon-64x64.png"
+            href="/static/icons/icon-64x64.png"
         />
         <link
             rel="icon"
             type="image/png"
             sizes="32x32"
-            href="/static/icon-32x32.png"
+            href="/static/icons/icon-32x32.png"
         />
         <link
             rel="icon"
             type="image/png"
             sizes="128x128"
-            href="/static/icon-128x128.png"
+            href="/static/icons/icon-128x128.png"
         />
         <link
             rel="icon"
             type="image/png"
             sizes="256x256"
-            href="/static/icon-256x256.png"
+            href="/static/icons/icon-256x256.png"
         />
         <link
             rel="icon"
             type="image/png"
             sizes="512x512"
-            href="/static/icon-512x512.png"
+            href="/static/icons/icon-512x512.png"
         />
         <link
             rel="apple-touch-icon"
             sizes="180x180"
-            href="/static/apple-touch-icon.png"
+            href="/static/icons/apple-touch-icon.png"
         />
-        <link rel="icon" type="image/svg+xml" href="/static/icon.svg" />
+        <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg" />
         <link rel="manifest" href="/static/manifest.json" />
         <link
             href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
@@ -340,7 +339,60 @@
             function loadItems() {
                 fetch("/api/items")
                     .then((response) => response.json())
-                    .then((items) => {
+                    .then((itemsMap) => {
+                        // itemsMap is an object: { id: Result, ... }
+                        // We need to convert it to an array and infer type/group from keys or values
+                        const items = Object.entries(itemsMap).map(
+                            ([id, result]) => {
+                                // Try to infer type from group or id
+                                let type = "";
+                                if (result.Group === "system") {
+                                    if (id.endsWith("cpu")) type = "cpu";
+                                    else if (id.endsWith("mem"))
+                                        type = "memory";
+                                    else type = "system";
+                                } else if (result.Group === "filesystem") {
+                                    type = "disk";
+                                } else if (result.Group === "healthcheck") {
+                                    type = "health";
+                                } else {
+                                    type = result.Group || "";
+                                }
+                                // Try to extract threshold, unit, last_check, message if present (may not be)
+                                return {
+                                    id,
+                                    type,
+                                    name: result.DisplayName || id,
+                                    // Map numeric status codes to string values
+                                    status: (function () {
+                                        const statusMap = {
+                                            0: "unknown",
+                                            1: "error",
+                                            2: "critical",
+                                            3: "warning",
+                                            4: "ok",
+                                        };
+                                        if (typeof result.Status === "number") {
+                                            return (
+                                                statusMap[result.Status] ||
+                                                "unknown"
+                                            );
+                                        }
+                                        if (typeof result.Status === "string") {
+                                            return result.Status.toLowerCase();
+                                        }
+                                        return "unknown";
+                                    })(),
+                                    value: result.Value || "",
+                                    unit: result.Unit || "", // May not exist
+                                    threshold: result.Threshold || null, // May not exist
+                                    last_check: result.LastCheck || "", // May not exist
+                                    message: result.Message || "", // May not exist
+                                    icon: result.Icon || "", // May not exist
+                                };
+                            },
+                        );
+
                         const systemItems = items
                             .filter(
                                 (item) =>
@@ -448,8 +500,13 @@
                 <div class="mb-3">
                     <strong>Value:</strong> ${
                         item.type === "health"
-                            ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
-                            : `${item.unit === "%" ? parseFloat(item.value).toFixed(2) : item.value}${item.unit}`
+                            ? typeof item.value === "number"
+                                ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
+                                : item.value
+                            : (item.unit === "%" &&
+                              !isNaN(parseFloat(item.value))
+                                  ? parseFloat(item.value).toFixed(2)
+                                  : item.value) + (item.unit || "")
                     }
                 </div>
                 <div class="mb-3">
@@ -464,10 +521,10 @@
                     }${item.threshold !== undefined && item.threshold !== null && item.threshold !== 0 ? item.unit : ""}
                 </div>
                 <div class="mb-3">
-                    <strong>Last Check:</strong> ${new Date(item.last_check).toLocaleString()}
+                    <strong>Last Check:</strong> ${item.last_check ? new Date(item.last_check).toLocaleString() : "N/A"}
                 </div>
                 <div class="mb-3">
-                    <strong>Message:</strong> ${item.message}
+                    <strong>Message:</strong> ${item.message || ""}
                 </div>
             `;
 

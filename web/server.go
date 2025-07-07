@@ -15,6 +15,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 
 	"lmon/config"
 	"lmon/monitors"
+	"lmon/monitors/disk"
 	"lmon/monitors/mapper"
 )
 
@@ -69,7 +71,7 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 
 	server.httpServer = &http.Server{
 		Addr:    ln.Addr().String(),
-		Handler: router,
+		Handler: LoggingHandler(os.Stdout, router),
 	}
 
 	// Setup push to webhook callback
@@ -91,6 +93,19 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 	}()
 
 	return server, nil
+}
+
+func LoggingHandler(stdout *os.File, router *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		// Log the request
+
+		// Call the actual handler
+		router.ServeHTTP(w, r)
+
+		elapsedTime := time.Since(start)
+		log.Printf("[%v] %s %s %s %v", start.Format("2006-01-02 15:04:05.000"), r.Method, r.URL.Path, r.RemoteAddr, elapsedTime)
+	})
 }
 
 // Start launches the web server in a separate goroutine.
@@ -266,9 +281,10 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 
 		// Template data
 		data := map[string]any{
-			"title":            s.config.Monitoring.System.Title,
-			"dashboard_title":  s.config.Monitoring.System.Title,
-			"refresh_interval": s.config.Monitoring.Interval,
+			"title":             s.config.Monitoring.System.Title,
+			"dashboard_title":   s.config.Monitoring.System.Title,
+			"refresh_interval":  s.config.Monitoring.Interval,
+			"default_disk_icon": disk.Icon, // from monitors/disk.Icon
 		}
 
 		// Execute the template
