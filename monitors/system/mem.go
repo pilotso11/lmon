@@ -1,5 +1,29 @@
 // Package system provides CPU and memory monitor implementations for lmon.
 // This file contains the memory monitor and its provider abstractions.
+//
+// # Memory Monitor
+//
+// The Memory monitor checks system memory usage and alerts if usage exceeds a configured threshold.
+//
+// How it works:
+//   - Uses a MemProvider interface to abstract memory usage retrieval (default: gopsutil).
+//   - Configured with:
+//   - threshold: Usage percentage threshold for alerting.
+//   - icon: UI icon (optional).
+//   - On each check:
+//   - Retrieves memory usage stats.
+//   - Formats the used percentage as a string.
+//   - Status is:
+//   - Green: Below 90% of threshold.
+//   - Amber: Between 90% of threshold and threshold.
+//   - Red: At or above threshold.
+//   - Configuration is persisted back to the config struct for saving.
+//
+// Example usage:
+//
+//	memMonitor := NewMem(80, "", nil)
+//	result := memMonitor.Check(context.Background())
+//	fmt.Println(result.Status, result.Value)
 package system
 
 import (
@@ -17,6 +41,7 @@ const MemIcon = "speedometer" // Default icon for memory monitors
 // MemProvider is an interface for obtaining memory usage statistics.
 // It allows for production and mock implementations.
 type MemProvider interface {
+	// Usage returns the current memory usage statistics.
 	Usage() (*mem.VirtualMemoryStat, error)
 }
 
@@ -30,6 +55,11 @@ func (d defaultMemProvider) Usage() (*mem.VirtualMemoryStat, error) {
 }
 
 // Mem represents a memory usage monitor.
+//
+// Fields:
+//   - threshold: Usage percentage threshold for alerting.
+//   - icon: Icon for UI display.
+//   - impl: Implementation for usage statistics (defaults to defaultMemProvider).
 type Mem struct {
 	threshold int         // Usage percentage threshold for alerting
 	icon      string      // Icon for UI display
@@ -76,6 +106,12 @@ func (c Mem) Save(cfg *config.Config) {
 
 // Check performs a usage check on memory and returns a Result.
 // It uses the configured MemProvider implementation.
+//
+// The returned Result's Status is:
+//   - RAGGreen: if usage is below 90% of threshold
+//   - RAGAmber: if usage is between 90% of threshold and threshold
+//   - RAGRed: if usage is at or above threshold
+//   - RAGError: if there was an error retrieving memory usage
 func (c Mem) Check(_ context.Context) monitors.Result {
 	usage, err := c.impl.Usage()
 	if err != nil {

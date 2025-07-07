@@ -1,5 +1,32 @@
 // Package disk provides the Disk monitor implementation for filesystem usage checks.
 // It supports both production and mock/test usage providers.
+//
+// # Disk Monitor Overview
+//
+// The Disk monitor checks filesystem usage for a specified path and alerts if usage exceeds a configured threshold.
+//
+// ## How it works
+//   - Uses a UsageProvider interface to abstract disk usage retrieval (default: gopsutil).
+//   - Each disk monitor is configured with:
+//   - name: Logical name for the disk.
+//   - path: Filesystem path to monitor.
+//   - threshold: Usage percentage threshold for alerting.
+//   - icon: UI icon (optional).
+//   - On each check:
+//   - Retrieves usage stats for the path.
+//   - Calculates percentage used and formats a result string.
+//   - Status is:
+//   - Green: Below 90% of threshold.
+//   - Amber: Between 90% of threshold and threshold.
+//   - Red: At or above threshold.
+//   - Configuration is persisted back to the config struct for saving.
+//
+// ## Example Usage
+//
+//	diskMonitor := NewDisk("root", "/", 80, "", nil)
+//	result := diskMonitor.Check(context.Background())
+//
+// See the NewDisk and Disk.Check methods for implementation details.
 package disk
 
 import (
@@ -18,6 +45,8 @@ const gigabyte = 1024 * 1024 * 1024
 
 // UsageProvider is an interface for obtaining disk usage statistics.
 // It allows for production and mock implementations.
+//
+// Implementations should return usage statistics for the given filesystem path.
 type UsageProvider interface {
 	Usage(path string) (*disk.UsageStat, error)
 }
@@ -32,6 +61,13 @@ func (p *DefaultDiskUsageProvider) Usage(path string) (*disk.UsageStat, error) {
 }
 
 // Disk represents a filesystem usage monitor.
+//
+// Fields:
+//   - name: Logical name for the disk monitor.
+//   - path: Filesystem path to monitor.
+//   - threshold: Usage percentage threshold for alerting.
+//   - icon: Icon for UI display.
+//   - impl: Implementation for usage statistics (can be mocked for testing).
 type Disk struct {
 	name      string        // Logical name for the disk monitor
 	path      string        // Filesystem path to monitor
@@ -41,8 +77,13 @@ type Disk struct {
 }
 
 // NewDisk constructs a new Disk monitor with the given parameters.
+//
 // If icon is empty, the default Icon is used.
 // If impl is nil, the DefaultDiskUsageProvider is used.
+//
+// Example:
+//
+//	diskMonitor := NewDisk("root", "/", 80, "", nil)
 func NewDisk(name string, path string, threshold int, icon string, impl UsageProvider) Disk {
 	if icon == "" {
 		icon = Icon
@@ -86,6 +127,12 @@ func (d Disk) Save(cfg *config.Config) {
 
 // Check performs a usage check on the disk and returns a Result.
 // It uses the configured UsageProvider implementation.
+//
+// The result status is:
+//   - RAGGreen: Usage is below 90% of threshold.
+//   - RAGAmber: Usage is between 90% of threshold and threshold.
+//   - RAGRed: Usage is at or above threshold.
+//   - RAGError: If disk usage cannot be determined.
 func (d Disk) Check(_ context.Context) monitors.Result {
 	usage, err := d.impl.Usage(d.path)
 	if err != nil {

@@ -1,5 +1,29 @@
 // Package healthcheck provides the Healthcheck monitor implementation for HTTP endpoint checks.
 // It supports both production and mock/test usage providers.
+//
+// # Healthcheck Monitor
+//
+// The Healthcheck monitor checks the health of an HTTP endpoint by making a request and evaluating the response.
+//
+// ## How it works:
+//   - Uses a UsageProvider interface to abstract HTTP checks (default: Go's http.Client).
+//   - Configured with:
+//   - name: Logical name for the healthcheck.
+//   - url: URL to check.
+//   - timeout: Timeout for the HTTP request.
+//   - icon: UI icon (optional).
+//   - On each check:
+//   - Makes an HTTP GET request to the configured URL with the specified timeout.
+//   - Status is:
+//   - Green: HTTP 2xx response.
+//   - Amber: HTTP 4xx response.
+//   - Red: HTTP 5xx response or request error.
+//   - Configuration is persisted back to the config struct for saving.
+//
+// Example usage:
+//
+//	hc, err := NewHealthcheck("My API", "https://api.example.com/health", 5000, "", nil)
+//	result := hc.Check(context.Background())
 package healthcheck
 
 import (

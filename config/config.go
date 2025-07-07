@@ -106,7 +106,7 @@ func NewLoader(cfgFilename string, paths []string) *Loader {
 	}
 
 	// If paths is nil or empty, set it to the current directory
-	if paths == nil || len(paths) == 0 {
+	if len(paths) == 0 {
 		paths = []string{"."}
 	}
 
