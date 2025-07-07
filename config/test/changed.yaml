@@ -7,10 +7,10 @@ monitoring:
         memory:
             icon: memicon
             threshold: 98
+        title: Test Dashboard
 web:
     host: localhost
     port: 8000
-    title: Test Dashboard
 webhook:
     enabled: false
     url: bad url

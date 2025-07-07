@@ -19,9 +19,8 @@ type Config struct {
 
 // WebConfig represents the web server configuration
 type WebConfig struct {
-	Host  string
-	Port  int
-	Title string
+	Host string
+	Port int
 }
 
 // MonitoringConfig represents the monitoring configuration
@@ -49,6 +48,7 @@ type SystemItem struct {
 type SystemConfig struct {
 	CPU    SystemItem
 	Memory SystemItem
+	Title  string
 }
 
 // HealthcheckConfig represents health check monitoring configuration
@@ -178,13 +178,13 @@ func (l *Loader) Load() (*Config, error) {
 func (l *Loader) setDefaults() {
 	l.v.SetDefault("web.host", "0.0.0.0")
 	l.v.SetDefault("web.port", 8080)
-	l.v.SetDefault("web.title", "LMON Dashboard")
 	l.v.SetDefault("monitoring.interval", 60)
 
 	l.v.SetDefault("monitoring.system.cpu.threshold", 90)
 	l.v.SetDefault("monitoring.system.memory.threshold", 90)
 	l.v.SetDefault("monitoring.system.cpu.icon", "cpu")
 	l.v.SetDefault("monitoring.system.memory.icon", "speedometer")
+	l.v.SetDefault("monitoring.system.title", "LMON Dashboard")
 
 	l.v.SetDefault("webhook.enabled", true)
 	l.v.SetDefault("webhook.url", "http://localhost:8080/test_webhook")
@@ -206,13 +206,13 @@ func (l *Loader) Save(config *Config) error {
 
 	l.v.Set("web.host", config.Web.Host)
 	l.v.Set("web.port", config.Web.Port)
-	l.v.Set("web.title", config.Web.Title)
 	l.v.Set("monitoring.interval", config.Monitoring.Interval)
 
 	l.v.Set("monitoring.system.cpu.threshold", config.Monitoring.System.CPU.Threshold)
 	l.v.Set("monitoring.system.memory.threshold", config.Monitoring.System.Memory.Threshold)
 	l.v.Set("monitoring.system.cpu.icon", config.Monitoring.System.CPU.Icon)
 	l.v.Set("monitoring.system.memory.icon", config.Monitoring.System.Memory.Icon)
+	l.v.Set("monitoring.system.title", config.Monitoring.System.Title)
 
 	l.v.Set("webhook.enabled", config.Webhook.Enabled)
 	l.v.Set("webhook.url", config.Webhook.URL)

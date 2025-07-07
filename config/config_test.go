@@ -53,7 +53,7 @@ func TestDefaultConfig(t *testing.T) {
 	// web settings
 	assert.Equal(t, "0.0.0.0", cfg.Web.Host, "cfg.web.host")
 	assert.Equal(t, 8080, cfg.Web.Port, "cfg.web.port")
-	assert.Equal(t, "LMON Dashboard", cfg.Web.Title, "cfg.web.dashboardTitle")
+	assert.Equal(t, "LMON Dashboard", cfg.Monitoring.System.Title, "cfg.web.dashboardTitle")
 
 	// monitoring settings
 	assert.Equal(t, 60, cfg.Monitoring.Interval, "cfg.monitoring.interval")
@@ -101,7 +101,7 @@ func TestChangeValues(t *testing.T) {
 
 	cfg.Web.Host = "localhost"
 	cfg.Web.Port = 8000
-	cfg.Web.Title = "Test Dashboard"
+	cfg.Monitoring.System.Title = "Test Dashboard"
 	cfg.Webhook.Enabled = false
 	cfg.Webhook.URL = "bad url"
 	cfg.Monitoring.System.CPU.Threshold = 99

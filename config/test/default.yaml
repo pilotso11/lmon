@@ -7,10 +7,10 @@ monitoring:
         memory:
             icon: speedometer
             threshold: 90
+        title: LMON Dashboard
 web:
     host: 0.0.0.0
     port: 8080
-    title: LMON Dashboard
 webhook:
     enabled: true
     url: http://localhost:8080/test_webhook
