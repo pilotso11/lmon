@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"lmon/config"
+	// "lmon/monitors"
 	"lmon/monitors/disk"
 	"lmon/monitors/healthcheck"
 	"lmon/monitors/system"
@@ -23,9 +24,9 @@ type Mapper struct {
 	Impls Implementations
 }
 
-// NewBuilder returns an Mapper struct with all providers set to nil unless mocks are supplied.
+// NewMapper returns an Mapper struct with all providers set to nil unless mocks are supplied.
 // This is used when no testing or custom overrides are required.
-func NewBuilder(impls *Implementations) Mapper {
+func NewMapper(impls *Implementations) Mapper {
 	if impls == nil {
 		impls = &Implementations{}
 	}

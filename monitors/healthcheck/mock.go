@@ -23,6 +23,6 @@ func (m MockHealthcheckProvider) Check(_ context.Context, _ *url.URL, _ int) (*h
 	}, nil
 }
 
-func NewMockHealthcheckProvider(ok int) *MockHealthcheckProvider {
-	return &MockHealthcheckProvider{Result: atomic.NewInt32(int32(ok))}
+func NewMockHealthcheckProvider(code int) *MockHealthcheckProvider {
+	return &MockHealthcheckProvider{Result: atomic.NewInt32(int32(code))}
 }

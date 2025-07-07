@@ -241,3 +241,7 @@ func (l *Loader) Save(config *Config) error {
 	}
 	return nil
 }
+
+func (l *Loader) FilePath() interface{} {
+	return l.v.ConfigFileUsed()
+}

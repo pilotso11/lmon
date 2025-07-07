@@ -23,7 +23,7 @@ func TestNewService(t *testing.T) {
 	time.Sleep(15 * time.Millisecond)
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
-	assert.Equal(t, 2, svc.monitors["test"].(*MockMonitor).Checks, "checks called add + timer")
+	assert.Equal(t, int32(3), svc.monitors["test"].(*MockMonitor).Checks.Load(), "checks called start + add + timer")
 	assert.Equal(t, 1, len(svc.result), "len result")
 
 	cancel()
@@ -161,10 +161,10 @@ func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 	// Wait for at least one check
 	time.Sleep(60 * time.Millisecond)
 	svc.mu.Lock()
-	initialChecks := mon.Checks
+	initialChecks := mon.Checks.Load()
 	initialPeriod := svc.period
 	svc.mu.Unlock()
-	require.GreaterOrEqual(t, initialChecks, 1, "should have at least one check")
+	require.GreaterOrEqual(t, initialChecks, int32(1), "should have at least one check")
 
 	// Change period to a much shorter interval
 	svc.SetPeriod(ctx, 10*time.Millisecond, 0)
@@ -176,7 +176,7 @@ func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 	// Wait for more checks to accumulate
 	time.Sleep(35 * time.Millisecond)
 	svc.mu.Lock()
-	newChecks := mon.Checks
+	newChecks := mon.Checks.Load()
 	svc.mu.Unlock()
 	assert.Greater(t, newChecks, initialChecks+2, "checks should increase after period change")
 	assert.NotEqual(t, initialPeriod, updatedPeriod, "period should have changed")

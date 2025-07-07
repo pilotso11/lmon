@@ -2,20 +2,20 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"lmon/config"
-	"lmon/monitor"
+	"lmon/monitors"
+	"lmon/monitors/mapper"
 	"lmon/web"
 )
 
@@ -69,7 +69,7 @@ Description=lmon - Lightweight Monitoring Service
 After=network.target
 
 [Service]
-Type=simple
+Group=simple
 User=lmon
 Group=lmon
 WorkingDirectory=/opt/lmon
@@ -182,116 +182,42 @@ func main() {
 		return
 	}
 
+	// subscribe to interrupts
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGKILL, os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	// Initialize logger
 	log.SetOutput(os.Stdout)
 	log.Println("Starting lmon - Lightweight Monitoring Service")
 
-	// Create a context that will be canceled on termination signals
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	// In test mode, use a temp config file to isolate config changes
-	var cfg *config.Config
-	var err error
-	testMode := os.Getenv("LMON_TEST_MODE") == "1"
-	if testMode {
-		tmpConfigPath := os.Getenv("LMON_TEST_CONFIG_PATH")
-		if tmpConfigPath == "" {
-			tmpConfigPath = "./lmon-test-config.yaml"
-		}
-		log.Printf("LMON_TEST_MODE=1: Using temp config file: %s", tmpConfigPath)
-		// If the file doesn't exist, create it with defaults
-		if _, statErr := os.Stat(tmpConfigPath); os.IsNotExist(statErr) {
-			defaultCfg := config.DefaultConfig()
-			if saveErr := config.Save(defaultCfg, tmpConfigPath); saveErr != nil {
-				log.Fatalf("Failed to create temp config file: %v", saveErr)
-			}
-			log.Printf("Created temp config file at: %s", tmpConfigPath)
-		} else {
-			log.Printf("Temp config file already exists at: %s", tmpConfigPath)
-		}
-		cfg, err = config.LoadFromFile(tmpConfigPath)
-		if err != nil {
-			log.Fatalf("Failed to load temp config: %v", err)
-		}
-		// Patch the config path in the web server so all saves go to the temp file
-		os.Setenv("LMON_CONFIG_PATH", tmpConfigPath)
-	} else {
-		cfg, err = config.Load()
-		if err != nil {
-			log.Fatalf("Failed to load configuration: %v", err)
-		}
+	// load config
+	l := config.NewLoader("", nil)
+	cfg, err := l.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Log the loaded configuration for debugging
-	log.Printf("Loaded configuration: Web: {Host: %s, Port: %d}", cfg.Web.Host, cfg.Web.Port)
-	log.Printf("Monitoring: {Interval: %d}", cfg.Monitoring.Interval)
-	log.Printf("System: {CPUThreshold: %d, MemoryThreshold: %d, CPUIcon: %s, MemoryIcon: %s}",
-		cfg.Monitoring.System.CPU.Threshold,
-		cfg.Monitoring.System.Memory.Threshold,
-		cfg.Monitoring.System.CPU.Icon,
-		cfg.Monitoring.System.Memory.Icon)
-	log.Printf("Disk monitors: %d", len(cfg.Monitoring.Disk))
-	for i, disk := range cfg.Monitoring.Disk {
-		log.Printf("  Disk[%d]: {Path: %s, Threshold: %d, Icon: %s}", i, disk.Path, disk.Threshold, disk.Icon)
-	}
-	log.Printf("Health checks: %d", len(cfg.Monitoring.Healthchecks))
-	for i, health := range cfg.Monitoring.Healthchecks {
-		log.Printf("  Health[%d]: {Name: %s, URL: %s, Interval: %d, timeout: %d, Icon: %s}",
-			i, health.Name, health.URL, health.Interval, health.Timeout, health.Icon)
-	}
-	log.Printf("Webhook: {Enabled: %t, URL: %s}", cfg.Webhook.Enabled, cfg.Webhook.URL)
+	// startup monitoring
+	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, time.Second, nil)
 
-	// Use real monitors with mock providers in test mode for integration tests
-	var monitoringService *monitor.Service
-	if os.Getenv("LMON_TEST_MODE") == "1" {
-		log.Println("LMON_TEST_MODE=1: Using real monitors with mock providers for integration tests")
-		monitoringService = monitor.NewServiceWithMonitors(
-			cfg,
-			monitor.NewDiskMonitorWithProvider(cfg, &monitor.AlwaysHealthyDiskUsageProvider{}),
-			monitor.NewSystemMonitor(cfg), // Optionally, you can mock CPU/mem providers too
-			monitor.NewHealthMonitor(cfg), // Optionally, you can mock HTTP client
-			&monitor.AlwaysNoopWebhookSender{},
-		)
-	} else {
-		// Initialize monitoring service with context
-		monitoringService = monitor.NewServiceWithContext(ctx, cfg)
+	// start server
+	server, err := web.NewServerWithContext(ctx, cfg, l, mon, mapper.NewMapper(nil))
+	if err != nil {
+		log.Fatalf("Failed to create server: %v", err)
 	}
 
-	// Start monitoring routines
-	monitoringService.Start()
-
-	// Initialize web server with context and correct config path
-	var configPath string
-	if testMode {
-		configPath = os.Getenv("LMON_TEST_CONFIG_PATH")
-		if configPath == "" {
-			configPath = "./lmon-test-config.yaml"
-		}
-	} else {
-		configPath = "../config.yaml"
+	// apply config
+	err = server.SetConfig(ctx, cfg.Monitoring)
+	if err != nil {
+		log.Fatalf("Failed to set initial config: %v", err)
 	}
-	webServer := web.NewServerWithContext(ctx, cfg, monitoringService, configPath)
 
-	// Start web server in a goroutine
-	go func() {
-		addr := fmt.Sprintf("%s:%d", cfg.Web.Host, cfg.Web.Port)
-		log.Printf("Starting web server on %s", addr)
-		if err := webServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Web server error: %v", err)
-		}
-	}()
+	server.Start()
 
-	// Wait for context to be canceled (when a termination signal is received)
+	// wait for interrupt
 	<-ctx.Done()
 
-	log.Println("Shutting down...")
-
-	// Stop receiving signals to prevent additional signal notifications
-	stop()
-
-	// Wait for graceful shutdown
-	_ = webServer.Stop()
+	_ = server.Stop()
 
 	log.Println("Shutdown complete")
 }

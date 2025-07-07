@@ -41,7 +41,7 @@ type MockMonitor struct {
 		msg string
 	}
 	group  string
-	Checks int
+	Checks atomic.Int32
 }
 
 func NewMockMonitor(name string, group string) *MockMonitor {
@@ -53,14 +53,14 @@ func NewMockMonitor(name string, group string) *MockMonitor {
 
 // Check implements Monitor.
 func (m *MockMonitor) Check(_ context.Context) Result {
-	m.Checks++
+	m.Checks.Inc()
 	if len(m.status) > 0 {
 		rag := m.status[0].rag
 		msg := m.status[0].msg
 		m.status = m.status[1:]
 		return Result{Status: rag, Value: msg}
 	}
-	return Result{Status: RAGGreen, Value: fmt.Sprintf("ok check %d", m.Checks)}
+	return Result{Status: RAGGreen, Value: fmt.Sprintf("ok check %d", m.Checks.Load())}
 }
 
 // DisplayName implements Monitor.

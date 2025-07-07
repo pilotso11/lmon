@@ -6,6 +6,7 @@ import (
 	"embed"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -71,6 +72,12 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 	// Setup routes
 	server.setupRoutes(ctx)
 
+	err = server.SetConfig(ctx, cfg.Monitoring)
+	if err != nil {
+		log.Printf("NewServerWithContext: %v", err)
+		return nil, fmt.Errorf("failed to set initial configuration: %w", err)
+	}
+
 	// Automatically stop the server when the context is cancelled.
 	go func() {
 		<-ctx.Done()
@@ -82,12 +89,11 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 
 // Start launches the web server in a separate goroutine.
 // Returns immediately after starting the server.
-func (s *Server) Start() error {
+func (s *Server) Start() {
 	log.Printf("Starting webserver on: %v", s.serverUrl)
 	go func() {
 		_ = s.httpServer.Serve(s.listener)
 	}()
-	return nil
 }
 
 // Stop gracefully shuts down the web server, waiting up to 5 seconds for active connections to close.
@@ -120,7 +126,7 @@ func (s *Server) setupRoutes(ctx context.Context) {
 
 	// API endpoints for monitoring data and configuration management
 	s.router.HandleFunc("GET /api/items", s.handleGetItems)
-	s.router.HandleFunc("GET /api/items/{id}", s.handleGetItem)
+	s.router.HandleFunc("GET /api/items/{group}/{id}", s.handleGetItem)
 	s.router.HandleFunc("GET /api/config", s.handleGetConfig)
 	s.router.HandleFunc("POST /api/config/interval", s.handleIntervalUpdate(ctx))
 	s.router.HandleFunc("POST /api/config/system", s.handleUpdateSystemConfig(ctx))
@@ -267,7 +273,7 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeJson serializes the given data as JSON and writes it to the HTTP response.
-// Sets the Content-Type header to application/json. Returns 500 on error.
+// Sets the Content-Group header to application/json. Returns 500 on error.
 func (s *Server) writeJson(w http.ResponseWriter, data any) {
 	payload, err := json.Marshal(data)
 	if err != nil {
@@ -292,8 +298,9 @@ func (s *Server) handleGetItems(w http.ResponseWriter, r *http.Request) {
 // Returns 404 if the item is not found.
 func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	group := r.PathValue("group")
 	items := s.monitor.Results()
-	item, ok := items[id]
+	item, ok := items[group+"_"+id]
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		log.Printf("handleGetItem: item not found: %s", id)
@@ -322,7 +329,7 @@ func (s *Server) unmarshallBody(w http.ResponseWriter, r *http.Request, data any
 	err = json.Unmarshal(body, data)
 	if err != nil {
 		log.Printf("unmarshallBody %s: %v", r.URL, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return false
 	}
 	return true
@@ -497,9 +504,87 @@ func (s *Server) handleUpdateWebhook(ctx context.Context) http.HandlerFunc {
 
 // handleDeleteMonitor processes a request to delete a monitor by type and ID.
 func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
-	// todo: implement me
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		t := r.PathValue("type")
+		id := r.PathValue("id")
+		var m monitors.Monitor
+		switch t {
+		case "disk":
+			m, _ = s.mapper.NewDisk(ctx, id, config.DiskConfig{})
+		case "healthcheck":
+			m, _ = s.mapper.NewHealthcheck(ctx, id, config.HealthcheckConfig{})
+		default:
+			log.Printf("handleDeleteMonitor invalid type: %s", r.URL.String())
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+		err := s.monitor.Remove(m)
+		if err != nil {
+			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
+			if errors.As(err, &monitors.ErrNotFound{}) {
+				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.saveConfig(w)
 	}
+}
+
+func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cpu, err := s.mapper.NewCpu(ctx, cfg.System.CPU)
+	if err != nil {
+		return err
+	}
+	if err = s.monitor.Add(ctx, cpu); err != nil {
+		return err
+	}
+	log.Printf("Set CPU  %v", cpu)
+
+	mem, err := s.mapper.NewMem(ctx, cfg.System.Memory)
+	if err != nil {
+		return err
+	}
+	if err := s.monitor.Add(ctx, mem); err != nil {
+		return err
+	}
+	log.Printf("Set MEM %v", cpu)
+
+	for name, i := range cfg.Disk {
+		newDisk, err := s.mapper.NewDisk(ctx, name, i)
+		if err != nil {
+			return err
+		}
+		if err := s.monitor.Add(ctx, newDisk); err != nil {
+			return err
+		}
+		log.Printf("Added Disk %v", newDisk)
+	}
+
+	for name, i := range cfg.Healthcheck {
+		newHealth, err := s.mapper.NewHealthcheck(ctx, name, i)
+		if err != nil {
+			return err
+		}
+		if err = s.monitor.Add(ctx, newHealth); err != nil {
+			return err
+		}
+		log.Printf("Added Healthcheck %v", newHealth)
+	}
+
+	// Set the monitoring interval to trigger the initial checks.
+	s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, time.Second)
+
+	log.Printf("Configuration applied")
+
+	return nil
 
 }

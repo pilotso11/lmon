@@ -48,9 +48,10 @@ func (r RAG) String() string {
 
 // Result of a single monitor check.
 type Result struct {
-	Key    Monitor
-	Status RAG
-	Value  string
+	Status      RAG
+	Value       string
+	Group       string
+	DisplayName string
 }
 
 // Monitor interface implemented by all monitors.
@@ -174,20 +175,20 @@ func (s *Service) startMonitors(ctx context.Context) {
 		s.mu.Unlock()
 		defer ticker.Stop()
 		for {
+			// Safely clone the timeout
+			s.mu.Lock()
+			to := s.timeout
+			s.mu.Unlock()
+			timeout, toCancel := context.WithTimeout(ctx, to)
+			s.checkMonitors(timeout)
+			toCancel()
+
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				// Safely clone the timeout
-				s.mu.Lock()
-				to := s.timeout
-				s.mu.Unlock()
-				timeout, toCancel := context.WithTimeout(ctx, to)
-				s.checkMonitors(timeout)
-
 				// wait until 1 timeout
 				time.Sleep(to + -1*time.Millisecond)
-				toCancel()
 			}
 		}
 	}(ctx)
@@ -202,7 +203,8 @@ func (s *Service) checkMonitors(ctx context.Context) {
 	for _, m := range s.monitors {
 		go func(ctx context.Context, m Monitor) {
 			result := m.Check(ctx)
-			result.Key = m
+			result.DisplayName = m.DisplayName()
+			result.Group = m.Group()
 
 			// check the result
 			// if status is changed push
@@ -215,7 +217,8 @@ func (s *Service) checkMonitors(ctx context.Context) {
 }
 
 func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Result) {
-	result.Key = m
+	result.DisplayName = m.DisplayName()
+	result.Group = m.Group()
 	prev, ok := s.result[m.Name()] // get previous result
 	s.result[m.Name()] = result
 	switch {
@@ -234,6 +237,12 @@ func (s *Service) Size() int {
 func (s *Service) Save(cfg *config.Config) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// remove all disks and healthchecks from config
+	cfg.Monitoring.Disk = make(map[string]config.DiskConfig)
+	cfg.Monitoring.Healthcheck = make(map[string]config.HealthcheckConfig)
+
+	// Save all the monitors
 	for _, m := range s.monitors {
 		m.Save(cfg)
 	}
