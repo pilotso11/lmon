@@ -1,3 +1,5 @@
+// Package system provides CPU and memory monitor implementations for lmon.
+// This file contains the CPU monitor and its provider abstractions.
 package system
 
 import (
@@ -11,24 +13,29 @@ import (
 	"lmon/monitors"
 )
 
-const CpuIcon = "cpu"
-const Group = "system"
+const CpuIcon = "cpu"  // Default icon for CPU monitors
+const Group = "system" // Group name for system monitors
 
+// CpuProvider is an interface for obtaining CPU usage statistics.
+// It allows for production and mock implementations.
 type CpuProvider interface {
 	Usage() (float64, error)
 }
 
+// defaultCpuProvider is the default implementation of CpuProvider using gopsutil.
 type defaultCpuProvider struct {
 	prevCPUTimes cpu.TimesStat
 	lastCPUCheck time.Time
 }
 
+// newDefaultCpuProvider creates a new defaultCpuProvider and initializes its state.
 func newDefaultCpuProvider() *defaultCpuProvider {
 	d := defaultCpuProvider{}
 	_, _ = d.Usage()
 	return &d
 }
 
+// Usage returns the current CPU usage percentage.
 func (d *defaultCpuProvider) Usage() (float64, error) {
 	times, err := cpu.Times(false)
 	if err != nil {
@@ -42,7 +49,8 @@ func (d *defaultCpuProvider) Usage() (float64, error) {
 	return usage, nil
 }
 
-// calculateCPUPercentage calculates the CPU Current percentage based on the difference between current and previous CPU times
+// calculateCPUPercentage calculates the CPU usage percentage based on the difference
+// between current and previous CPU times.
 func calculateCPUPercentage(current, previous cpu.TimesStat) float64 {
 	// Calculate the total time spent by the CPU
 	prevTotal := previous.User + previous.System + previous.Idle + previous.Nice + previous.Iowait + previous.Irq + previous.Softirq + previous.Steal
@@ -63,12 +71,16 @@ func calculateCPUPercentage(current, previous cpu.TimesStat) float64 {
 	return 0.0
 }
 
+// Cpu represents a CPU usage monitor.
 type Cpu struct {
-	threshold int
-	icon      string
-	impl      CpuProvider
+	threshold int         // Usage percentage threshold for alerting
+	icon      string      // Icon for UI display
+	impl      CpuProvider // Implementation for usage statistics
 }
 
+// NewCpu constructs a new Cpu monitor with the given parameters.
+// If icon is empty, the default CpuIcon is used.
+// If provider is nil, the defaultCpuProvider is used.
 func NewCpu(threshold int, icon string, provider CpuProvider) Cpu {
 	if icon == "" {
 		icon = CpuIcon
@@ -83,23 +95,29 @@ func NewCpu(threshold int, icon string, provider CpuProvider) Cpu {
 	}
 }
 
+// DisplayName returns a human-readable name for the CPU monitor.
 func (c Cpu) DisplayName() string {
 	return "cpu"
 }
 
+// Group returns the group/category for the CPU monitor.
 func (c Cpu) Group() string {
 	return Group
 }
 
+// Name returns the unique name/ID for the CPU monitor.
 func (c Cpu) Name() string {
 	return fmt.Sprintf("%s_cpu", Group)
 }
 
+// Save persists the CPU monitor's configuration to the provided config struct.
 func (c Cpu) Save(cfg *config.Config) {
 	cfg.Monitoring.System.CPU.Threshold = c.threshold
 	cfg.Monitoring.System.CPU.Icon = c.icon
 }
 
+// Check performs a usage check on the CPU and returns a Result.
+// It uses the configured CpuProvider implementation.
 func (c Cpu) Check(_ context.Context) monitors.Result {
 	usage, err := c.impl.Usage()
 	if err != nil {

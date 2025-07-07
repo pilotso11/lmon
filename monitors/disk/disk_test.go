@@ -1,3 +1,4 @@
+// disk_test.go contains unit tests for the Disk monitor implementation and its integration with the monitoring service.
 package disk
 
 import (
@@ -13,6 +14,7 @@ import (
 	"lmon/monitors"
 )
 
+// TstNewDisk is a helper for quickly testing Disk creation and addition to a monitoring service.
 func TstNewDisk(t *testing.T) {
 	push := monitors.NewMockPush()
 	d := NewDisk("test", "/test", 90, "", MockDiskProvider{path: "/test", Current: atomic.NewFloat64(0), total: 100})
@@ -21,6 +23,7 @@ func TstNewDisk(t *testing.T) {
 	assert.Equal(t, 1, svc.Size(), "one monitor added")
 }
 
+// TestDisk_DisplayName verifies that DisplayName returns the expected string for various disk names and paths.
 func TestDisk_DisplayName(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -46,6 +49,8 @@ func TestDisk_DisplayName(t *testing.T) {
 		})
 	}
 }
+
+// TestDisk_Group verifies that Group returns the correct group name for disk monitors.
 func TestDisk_Group(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -70,6 +75,7 @@ func TestDisk_Group(t *testing.T) {
 	}
 }
 
+// TestDisk_Name verifies that Name returns the correct unique identifier for disk monitors.
 func TestDisk_Name(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -94,6 +100,7 @@ func TestDisk_Name(t *testing.T) {
 	}
 }
 
+// TestDisk_Save verifies that Save correctly persists the disk monitor configuration.
 func TestDisk_Save(t *testing.T) {
 	l := config.NewLoader("", []string{t.TempDir()})
 	cfg, _ := l.Load()
@@ -108,6 +115,7 @@ func TestDisk_Save(t *testing.T) {
 	assert.Equal(t, 66, dc.Threshold)
 }
 
+// TestDisk_Check_DefaultImpl verifies that the default implementation of Disk.Check does not panic and returns a valid status.
 func TestDisk_Check_DefaultImpl(t *testing.T) {
 	assert.NotPanics(t, func() {
 		d := NewDisk("local", t.TempDir(), 90, "", nil)
@@ -116,6 +124,7 @@ func TestDisk_Check_DefaultImpl(t *testing.T) {
 	})
 }
 
+// TestDisk_Check_Mock verifies Disk.Check with a mock provider for various usage scenarios and thresholds.
 func TestDisk_Check_Mock(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -144,6 +153,7 @@ func TestDisk_Check_Mock(t *testing.T) {
 	}
 }
 
+// Test_Check_PushOnAddWithBreach verifies that adding a disk monitor with a breached threshold triggers a push notification.
 func Test_Check_PushOnAddWithBreach(t *testing.T) {
 	push := monitors.NewMockPush()
 
@@ -158,6 +168,7 @@ func Test_Check_PushOnAddWithBreach(t *testing.T) {
 	assert.Equal(t, monitors.RAGRed, val.Result.Status, "status")
 }
 
+// Test_Check_PushOnAddWithErr verifies that adding a disk monitor with an error triggers a push notification and returns an error.
 func Test_Check_PushOnAddWithErr(t *testing.T) {
 	push := monitors.NewMockPush()
 
@@ -173,6 +184,7 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 	assert.Equal(t, monitors.RAGError, val.Result.Status, "status")
 }
 
+// Test_Check_PushOnChange verifies that push notifications are triggered when the disk usage status changes.
 func Test_Check_PushOnChange(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -210,7 +222,7 @@ func Test_Check_PushOnChange(t *testing.T) {
 				assert.Equal(t, tt.initialStatus, va.Result.Status, "initial status")
 			}
 
-			// toggle
+			// toggle usage to new value
 			impl.Current.Store(tt.second)
 
 			time.Sleep(15 * time.Millisecond)

@@ -1,3 +1,4 @@
+// health_test.go contains unit tests for the Healthcheck monitor implementation and its integration with the monitoring service.
 package healthcheck
 
 import (
@@ -13,6 +14,7 @@ import (
 	"lmon/monitors"
 )
 
+// TestNewHealthcheck verifies that a Healthcheck can be created and added to a monitoring service.
 func TestNewHealthcheck(t *testing.T) {
 	push := monitors.NewMockPush()
 	h, err := NewHealthcheck("local", "http://localhost/health", 5, "", MockHealthcheckProvider{Result: atomic.NewInt32(http.StatusOK)})
@@ -22,6 +24,7 @@ func TestNewHealthcheck(t *testing.T) {
 	assert.Equal(t, 1, svc.Size(), "one monitor added")
 }
 
+// TestHealthcheck_DisplayName verifies that DisplayName returns the expected string for various healthcheck names and URLs.
 func TestHealthcheck_DisplayName(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -50,6 +53,7 @@ func TestHealthcheck_DisplayName(t *testing.T) {
 	}
 }
 
+// TestHealthcheck_Group verifies that Group returns the correct group name for healthcheck monitors.
 func TestHealthcheck_Group(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -77,6 +81,7 @@ func TestHealthcheck_Group(t *testing.T) {
 	}
 }
 
+// TestHealthcheck_Name verifies that Name returns the correct unique identifier for healthcheck monitors.
 func TestHealthcheck_Name(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -105,6 +110,7 @@ func TestHealthcheck_Name(t *testing.T) {
 
 }
 
+// TestHealthcheck_Save verifies that Save correctly persists the healthcheck monitor configuration.
 func TestHealthcheck_Save(t *testing.T) {
 	l := config.NewLoader("", []string{t.TempDir()})
 	cfg, _ := l.Load()
@@ -124,6 +130,7 @@ func TestHealthcheck_Save(t *testing.T) {
 	assert.Equal(t, 5, h.Timeout, "timeout")
 }
 
+// testServer is a helper for spinning up a local HTTP server for healthcheck integration tests.
 type testServer struct {
 	ts      *http.Server
 	code    atomic.Int32
@@ -131,6 +138,7 @@ type testServer struct {
 	url     string
 }
 
+// handler is the HTTP handler for the testServer, simulating various status codes and delays.
 func (ts *testServer) handler(w http.ResponseWriter, _ *http.Request) {
 	delay := ts.msDelay.Load()
 	code := int(ts.code.Load())
@@ -146,6 +154,7 @@ func (ts *testServer) handler(w http.ResponseWriter, _ *http.Request) {
 
 }
 
+// startTestServer spins up a test HTTP server for healthcheck integration tests.
 func startTestServer(t *testing.T, uri string) *testServer {
 	ts := &testServer{}
 	ts.ts = &http.Server{}
@@ -163,6 +172,8 @@ func startTestServer(t *testing.T, uri string) *testServer {
 	return ts
 }
 
+// TestHealthcheck_DefaultImplSmokeTest verifies the default implementation of Healthcheck.Check
+// for various HTTP status codes and simulated delays.
 func TestHealthcheck_DefaultImplSmokeTest(t *testing.T) {
 	ts := startTestServer(t, "/health")
 	defer func() {

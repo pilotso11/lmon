@@ -1,3 +1,4 @@
+// mock_test.go contains unit tests for the MockHealthcheckProvider in the healthcheck package.
 package healthcheck
 
 import (
@@ -6,12 +7,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestNewMockHealthcheckProvider verifies that NewMockHealthcheckProvider initializes the Result value correctly.
 func TestNewMockHealthcheckProvider(t *testing.T) {
 	m := NewMockHealthcheckProvider(200)
 	assert.NotNil(t, m, "should not be nil")
 	assert.Equal(t, int32(200), m.Result.Load(), "Initial value should be 200")
 }
 
+// TestMockHealthcheckProvider_Check verifies the Check method returns the correct status code and error handling.
 func TestMockHealthcheckProvider_Check(t *testing.T) {
 	m := NewMockHealthcheckProvider(200)
 	resp, err := m.Check(nil, nil, 0)

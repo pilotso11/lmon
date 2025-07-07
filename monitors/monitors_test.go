@@ -1,3 +1,5 @@
+// monitors_test.go contains unit tests for the monitors package.
+// These tests cover the Service lifecycle, monitor management, concurrency, and RAG status logic.
 package monitors
 
 import (
@@ -11,6 +13,7 @@ import (
 	"go.uber.org/goleak"
 )
 
+// TestNewService verifies that a Service can be created, a monitor can be added, and checks are performed.
 func TestNewService(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -29,6 +32,7 @@ func TestNewService(t *testing.T) {
 	cancel()
 }
 
+// TestService_Add verifies adding monitors to the Service, including replacing an existing monitor.
 func TestService_Add(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -56,6 +60,7 @@ func TestService_Add(t *testing.T) {
 	assert.Same(t, m3, svc.monitors["test1"], "monitor was replaced")
 }
 
+// TestService_Remove verifies removing monitors from the Service, including error handling for missing monitors.
 func TestService_Remove(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -89,6 +94,7 @@ func TestService_Remove(t *testing.T) {
 	assert.Len(t, svc.monitors, 0, "no monitors should remain")
 }
 
+// TestService_Results_CloneAndRace verifies that Results returns a safe-to-mutate clone and tests for race conditions.
 func TestService_Results_CloneAndRace(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -149,6 +155,7 @@ func TestService_Results_CloneAndRace(t *testing.T) {
 	wg.Wait()
 }
 
+// TestService_SetPeriod_UpdatesPeriodAndRestarts verifies that SetPeriod updates the check interval and restarts monitoring.
 func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -182,6 +189,7 @@ func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 	assert.NotEqual(t, initialPeriod, updatedPeriod, "period should have changed")
 }
 
+// TestService_SetPeriod_Race verifies that SetPeriod and Results can be called concurrently without race conditions.
 func TestService_SetPeriod_Race(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -208,6 +216,7 @@ func TestService_SetPeriod_Race(t *testing.T) {
 	<-done
 }
 
+// TestRAG_String verifies the string representations of RAG status values.
 func TestRAG_String(t *testing.T) {
 	tests := []struct {
 		rag      RAG

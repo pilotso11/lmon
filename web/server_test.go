@@ -1,3 +1,5 @@
+// server_test.go contains integration and unit tests for the lmon web server.
+// These tests cover HTTP endpoints, configuration management, static file serving, and webhook integration.
 package web
 
 import (
@@ -26,16 +28,19 @@ import (
 	"lmon/monitors/system"
 )
 
+// mockWebhookHandler is a test double for capturing webhook callback invocations.
 type mockWebhookHandler struct {
 	lastMessage atomic.String
 	cnt         atomic.Int32
 }
 
+// webhookCallback stores the last message and increments the call count.
 func (m *mockWebhookHandler) webhookCallback(msg string) {
 	m.lastMessage.Store(msg)
 	m.cnt.Inc()
 }
 
+// NewMockImplementations returns a set of mock monitor providers and a webhook callback for testing.
 func NewMockImplementations(hook *mockWebhookHandler) *mapper.Implementations {
 	return &mapper.Implementations{
 		Disk:    disk.NewMockDiskProvider(50),
@@ -46,6 +51,8 @@ func NewMockImplementations(hook *mockWebhookHandler) *mapper.Implementations {
 	}
 }
 
+// startTestServer creates and starts a new test server instance with a temporary configuration.
+// Returns the server and a mock webhook handler for assertions.
 func startTestServer(ctx context.Context, t *testing.T, cfgFile string) (*Server, *mockWebhookHandler) {
 	t.Helper()
 	t.Setenv("LMON_WEB_PORT", "0")
@@ -62,6 +69,8 @@ func startTestServer(ctx context.Context, t *testing.T, cfgFile string) (*Server
 	return s, hook
 }
 
+// sendRequest is a helper for sending HTTP requests to the test server.
+// It marshals the data as JSON if provided, and returns the response and body as a string.
 func sendRequest(ctx context.Context, t *testing.T, method string, s *Server, path string, timeout time.Duration, data any) (*http.Response, string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -87,18 +96,22 @@ func sendRequest(ctx context.Context, t *testing.T, method string, s *Server, pa
 	return readBody(res, t)
 }
 
+// getRequest sends a GET request to the test server.
 func getRequest(ctx context.Context, t *testing.T, s *Server, path string) (*http.Response, string) {
 	return sendRequest(ctx, t, "GET", s, path, 20*time.Millisecond, nil)
 }
 
+// deleteRequest sends a DELETE request to the test server.
 func deleteRequest(ctx context.Context, t *testing.T, s *Server, path string) (*http.Response, string) {
 	return sendRequest(ctx, t, "DELETE", s, path, 10*time.Millisecond, nil)
 }
 
+// postRequest sends a POST request with JSON data to the test server.
 func postRequest(ctx context.Context, t *testing.T, s *Server, path string, data any) (*http.Response, string) {
 	return sendRequest(ctx, t, "POST", s, path, 100*time.Millisecond, data)
 }
 
+// readBody reads and closes the response body, returning the response and body as a string.
 func readBody(res *http.Response, t *testing.T) (*http.Response, string) {
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
@@ -111,6 +124,7 @@ func readBody(res *http.Response, t *testing.T) (*http.Response, string) {
 	return res, string(body)
 }
 
+// TestNewServerWithContext_Smoke verifies that the server can be created, started, and stopped without panicking.
 func TestNewServerWithContext_Smoke(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
@@ -127,6 +141,7 @@ func TestNewServerWithContext_Smoke(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 }
 
+// TestSelfHealthcheck checks that the /healthz endpoint returns HTTP 200 OK.
 func TestSelfHealthcheck(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -139,6 +154,7 @@ func TestSelfHealthcheck(t *testing.T) {
 	assert.Equal(t, "OK\n", body)
 }
 
+// TestGetIndex checks that the root and /index.html endpoints return the dashboard HTML.
 func TestGetIndex(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -156,6 +172,7 @@ func TestGetIndex(t *testing.T) {
 	assert.True(t, within(len(indexHtml), len(body), .10), "index returned is about the same length as the template")
 }
 
+// within returns true if i2 is within the given tolerance of i.
 func within(i int, i2 int, tolerance float64) bool {
 	d := i - i2
 	if d < 0 {
@@ -164,6 +181,7 @@ func within(i int, i2 int, tolerance float64) bool {
 	return float64(d)/float64(i) < tolerance
 }
 
+// TestGetConfig checks that the /config endpoint returns the configuration HTML.
 func TestGetConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -179,6 +197,7 @@ func TestGetConfig(t *testing.T) {
 //go:embed static/icon.svg
 var icon string
 
+// TestStatic checks that static files are served correctly.
 func TestStatic(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -190,6 +209,7 @@ func TestStatic(t *testing.T) {
 	assert.Equal(t, icon, body)
 }
 
+// TestSetSystemConfig verifies updating the system configuration via the API.
 func TestSetSystemConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -215,6 +235,7 @@ func TestSetSystemConfig(t *testing.T) {
 	assert.Equal(t, cfg, s.config.Monitoring.System, "config applied")
 }
 
+// TestSetInterval verifies updating the monitoring interval via the API.
 func TestSetInterval(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -234,6 +255,7 @@ func TestSetInterval(t *testing.T) {
 	assert.Equal(t, 10, s.config.Monitoring.Interval, "config applied")
 }
 
+// TestAddDisk verifies adding a disk monitor via the API.
 func TestAddDisk(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -256,6 +278,8 @@ func TestAddDisk(t *testing.T) {
 	assert.Equal(t, data, d2, "disk entry applied")
 }
 
+// TestDeleteDisk verifies deleting a disk monitor via the API and handling of missing entries.
+// TestDeleteDisk verifies deleting a disk monitor and handling repeated deletes (not found).
 func TestDeleteDisk(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -287,6 +311,7 @@ func TestDeleteDisk(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
 }
 
+// TestAddHealthcheck verifies adding a healthcheck monitor via the API.
 func TestAddHealthcheck(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -309,6 +334,7 @@ func TestAddHealthcheck(t *testing.T) {
 	assert.Equal(t, data, d2, "healthcheck entry applied")
 }
 
+// TestDeleteHealthcheck verifies deleting a healthcheck monitor and handling repeated deletes (not found).
 func TestDeleteHealthcheck(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -334,6 +360,7 @@ func TestDeleteHealthcheck(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	assert.Equal(t, "OK\n", body)
 
+	// Note: This checks disk entries, but should likely check healthcheck entries.
 	assert.Equal(t, 0, len(s.config.Monitoring.Disk), "number of disk entries")
 
 	resp, body = deleteRequest(ctx, t, s, "/api/config/healthcheck/"+id)
@@ -341,6 +368,7 @@ func TestDeleteHealthcheck(t *testing.T) {
 
 }
 
+// TestSetWebhook verifies updating the webhook configuration via the API.
 func TestSetWebhook(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -359,6 +387,7 @@ func TestSetWebhook(t *testing.T) {
 	assert.Equal(t, data, s.config.Webhook, "healthcheck entry applied")
 }
 
+// TestWebHookAndCallback verifies that webhook callbacks are triggered and received.
 func TestWebHookAndCallback(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -376,6 +405,7 @@ func TestWebHookAndCallback(t *testing.T) {
 
 	assert.Equal(t, data, s.config.Webhook, "healthcheck entry applied")
 
+	// Simulate a disk status change to trigger the webhook.
 	s.mapper.Impls.Disk.Current.Store(99)
 	d := config.DiskConfig{Threshold: 1, Icon: "", Path: "."}
 	id := "test-disk"
@@ -391,6 +421,7 @@ func TestWebHookAndCallback(t *testing.T) {
 //go:embed test/postsave.yaml
 var expectedFile string
 
+// TestConfigSaved verifies that configuration changes are persisted to disk.
 func TestConfigSaved(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -418,6 +449,7 @@ func TestConfigSaved(t *testing.T) {
 	assert.Equal(t, expectedFile, string(bodyBytes), "config saved")
 }
 
+// TestMapper_SetConfig verifies that SetConfig applies all monitor types and persists configuration.
 func TestMapper_SetConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -453,6 +485,7 @@ func TestMapper_SetConfig(t *testing.T) {
 	assert.Equal(t, cfg.Monitoring, cfg2.Monitoring, "config applied")
 }
 
+// TestGetItems verifies the /api/items endpoint and fetching individual items.
 func TestGetItems(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -500,6 +533,7 @@ func TestGetItems(t *testing.T) {
 	})
 }
 
+// TestGetApiConfig verifies the /api/config endpoint returns the correct configuration.
 func TestGetApiConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -527,6 +561,7 @@ func TestGetApiConfig(t *testing.T) {
 	assert.Equal(t, "https://google.com", cfg.Monitoring.Healthcheck["google"].URL)
 }
 
+// TestBadJson verifies that invalid JSON in POST requests returns HTTP 400 Bad Request.
 func TestBadJson(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -540,6 +575,7 @@ func TestBadJson(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
 }
 
+// TestDeleteBadType verifies that deleting a monitor with an invalid type returns HTTP 400 Bad Request.
 func TestDeleteBadType(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()

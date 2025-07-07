@@ -1,3 +1,5 @@
+// Package monitors provides core monitoring abstractions and helpers for lmon.
+// This file contains mock implementations for testing monitor logic and push notifications.
 package monitors
 
 import (
@@ -15,25 +17,33 @@ type mockResult struct {
 	prev   Result
 	Result Result
 }
+
+// MockPush is a test double for PushFunc that records calls and their arguments.
+// It is safe for concurrent use in tests.
 type MockPush struct {
 	cnt   atomic.Int32
 	Calls *xsync.Map[int32, mockResult]
 }
 
+// NewMockPush creates a new MockPush instance for use in tests.
 func NewMockPush() *MockPush {
 	return &MockPush{
 		Calls: xsync.NewMap[int32, mockResult](),
 	}
 }
 
+// Push implements the PushFunc signature and records each call with its arguments.
 func (m *MockPush) Push(_ context.Context, mon Monitor, prev Result, result Result) {
 	m.Calls.Store(m.cnt.Inc(), mockResult{mon, prev, result})
 }
 
+// ClearCalls removes all recorded push calls.
 func (m *MockPush) ClearCalls() {
 	m.Calls.Clear()
 }
 
+// MockMonitor is a test double for the Monitor interface.
+// It allows simulation of status changes and tracks the number of checks.
 type MockMonitor struct {
 	name   string
 	status []struct {
@@ -44,6 +54,7 @@ type MockMonitor struct {
 	Checks atomic.Int32
 }
 
+// NewMockMonitor creates a new MockMonitor with the given name and group.
 func NewMockMonitor(name string, group string) *MockMonitor {
 	return &MockMonitor{
 		name:  name,
@@ -51,7 +62,8 @@ func NewMockMonitor(name string, group string) *MockMonitor {
 	}
 }
 
-// Check implements Monitor.
+// Check implements Monitor. It returns the next status in the queue, or RAGGreen by default.
+// Each call increments the Checks counter.
 func (m *MockMonitor) Check(_ context.Context) Result {
 	m.Checks.Inc()
 	if len(m.status) > 0 {
@@ -63,22 +75,22 @@ func (m *MockMonitor) Check(_ context.Context) Result {
 	return Result{Status: RAGGreen, Value: fmt.Sprintf("ok check %d", m.Checks.Load())}
 }
 
-// DisplayName implements Monitor.
+// DisplayName implements Monitor. Returns a human-readable name for the mock monitor.
 func (m *MockMonitor) DisplayName() string {
 	return fmt.Sprintf("MockMonitor %s", m.name)
 }
 
-// Group implements Monitor.
+// Group implements Monitor. Returns the group name for the mock monitor.
 func (m *MockMonitor) Group() string {
 	return m.group
 }
 
-// Name implements Monitor.
+// Name implements Monitor. Returns the unique name for the mock monitor.
 func (m *MockMonitor) Name() string {
 	return m.name
 }
 
-// Save implements Monitor.
+// Save implements Monitor. No-op for the mock monitor.
 func (m *MockMonitor) Save(_ *config.Config) {
 	// noop
 }

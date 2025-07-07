@@ -1,3 +1,4 @@
+// mocks_test.go contains unit tests for the MockPush and MockMonitor types in the monitors package.
 package monitors
 
 import (
@@ -6,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestMockPush verifies that MockPush records, counts, and clears push calls correctly.
 func TestMockPush(t *testing.T) {
 	m := NewMockPush()
 	assert.Equal(t, 0, m.Calls.Size(), "empty")
@@ -21,6 +23,8 @@ func TestMockPush(t *testing.T) {
 
 }
 
+// TestMockMonitor_Check verifies that MockMonitor.Check returns the correct status and value,
+// increments the check counter, and consumes the status queue as expected.
 func TestMockMonitor_Check(t *testing.T) {
 	mon := NewMockMonitor("test", "test")
 	r := mon.Check(t.Context())
@@ -44,6 +48,8 @@ func TestMockMonitor_Check(t *testing.T) {
 	assert.Equal(t, 3, len(mon.status), "status len")
 }
 
+// TestNewMockMonitor_NameGroup verifies that NewMockMonitor sets the name and group fields correctly
+// and that DisplayName returns the expected value.
 func TestNewMockMonitor_NameGroup(t *testing.T) {
 	mon := NewMockMonitor("test", "group")
 	assert.Equal(t, "test", mon.name, "Name")

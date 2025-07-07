@@ -1,3 +1,5 @@
+// Package healthcheck provides the Healthcheck monitor implementation for HTTP endpoint checks.
+// It supports both production and mock/test usage providers.
 package healthcheck
 
 import (
@@ -11,19 +13,22 @@ import (
 	"lmon/monitors"
 )
 
-const Icon = "activity"
-const Group = "app"
+const Icon = "activity" // Default icon for healthcheck monitors
+const Group = "app"     // Group name for healthcheck monitors
 
-// UsageProvider is an interface for getting healthcheck usage
+// UsageProvider is an interface for obtaining healthcheck usage statistics.
+// It allows for production and mock implementations.
 type UsageProvider interface {
 	Check(ctx context.Context, path *url.URL, timeout int) (*http.Response, error)
 }
 
-// DefaultHealthcheckProvider is the default implementation of HealthcheckUsageProvider
+// DefaultHealthcheckProvider is the default implementation of UsageProvider
+// using Go's http.Client.
 type DefaultHealthcheckProvider struct {
 	client http.Client
 }
 
+// NewDefaultHealthcheckProvider creates a new DefaultHealthcheckProvider with the given timeout in milliseconds.
 func NewDefaultHealthcheckProvider(msTimeout int) *DefaultHealthcheckProvider {
 	if msTimeout == 0 {
 		msTimeout = 5
@@ -35,7 +40,8 @@ func NewDefaultHealthcheckProvider(msTimeout int) *DefaultHealthcheckProvider {
 	}
 }
 
-// Check returns healthcheck usage statistics
+// Check performs an HTTP GET request to the given URL with the specified timeout (ms).
+// Returns the HTTP response or an error.
 func (p *DefaultHealthcheckProvider) Check(ctx context.Context, path *url.URL, msTimeout int) (*http.Response, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(msTimeout)*time.Millisecond)
 	defer cancel()
@@ -46,20 +52,23 @@ func (p *DefaultHealthcheckProvider) Check(ctx context.Context, path *url.URL, m
 	return p.client.Do(req)
 }
 
+// Healthcheck represents an HTTP endpoint health monitor.
 type Healthcheck struct {
-	name    string
-	timeout int
-	url     *url.URL
-	icon    string
-	impl    UsageProvider
+	name    string        // Logical name for the healthcheck
+	timeout int           // Timeout in milliseconds for the check
+	url     *url.URL      // URL to check
+	icon    string        // Icon for UI display
+	impl    UsageProvider // Implementation for performing the check
 }
 
+// NewHealthcheck constructs a new Healthcheck monitor with the given parameters.
+// If icon is empty, the default Icon is used.
+// If impl is nil, the DefaultHealthcheckProvider is used.
 func NewHealthcheck(name string, urlRaw string, timeout int, icon string, impl UsageProvider) (Healthcheck, error) {
 	if icon == "" {
 		icon = Icon
 	}
 	if impl == nil {
-		// todo: is the filesystem zfs?
 		impl = NewDefaultHealthcheckProvider(0)
 	}
 	parsedUrl, err := url.Parse(urlRaw)
@@ -75,19 +84,23 @@ func NewHealthcheck(name string, urlRaw string, timeout int, icon string, impl U
 	}, nil
 }
 
+// DisplayName returns a human-readable name for the healthcheck monitor.
 func (d Healthcheck) DisplayName() string {
 	u := fmt.Sprintf("%s://%s", d.url.Scheme, d.url.Host)
 	return fmt.Sprintf("%s (%s)", d.name, u)
 }
 
+// Group returns the group/category for the healthcheck monitor.
 func (d Healthcheck) Group() string {
 	return Group
 }
 
+// Name returns the unique name/ID for the healthcheck monitor.
 func (d Healthcheck) Name() string {
 	return fmt.Sprintf("healthcheck_%s", d.name)
 }
 
+// Save persists the healthcheck monitor's configuration to the provided config struct.
 func (d Healthcheck) Save(cfg *config.Config) {
 	cfg.Monitoring.Healthcheck[d.name] = config.HealthcheckConfig{
 		URL:     d.url.String(),
@@ -96,6 +109,8 @@ func (d Healthcheck) Save(cfg *config.Config) {
 	}
 }
 
+// Check performs a healthcheck by making an HTTP request to the configured URL.
+// Returns a Result with the status and value based on the HTTP response.
 func (d Healthcheck) Check(ctx context.Context) monitors.Result {
 	response, err := d.impl.Check(ctx, d.url, d.timeout)
 	if err != nil {
