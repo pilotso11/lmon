@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -47,6 +48,7 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 		router:  router,
 		ctx:     ctx,
 		mapper:  builder,
+		loader:  loader,
 	}
 
 	addr := fmt.Sprintf("%s:%d", server.config.Web.Host, server.config.Web.Port)
@@ -113,7 +115,7 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("GET /api/items", s.handleGetItems)
 	s.router.HandleFunc("GET /api/items/{id}", s.handleGetItem)
 	s.router.HandleFunc("GET /api/config", s.handleGetConfig)
-	s.router.HandleFunc("GET /api/config/interval", s.handleIntervalUpdate(ctx))
+	s.router.HandleFunc("POST /api/config/interval", s.handleIntervalUpdate(ctx))
 	s.router.HandleFunc("POST /api/config/system", s.handleUpdateSystemConfig(ctx))
 	s.router.HandleFunc("POST /api/config/disk", s.handleAddDiskMonitor)
 	s.router.HandleFunc("POST /api/config/healthcheck", s.handleAddHealthCheck)
@@ -233,16 +235,10 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 // unmarshallBody reads and unmarshals the JSON request body into the provided data structure.
 // Returns true on success, or writes an error response and returns false on failure.
 func (s *Server) unmarshallBody(w http.ResponseWriter, r *http.Request, data any) bool {
-	var body []byte
-	n, err := r.Body.Read(body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("unmarshallBody %s: %v", r.URL, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return false
-	}
-	if n == 0 {
-		log.Printf("unmarshallBody %s: %v", r.URL, err)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return false
 	}
 
@@ -297,21 +293,25 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) func(w http.Respo
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
-		// Save config
-		err = s.monitor.Save(s.config)
-		if err != nil {
-			log.Printf("handleUpdateSystemConfig (save): %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		err = s.loader.Save(s.config)
-		if err != nil {
-			log.Printf("handleUpdateSystemConfig (save): %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-
-		// done
-		http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
+		s.saveConfig(w)
 	}
+}
+
+func (s *Server) saveConfig(w http.ResponseWriter) {
+	// Save config
+	err := s.monitor.Save(s.config)
+	if err != nil {
+		log.Printf("handleUpdateSystemConfig (save): %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	err = s.loader.Save(s.config)
+	if err != nil {
+		log.Printf("handleUpdateSystemConfig (save): %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	// done
+	http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
 }
 
 // handleIntervalUpdate processes an HTTP request to update the monitoring interval configuration dynamically.
@@ -325,7 +325,7 @@ func (s *Server) handleIntervalUpdate(ctx context.Context) func(w http.ResponseW
 			return
 		}
 		s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, time.Second)
-		http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
+		s.saveConfig(w)
 	}
 }
 

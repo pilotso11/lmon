@@ -237,5 +237,6 @@ func (s *Service) Save(cfg *config.Config) error {
 	for _, m := range s.monitors {
 		m.Save(cfg)
 	}
+	cfg.Monitoring.Interval = int(s.period / time.Second)
 	return nil
 }

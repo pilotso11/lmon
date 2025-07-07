@@ -1,8 +1,10 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -55,6 +57,52 @@ func startTestServer(ctx context.Context, t *testing.T, cfgFile string) *Server 
 	return s
 }
 
+func getRequest(ctx context.Context, t *testing.T, s *Server, path string) (*http.Response, string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", s.serverUrl+path, nil)
+	require.NoErrorf(t, err, "GET %s", s.serverUrl+path)
+
+	client := http.Client{}
+	res, err := client.Do(req)
+	require.NoErrorf(t, err, "GET %s", s.serverUrl+path)
+
+	return readBody(res, t)
+}
+
+func readBody(res *http.Response, t *testing.T) (*http.Response, string) {
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	assert.NoError(t, err, "read body")
+	return res, string(body)
+}
+
+func postRequest(ctx context.Context, t *testing.T, s *Server, path string, data any) (*http.Response, string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
+	bodybyes, err := json.Marshal(data)
+	require.NoError(t, err, "marshal data")
+	bodyBuff := bytes.NewBuffer(bodybyes)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", s.serverUrl+path, bodyBuff)
+	require.NoErrorf(t, err, "POST %s", s.serverUrl+path)
+
+	client := http.Client{}
+	res, err := client.Do(req)
+	require.NoErrorf(t, err, "POST %s", s.serverUrl+path)
+
+	return readBody(res, t)
+}
+
 func TestNewServerWithContext_Smoke(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
@@ -72,35 +120,12 @@ func TestNewServerWithContext_Smoke(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 }
 
-func getRequest(ctx context.Context, t *testing.T, s *Server, path string) (*http.Response, string) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", s.serverUrl+path, nil)
-	require.NoErrorf(t, err, "GET %s", s.serverUrl+path)
-
-	client := http.Client{}
-	res, err := client.Do(req)
-	require.NoErrorf(t, err, "GET %s", s.serverUrl+path)
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(res.Body)
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	assert.NoError(t, err, "read body")
-	return res, string(body)
-}
-
 func TestSelfHealthcheck(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s := startTestServer(ctx, t, "")
 	err := s.Start()
-	assert.NoError(t, err, "start")
+	require.NoError(t, err, "start")
 
 	r, body := getRequest(ctx, t, s, "/healthz")
 
@@ -113,7 +138,7 @@ func TestGetIndex(t *testing.T) {
 	defer cancel()
 	s := startTestServer(ctx, t, "")
 	err := s.Start()
-	assert.NoError(t, err, "start")
+	require.NoError(t, err, "start")
 
 	r, body := getRequest(ctx, t, s, "/")
 
@@ -139,7 +164,7 @@ func TestGetConfig(t *testing.T) {
 	defer cancel()
 	s := startTestServer(ctx, t, "")
 	err := s.Start()
-	assert.NoError(t, err, "start")
+	require.NoError(t, err, "start")
 
 	r, body := getRequest(ctx, t, s, "/config")
 
@@ -155,9 +180,55 @@ func TestStatic(t *testing.T) {
 	defer cancel()
 	s := startTestServer(ctx, t, "")
 	err := s.Start()
-	assert.NoError(t, err, "start")
+	require.NoError(t, err, "start")
 
 	r, body := getRequest(ctx, t, s, "/static/icon.svg")
 	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
 	assert.Equal(t, icon, body)
+}
+
+func TestSetSystemConfig(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s := startTestServer(ctx, t, "")
+	err := s.Start()
+	require.NoError(t, err, "start")
+
+	cfg := config.SystemConfig{
+		CPU: config.SystemItem{
+			Threshold: 55,
+			Icon:      "cpu-icon",
+		},
+		Memory: config.SystemItem{
+			Threshold: 66,
+			Icon:      "mem-icon",
+		},
+		Title: "new title",
+	}
+
+	resp, body := postRequest(ctx, t, s, "/api/config/system", cfg)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	assert.Equal(t, cfg, s.config.Monitoring.System, "config applied")
+}
+
+func TestSetInterval(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s := startTestServer(ctx, t, "")
+	err := s.Start()
+	require.NoError(t, err, "start")
+
+	data := struct {
+		Interval int
+	}{
+		Interval: 10,
+	}
+
+	resp, body := postRequest(ctx, t, s, "/api/config/interval", data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	assert.Equal(t, 10, s.config.Monitoring.Interval, "config applied")
 }
