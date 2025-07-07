@@ -353,7 +353,10 @@
                                     else type = "system";
                                 } else if (result.Group === "filesystem") {
                                     type = "disk";
-                                } else if (result.Group === "healthcheck") {
+                                } else if (
+                                    result.Group === "healthcheck" ||
+                                    result.Group === "app"
+                                ) {
                                     type = "health";
                                 } else {
                                     type = result.Group || "";
@@ -468,7 +471,9 @@
                                 <span class="badge ${statusClass}">${item.status}</span>
                                 <span class="ms-2">${
                                     item.type === "health"
-                                        ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
+                                        ? typeof item.value === "number"
+                                            ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
+                                            : item.value
                                         : `${item.unit === "%" ? parseFloat(item.value).toFixed(2) : item.value}${item.unit}`
                                 }</span>
                             </div>

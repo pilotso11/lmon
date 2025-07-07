@@ -81,6 +81,10 @@
                 }
             }
         </style>
+        <script>
+            const default_health_icon = "{{ .default_health_icon }}";
+            const default_disk_icon = "{{ .default_disk_icon }}";
+        </script>
     </head>
     <body>
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -202,6 +206,7 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
                             <hr />
                             <h5>Update System Settings</h5>
                             <form id="update-system-form">
@@ -299,21 +304,7 @@
                                         required
                                     />
                                 </div>
-                                <div class="mb-3">
-                                    <label
-                                        for="health-interval"
-                                        class="form-label"
-                                        >Check Interval (seconds)</label
-                                    >
-                                    <input
-                                        type="number"
-                                        class="form-control"
-                                        id="health-interval"
-                                        min="5"
-                                        value="60"
-                                        required
-                                    />
-                                </div>
+                                <div class="mb-3"></div>
                                 <div class="mb-3">
                                     <label
                                         for="health-timeout"
@@ -337,7 +328,7 @@
                                         type="text"
                                         class="form-control"
                                         id="health-icon"
-                                        value="activity"
+                                        value="{{ .default_health_icon }}"
                                     />
                                 </div>
                                 <button type="submit" class="btn btn-primary">
@@ -461,13 +452,13 @@
                     .then((config) => {
                         // Render disk config items
                         // Convert disk map to array of {name, ...props}
-                        const diskArray = Object.entries(
+                        window.diskArray = Object.entries(
                             config.Monitoring.Disk || {},
                         ).map(([name, props]) => ({
                             name,
                             ...props,
                         }));
-                        renderDiskConfig(diskArray);
+                        renderDiskConfig(window.diskArray);
 
                         // Render system config (passing web config for dashboard title)
                         renderSystemConfig(
@@ -475,15 +466,19 @@
                             config.Web,
                         );
 
+                        // Set refresh interval input value
+                        document.getElementById("refresh-interval").value =
+                            config.Monitoring.Interval || 60;
+
                         // Render health check config items
                         // Convert healthcheck map to array of {name, ...props}
-                        const healthArray = Object.entries(
+                        window.healthArray = Object.entries(
                             config.Monitoring.Healthcheck || {},
                         ).map(([name, props]) => ({
                             name,
                             ...props,
                         }));
-                        renderHealthConfig(healthArray);
+                        renderHealthConfig(window.healthArray);
 
                         // Render webhook config
                         renderWebhookConfig(config.Webhook);
@@ -538,7 +533,17 @@
                     .forEach((btn) => {
                         btn.addEventListener("click", function () {
                             const id = this.getAttribute("data-id");
-                            deleteMonitor("disk", id);
+                            // Find disk details for confirmation
+                            const disk = (
+                                typeof window.diskArray !== "undefined"
+                                    ? window.diskArray
+                                    : []
+                            ).find((d) => d.name === id);
+                            let detail = id;
+                            if (disk) {
+                                detail = `${disk.name} (${disk.Path || ""})`;
+                            }
+                            deleteMonitor("disk", id, detail);
                         });
                     });
             }
@@ -593,6 +598,26 @@
                 <div class="config-item">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
+                            <i class="bi bi-clock-history item-icon"></i>
+                            <strong>Refresh Interval</strong>
+                        </div>
+                        <div>
+                            <input
+                                type="number"
+                                class="form-control"
+                                id="refresh-interval"
+                                min="1"
+                                style="width: 100px; display: inline-block;"
+                                value=""
+                            />
+                            <span class="ms-2">seconds</span>
+                            <button id="save-interval-btn" class="btn btn-sm btn-primary ms-2">Save</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="config-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
                             <i class="bi bi-gear item-icon"></i>
                             <strong>Dashboard Title</strong>
                         </div>
@@ -631,7 +656,7 @@
                     <div class="config-item">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <i class="bi bi-${item.icon || "activity"} item-icon"></i>
+                                <i class="bi bi-${item.icon || default_health_icon} item-icon"></i>
                                 <strong>${item.name}</strong>
                             </div>
                             <div>
@@ -639,7 +664,7 @@
                             </div>
                         </div>
                         <div class="mt-2">
-                            <small class="text-muted">${item.url}</small>
+                            <small class="text-muted">${item.URL}</small>
                         </div>
                     </div>
                 `;
@@ -653,7 +678,17 @@
                     .forEach((btn) => {
                         btn.addEventListener("click", function () {
                             const id = this.getAttribute("data-id");
-                            deleteMonitor("healthcheck", id);
+                            // Find healthcheck details for confirmation
+                            const health = (
+                                typeof window.healthArray !== "undefined"
+                                    ? window.healthArray
+                                    : []
+                            ).find((h) => h.name === id);
+                            let detail = id;
+                            if (health) {
+                                detail = `${health.name} (${health.URL || ""})`;
+                            }
+                            deleteMonitor("healthcheck", id, detail);
                         });
                     });
             }
@@ -691,12 +726,11 @@
             }
 
             // Function to delete a monitor
-            function deleteMonitor(type, id) {
-                if (
-                    !confirm(
-                        `Are you sure you want to delete this ${type} monitor?`,
-                    )
-                ) {
+            function deleteMonitor(type, id, detail) {
+                const msg = detail
+                    ? `Are you sure you want to delete this ${type} monitor: ${detail}?`
+                    : `Are you sure you want to delete this ${type} monitor?`;
+                if (!confirm(msg)) {
                     return;
                 }
 
@@ -922,10 +956,6 @@
                         const healthConfig = {
                             name: document.getElementById("health-name").value,
                             url: document.getElementById("health-url").value,
-                            interval: parseInt(
-                                document.getElementById("health-interval")
-                                    .value,
-                            ),
                             timeout: parseInt(
                                 document.getElementById("health-timeout").value,
                             ),
@@ -1030,6 +1060,7 @@
                             });
                     });
             });
+
         </script>
     </body>
 </html>

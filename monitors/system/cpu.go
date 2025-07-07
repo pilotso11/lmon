@@ -29,11 +29,11 @@ package system
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 
+	"lmon/common"
 	"lmon/config"
 	"lmon/monitors"
 )
@@ -125,7 +125,7 @@ func NewCpu(threshold int, icon string, provider CpuProvider) Cpu {
 	if icon == "" {
 		icon = CpuIcon
 	}
-	if provider == nil || reflect.ValueOf(provider).IsNil() {
+	if common.IsNil(provider) {
 		provider = newDefaultCpuProvider()
 	}
 	return Cpu{

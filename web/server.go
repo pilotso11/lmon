@@ -24,6 +24,7 @@ import (
 	"lmon/config"
 	"lmon/monitors"
 	"lmon/monitors/disk"
+	"lmon/monitors/healthcheck"
 	"lmon/monitors/mapper"
 )
 
@@ -281,10 +282,11 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 
 		// Template data
 		data := map[string]any{
-			"title":             s.config.Monitoring.System.Title,
-			"dashboard_title":   s.config.Monitoring.System.Title,
-			"refresh_interval":  s.config.Monitoring.Interval,
-			"default_disk_icon": disk.Icon, // from monitors/disk.Icon
+			"title":               s.config.Monitoring.System.Title,
+			"dashboard_title":     s.config.Monitoring.System.Title,
+			"refresh_interval":    s.config.Monitoring.Interval,
+			"default_disk_icon":   disk.Icon,        // from monitors/disk.Icon
+			"default_health_icon": healthcheck.Icon, // from monitors/healthcheck.Icon
 		}
 
 		// Execute the template

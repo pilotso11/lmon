@@ -119,9 +119,6 @@ func (s *Service) Add(ctx context.Context, m Monitor) error {
 	// Synchronously check so any error can be reported back to the user
 	result := m.Check(ctx)
 	s.checkStoreAndPush(ctx, m, result)
-	if result.Status == RAGError {
-		return fmt.Errorf("error adding monitor %s: %s", m.DisplayName(), result.Value)
-	}
 	return nil
 }
 
@@ -131,11 +128,13 @@ func (s *Service) Remove(m Monitor) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, ok := s.monitors[m.Name()]
+	name := m.Name()
+	_, ok := s.monitors[name]
 	if !ok {
-		return ErrNotFound{Name: m.Name()}
+		return ErrNotFound{Name: name}
 	}
-	delete(s.monitors, m.Name())
+	delete(s.monitors, name)
+	delete(s.result, name) // Remove any pending result immediately
 	return nil
 }
 

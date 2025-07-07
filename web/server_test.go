@@ -307,6 +307,15 @@ func TestDeleteDisk(t *testing.T) {
 
 	assert.Equal(t, 0, len(s.config.Monitoring.Disk), "number of disk entries")
 
+	// New: Ensure the disk is also removed from /api/items
+	resp, body = getRequest(ctx, t, s, "/api/items")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	var stats map[string]monitors.Result
+	err := json.Unmarshal([]byte(body), &stats)
+	assert.NoError(t, err, "unmarshal")
+	_, exists := stats["disk_"+id]
+	assert.False(t, exists, "deleted disk should not be in /api/items")
+
 	resp, body = deleteRequest(ctx, t, s, "/api/config/disk/"+id)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
 }
@@ -360,8 +369,16 @@ func TestDeleteHealthcheck(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	assert.Equal(t, "OK\n", body)
 
-	// Note: This checks disk entries, but should likely check healthcheck entries.
-	assert.Equal(t, 0, len(s.config.Monitoring.Disk), "number of disk entries")
+	assert.Equal(t, 0, len(s.config.Monitoring.Healthcheck), "number of healthcheck entries")
+
+	// New: Ensure the healthcheck is also removed from /api/items
+	resp, body = getRequest(ctx, t, s, "/api/items")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	var stats map[string]monitors.Result
+	err := json.Unmarshal([]byte(body), &stats)
+	assert.NoError(t, err, "unmarshal")
+	_, exists := stats["healthcheck_"+id]
+	assert.False(t, exists, "deleted healthcheck should not be in /api/items")
 
 	resp, body = deleteRequest(ctx, t, s, "/api/config/healthcheck/"+id)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
