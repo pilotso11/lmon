@@ -25,10 +25,10 @@ type RAG int
 
 const (
 	RAGUnknown RAG = iota
-	RAGGreen
-	RAGAmber
-	RAGRed
 	RAGError
+	RAGRed
+	RAGAmber
+	RAGGreen
 )
 
 func (r RAG) String() string {

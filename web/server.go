@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	_ "embed"
@@ -64,7 +65,10 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 		Handler: router,
 	}
 
-	// Set up routes
+	// Setup push to webhook callback
+	server.monitor.SetPush(server.pushToWebhook)
+
+	// Setup routes
 	server.setupRoutes(ctx)
 
 	// Automatically stop the server when the context is cancelled.
@@ -106,6 +110,9 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	// Health check endpoint for liveness/readiness probes
 	s.router.HandleFunc("GET /healthz", s.handleHealthCheck)
 
+	// Health check endpoint for liveness/readiness probes
+	s.router.HandleFunc("POST /testhook", s.handleTestWebhook(ctx))
+
 	// Main dashboard and configuration pages
 	s.router.HandleFunc("GET /", s.handleTemplate())
 	s.router.HandleFunc("GET /index.html", s.handleTemplate())
@@ -123,9 +130,74 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor(ctx))
 }
 
+type webhookPayload struct {
+	Text string `json:"text"`
+}
+
+func (s *Server) pushToWebhook(ctx context.Context, m monitors.Monitor, prev monitors.Result, result monitors.Result) {
+	// do this in a go routine because we need to relock to access config
+	go func(ctx context.Context, msg string) {
+		s.mu.Lock()
+		wh := s.config.Webhook
+		s.mu.Unlock()
+		if wh.Enabled {
+			var body webhookPayload
+			body.Text = msg
+			payload, err := json.Marshal(body)
+			if err != nil {
+				log.Printf("pushToWebhook (json): %v", err)
+				return
+			}
+			req, err := http.NewRequestWithContext(ctx, "POST", wh.URL, bytes.NewBuffer(payload))
+			if err != nil {
+				log.Printf("pushToWebhook (newreq): %v", err)
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+			client := &http.Client{Timeout: 5 * time.Second}
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("pushToWebhook (req): %v", err)
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("pushToWebhook (status): %v", resp.Status)
+				return
+			}
+		}
+	}(ctx, fmt.Sprintf("%s: %s %s [ %s ]", m.DisplayName(), result.Status.String(), getResultArrow(prev, result), result.Value))
+}
+
+func getResultArrow(prev monitors.Result, result monitors.Result) any {
+	if prev.Status == monitors.RAGUnknown {
+		return ""
+	}
+	if result.Status > prev.Status {
+		return "\u2197" // trending up in health
+	} else {
+		return "\u2198" // trending down in health
+	}
+}
+
 // handleHealthCheck responds with HTTP 200 OK for health check probes.
 func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
+}
+
+// handleTestWebhook responds with HTTP 200 OK for health check probes.
+func (s *Server) handleTestWebhook(_ context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var hook webhookPayload
+		ok := s.unmarshallBody(w, r, &hook)
+		if !ok {
+			return
+		}
+		log.Printf("handleTestWebhook: %v", hook)
+		if s.mapper.Impls.Webhook != nil {
+			s.mapper.Impls.Webhook(hook.Text)
+		}
+		http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
+	}
 }
 
 //go:embed static/*

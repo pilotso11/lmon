@@ -9,11 +9,13 @@ import (
 	"lmon/monitors/system"
 )
 
+type WebhookCallbackFunc func(msg string)
 type Implementations struct {
-	Disk   *disk.MockDiskProvider
-	Health *healthcheck.MockHealthcheckProvider
-	Cpu    *system.MockCpuProvider
-	Mem    *system.MockMemProvider
+	Disk    *disk.MockDiskProvider
+	Health  *healthcheck.MockHealthcheckProvider
+	Cpu     *system.MockCpuProvider
+	Mem     *system.MockMemProvider
+	Webhook WebhookCallbackFunc
 }
 
 // Mapper handles applying config changes..

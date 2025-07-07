@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 	"go.uber.org/goleak"
 
 	"lmon/config"
@@ -25,16 +26,27 @@ import (
 	"lmon/monitors/system"
 )
 
-func NewMockImpplementations() *mapper.Implementations {
+type mockWebhookHandler struct {
+	lastMessage atomic.String
+	cnt         atomic.Int32
+}
+
+func (m *mockWebhookHandler) webhookCallback(msg string) {
+	m.lastMessage.Store(msg)
+	m.cnt.Inc()
+}
+
+func NewMockImplementations(hook *mockWebhookHandler) *mapper.Implementations {
 	return &mapper.Implementations{
-		Disk:   disk.NewMockDiskProvider(50),
-		Health: healthcheck.NewMockHealthcheckProvider(50),
-		Cpu:    system.NewMockCpuProvider(50),
-		Mem:    system.NewMockMemProvider(50),
+		Disk:    disk.NewMockDiskProvider(50),
+		Health:  healthcheck.NewMockHealthcheckProvider(50),
+		Cpu:     system.NewMockCpuProvider(50),
+		Mem:     system.NewMockMemProvider(50),
+		Webhook: hook.webhookCallback,
 	}
 }
 
-func startTestServer(ctx context.Context, t *testing.T, cfgFile string) *Server {
+func startTestServer(ctx context.Context, t *testing.T, cfgFile string) (*Server, *mockWebhookHandler) {
 	t.Helper()
 	t.Setenv("LMON_WEB_PORT", "0")
 	t.Setenv("LMON_WEB_HOST", "127.0.0.1")
@@ -52,9 +64,10 @@ func startTestServer(ctx context.Context, t *testing.T, cfgFile string) *Server 
 	assert.NoError(t, err, "config loaded")
 	push := monitors.NewMockPush()
 	mon := monitors.NewService(ctx, 10*time.Millisecond, 10*time.Millisecond, push.Push)
-	s, err := NewServerWithContext(ctx, cfg, l, mon, mapper.NewBuilder(NewMockImpplementations()))
+	hook := &mockWebhookHandler{}
+	s, err := NewServerWithContext(ctx, cfg, l, mon, mapper.NewBuilder(NewMockImplementations(hook)))
 	require.NoError(t, err, "server create")
-	return s
+	return s, hook
 }
 
 func getRequest(ctx context.Context, t *testing.T, s *Server, path string) (*http.Response, string) {
@@ -108,7 +121,7 @@ func TestNewServerWithContext_Smoke(t *testing.T) {
 
 	assert.NotPanics(t, func() {
 		ctx, cancel := context.WithCancel(t.Context())
-		s := startTestServer(ctx, t, "")
+		s, _ := startTestServer(ctx, t, "")
 		err := s.Start()
 		assert.NoError(t, err, "server start")
 
@@ -123,7 +136,7 @@ func TestNewServerWithContext_Smoke(t *testing.T) {
 func TestSelfHealthcheck(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	s := startTestServer(ctx, t, "")
+	s, _ := startTestServer(ctx, t, "")
 	err := s.Start()
 	require.NoError(t, err, "start")
 
@@ -136,7 +149,7 @@ func TestSelfHealthcheck(t *testing.T) {
 func TestGetIndex(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	s := startTestServer(ctx, t, "")
+	s, _ := startTestServer(ctx, t, "")
 	err := s.Start()
 	require.NoError(t, err, "start")
 
@@ -162,7 +175,7 @@ func within(i int, i2 int, tolerance float64) bool {
 func TestGetConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	s := startTestServer(ctx, t, "")
+	s, _ := startTestServer(ctx, t, "")
 	err := s.Start()
 	require.NoError(t, err, "start")
 
@@ -178,7 +191,7 @@ var icon string
 func TestStatic(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	s := startTestServer(ctx, t, "")
+	s, _ := startTestServer(ctx, t, "")
 	err := s.Start()
 	require.NoError(t, err, "start")
 
@@ -190,7 +203,7 @@ func TestStatic(t *testing.T) {
 func TestSetSystemConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	s := startTestServer(ctx, t, "")
+	s, _ := startTestServer(ctx, t, "")
 	err := s.Start()
 	require.NoError(t, err, "start")
 
@@ -216,7 +229,7 @@ func TestSetSystemConfig(t *testing.T) {
 func TestSetInterval(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	s := startTestServer(ctx, t, "")
+	s, _ := startTestServer(ctx, t, "")
 	err := s.Start()
 	require.NoError(t, err, "start")
 
@@ -236,7 +249,7 @@ func TestSetInterval(t *testing.T) {
 func TestAddDisk(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	s := startTestServer(ctx, t, "")
+	s, _ := startTestServer(ctx, t, "")
 	err := s.Start()
 	require.NoError(t, err, "start")
 
@@ -259,7 +272,7 @@ func TestAddDisk(t *testing.T) {
 func TestAddHealthcheck(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	s := startTestServer(ctx, t, "")
+	s, _ := startTestServer(ctx, t, "")
 	err := s.Start()
 	require.NoError(t, err, "start")
 
@@ -282,7 +295,7 @@ func TestAddHealthcheck(t *testing.T) {
 func TestSetWebhook(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	s := startTestServer(ctx, t, "")
+	s, _ := startTestServer(ctx, t, "")
 	err := s.Start()
 	require.NoError(t, err, "start")
 
@@ -291,9 +304,39 @@ func TestSetWebhook(t *testing.T) {
 		URL:     s.serverUrl + "/hook",
 	}
 
+	resp, body := postRequest(ctx, t, s, "/api/config/testhook", data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	assert.Equal(t, data, s.config.Webhook, "healthcheck entry applied")
+}
+
+func TestWebHookAndCallback(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, hook := startTestServer(ctx, t, "")
+	err := s.Start()
+	require.NoError(t, err, "start")
+
+	data := config.WebhookConfig{
+		Enabled: true,
+		URL:     s.serverUrl + "/testhook",
+	}
+
 	resp, body := postRequest(ctx, t, s, "/api/config/webhook", data)
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	assert.Equal(t, "OK\n", body)
 
 	assert.Equal(t, data, s.config.Webhook, "healthcheck entry applied")
+
+	s.mapper.Impls.Disk.Current.Store(99)
+	d := config.DiskConfig{Threshold: 1, Icon: "", Path: "."}
+	id := "test-disk"
+	resp, body = postRequest(ctx, t, s, "/api/config/disk/"+id, d)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+
+	time.Sleep(10 * time.Millisecond) // time for webhook to send
+
+	assert.Equal(t, int32(1), hook.cnt.Load(), "got hook")
+	assert.Contains(t, hook.lastMessage.Load(), "Red", "got hook")
 }
