@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	_ "embed"
 	"io"
 	"log"
 	"net/http"
@@ -18,8 +19,18 @@ import (
 	"lmon/monitors"
 	"lmon/monitors/disk"
 	"lmon/monitors/healthcheck"
+	"lmon/monitors/mapper"
 	"lmon/monitors/system"
 )
+
+func NewMockImpplementations() *mapper.Implementations {
+	return &mapper.Implementations{
+		Disk:   disk.NewMockDiskProvider(50),
+		Health: healthcheck.NewMockHealthcheckProvider(50),
+		Cpu:    system.NewMockCpuProvider(50),
+		Mem:    system.NewMockMemProvider(50),
+	}
+}
 
 func startTestServer(ctx context.Context, t *testing.T, cfgFile string) *Server {
 	t.Helper()
@@ -37,15 +48,9 @@ func startTestServer(ctx context.Context, t *testing.T, cfgFile string) *Server 
 	l := config.NewLoader("config.yaml", []string{t.TempDir()})
 	cfg, err := l.Load()
 	assert.NoError(t, err, "config loaded")
-	impls := Implementations{
-		disk:   disk.NewMockDiskProvider(50),
-		health: healthcheck.NewMockHealthcheckProvider(http.StatusOK),
-		cpu:    system.NewMockCpuProvider(50),
-		mem:    system.NewMockMemProvider(50),
-	}
 	push := monitors.NewMockPush()
 	mon := monitors.NewService(ctx, 10*time.Millisecond, 10*time.Millisecond, push.Push)
-	s, err := NewServerWithContext(ctx, cfg, mon, impls)
+	s, err := NewServerWithContext(ctx, cfg, l, mon, mapper.NewBuilder(NewMockImpplementations()))
 	require.NoError(t, err, "server create")
 	return s
 }
@@ -100,7 +105,7 @@ func TestSelfHealthcheck(t *testing.T) {
 	r, body := getRequest(ctx, t, s, "/healthz")
 
 	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
-	assert.Equal(t, "OK", body)
+	assert.Equal(t, "OK\n", body)
 }
 
 func TestGetIndex(t *testing.T) {
@@ -140,4 +145,19 @@ func TestGetConfig(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
 	assert.True(t, within(len(configHtml), len(body), .10), "config returned is about the same length as the template")
+}
+
+//go:embed static/icon.svg
+var icon string
+
+func TestStatic(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s := startTestServer(ctx, t, "")
+	err := s.Start()
+	assert.NoError(t, err, "start")
+
+	r, body := getRequest(ctx, t, s, "/static/icon.svg")
+	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
+	assert.Equal(t, icon, body)
 }

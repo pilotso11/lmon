@@ -29,14 +29,14 @@ type Mem struct {
 	impl      MemProvider
 }
 
-func NewMem(threshold int, icon string, provider MemProvider) *Mem {
+func NewMem(threshold int, icon string, provider MemProvider) Mem {
 	if icon == "" {
 		icon = MemIcon
 	}
 	if provider == nil {
 		provider = defaultMemProvider{}
 	}
-	return &Mem{
+	return Mem{
 		threshold: threshold,
 		icon:      icon,
 		impl:      provider,

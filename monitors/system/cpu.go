@@ -69,14 +69,14 @@ type Cpu struct {
 	impl      CpuProvider
 }
 
-func NewCpu(threshold int, icon string, provider CpuProvider) *Cpu {
+func NewCpu(threshold int, icon string, provider CpuProvider) Cpu {
 	if icon == "" {
 		icon = CpuIcon
 	}
 	if provider == nil {
 		provider = newDefaultCpuProvider()
 	}
-	return &Cpu{
+	return Cpu{
 		threshold: threshold,
 		icon:      icon,
 		impl:      provider,

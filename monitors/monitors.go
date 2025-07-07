@@ -230,3 +230,12 @@ func (s *Service) Size() int {
 	defer s.mu.Unlock()
 	return len(s.monitors)
 }
+
+func (s *Service) Save(cfg *config.Config) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.monitors {
+		m.Save(cfg)
+	}
+	return nil
+}
