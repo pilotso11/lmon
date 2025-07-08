@@ -127,67 +127,86 @@
     <div class="row">
         <div class="col-md-6">
             <div class="card">
+                <div class="card-header">System Monitoring</div>
+                <div class="card-body">
+                    <div id="system-config-items"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Webhook</div>
+                <div class="card-body">
+                    <div id="webhook-config"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
                 <div class="card-header">Disk Monitoring</div>
                 <div class="card-body">
                     <div id="disk-config-items">
                         <div class="text-center">
                             <div class="spinner-border" role="status">
-                                        <span class="visually-hidden"
-                                        >Loading...</span
-                                        >
+                                <span class="visually-hidden"
+                                    >Loading...</span
+                                >
                             </div>
                         </div>
                     </div>
-                    <hr/>
+                    <hr />
                     <h5>Add Disk Monitor</h5>
                     <form id="add-disk-form">
                         <div class="mb-3">
                             <label for="disk-name" class="form-label"
-                            >Name (ID)</label
+                                >Name (ID)</label
                             >
                             <input
-                                    type="text"
-                                    class="form-control"
-                                    id="disk-name"
-                                    required
+                                type="text"
+                                class="form-control"
+                                id="disk-name"
+                                required
                             />
                         </div>
                         <div class="mb-3">
                             <label for="disk-path" class="form-label"
-                            >Path</label
+                                >Path</label
                             >
                             <input
-                                    type="text"
-                                    class="form-control"
-                                    id="disk-path"
-                                    required
+                                type="text"
+                                class="form-control"
+                                id="disk-path"
+                                required
                             />
                         </div>
                         <div class="mb-3">
                             <label
-                                    for="disk-threshold"
-                                    class="form-label"
-                            >Threshold (%)</label
+                                for="disk-threshold"
+                                class="form-label"
+                                >Threshold (%)</label
                             >
                             <input
-                                    type="number"
-                                    class="form-control"
-                                    id="disk-threshold"
-                                    min="1"
-                                    max="100"
-                                    value="80"
-                                    required
+                                type="number"
+                                class="form-control"
+                                id="disk-threshold"
+                                min="1"
+                                max="100"
+                                value="80"
+                                required
                             />
                         </div>
                         <div class="mb-3">
                             <label for="disk-icon" class="form-label"
-                            >Icon (Bootstrap Icon name)</label
+                                >Icon (Bootstrap Icon name)</label
                             >
                             <input
-                                    type="text"
-                                    class="form-control"
-                                    id="disk-icon"
-                                    value="{{ .default_disk_icon }}"
+                                type="text"
+                                class="form-control"
+                                id="disk-icon"
+                                value="{{ .default_disk_icon }}"
                             />
                         </div>
                         <button type="submit" class="btn btn-primary">
@@ -197,116 +216,78 @@
                 </div>
             </div>
         </div>
-
         <div class="col-md-6">
             <div class="card">
-                <div class="card-header">System Monitoring</div>
+                <div class="card-header">Health Checks</div>
                 <div class="card-body">
-                    <div id="system-config-items">
+                    <div id="health-config-items">
                         <div class="text-center">
                             <div class="spinner-border" role="status">
-                                        <span class="visually-hidden"
-                                        >Loading...</span
-                                        >
+                                <span class="visually-hidden"
+                                    >Loading...</span
+                                >
                             </div>
                         </div>
                     </div>
-                </div>
-                <hr/>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mt-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">Health Checks</div>
-            <div class="card-body">
-                <div id="health-config-items">
-                    <div class="text-center">
-                        <div class="spinner-border" role="status">
-                                        <span class="visually-hidden"
-                                        >Loading...</span
-                                        >
-                        </div>
-                    </div>
-                </div>
-                <hr/>
-                <h5>Add Health Check</h5>
-                <form id="add-health-form">
-                    <div class="mb-3">
-                        <label for="health-name" class="form-label"
-                        >Name</label
-                        >
-                        <input
+                    <hr />
+                    <h5>Add Health Check</h5>
+                    <form id="add-health-form">
+                        <div class="mb-3">
+                            <label for="health-name" class="form-label"
+                                >Name (ID)</label
+                            >
+                            <input
                                 type="text"
                                 class="form-control"
                                 id="health-name"
                                 required
-                        />
-                    </div>
-                    <div class="mb-3">
-                        <label for="health-url" class="form-label"
-                        >URL</label
-                        >
-                        <input
+                            />
+                        </div>
+                        <div class="mb-3">
+                            <label for="health-url" class="form-label"
+                                >URL</label
+                            >
+                            <input
                                 type="url"
                                 class="form-control"
                                 id="health-url"
                                 required
-                        />
-                    </div>
-                    <div class="mb-3"></div>
-                    <div class="mb-3">
-                        <label
+                            />
+                        </div>
+                        <div class="mb-3">
+                            <label
                                 for="health-timeout"
                                 class="form-label"
-                        >Timeout (seconds)</label
-                        >
-                        <input
+                                >Timeout (seconds)</label
+                            >
+                            <input
                                 type="number"
                                 class="form-control"
                                 id="health-timeout"
                                 min="1"
                                 value="10"
                                 required
-                        />
-                    </div>
-                    <div class="mb-3">
-                        <label for="health-icon" class="form-label"
-                        >Icon (Bootstrap Icon name)</label
-                        >
-                        <input
+                            />
+                        </div>
+                        <div class="mb-3">
+                            <label for="health-icon" class="form-label"
+                                >Icon (Bootstrap Icon name)</label
+                            >
+                            <input
                                 type="text"
                                 class="form-control"
                                 id="health-icon"
                                 value="{{ .default_health_icon }}"
-                        />
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        Add Health Check
-                    </button>
-                </form>
+                            />
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            Add Health Check
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
-
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">Webhook Notifications</div>
-            <div class="card-body">
-                <div id="webhook-config">
-                    <div class="text-center">
-                        <div class="spinner-border" role="status">
-                                        <span class="visually-hidden"
-                                        >Loading...</span
-                                        >
-                        </div>
-                    </div>
-                </div>
-                <hr/>
-            </div>
         </div>
     </div>
 </div>
