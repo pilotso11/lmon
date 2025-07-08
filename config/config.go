@@ -252,6 +252,6 @@ func (l *Loader) Save(config *Config) error {
 	return nil
 }
 
-func (l *Loader) FilePath() interface{} {
+func (l *Loader) FilePath() string {
 	return l.v.ConfigFileUsed()
 }
