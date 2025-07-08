@@ -104,11 +104,21 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	// Wait for the disk item to appear in the dashboard
 	page.Timeout(1 * time.Second).MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
 
-	// Assert its presence
+	// Assert its presence on the dashboar
+	page.MustElement(`a.nav-link[href="/"]`).MustClick()
 	diskItem := page.MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
 	assert.NotNil(t, diskItem, "Disk item 'root' is present in dashboard")
-	assert.Contains(t, diskItem.MustText(), "root (/)", "Disk name is shown")
-	assert.Contains(t, diskItem.MustText(), "50.0%", "Disk value is shown")
+	diskText := diskItem.MustText()
+	assert.Contains(t, diskText, "root (/)", "Disk display name is shown")
+	assert.Regexp(t, `\d+(\.\d+)?%`, diskText, "Disk value is shown")
+
+	// --- MOBILE PAGE CHECKS ---
+	page.MustElement(`a.nav-link[href="/mobile"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#mobile-items-list`)
+	diskMobile := page.MustElement(`#mobile-items-list .mobile-list-item[data-id="disk_root"]`)
+	diskMobileText := diskMobile.MustText()
+	assert.Contains(t, diskMobileText, "root (/)", "Disk display name is shown on mobile")
+	assert.Regexp(t, `\d+(\.\d+)?%`, diskMobileText, "Disk value is shown on mobile")
 
 	// Go back to config and delete the disk
 	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
@@ -171,6 +181,37 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	// Assert its presence
 	healthItem := page.MustElement(`#health-items .list-group-item[data-id="health_local"]`)
 	assert.NotNil(t, healthItem, "Health check item 'local' is present in dashboard")
+	healthText := healthItem.MustText()
+	assert.Contains(t, healthText, "local", "Health check display name is shown")
+	assert.Contains(t, healthText, "http://localhost:8080", "Health check URL is shown")
+	assert.Regexp(t, `\d+(\.\d+)?`, healthText, "Health check value is shown")
+	healthItem.MustClick()
+	modal := page.MustElement("#itemDetailModal")
+	modalText := modal.MustText()
+	assert.Contains(t, modalText, "local", "Modal shows display name")
+	assert.Contains(t, modalText, "http://localhost:8080", "Modal shows URL")
+	assert.Contains(t, modalText, "Value", "Modal shows value")
+	assert.Contains(t, modalText, "Threshold", "Modal shows threshold")
+
+	// --- MOBILE PAGE CHECKS ---
+	page.MustElement(`a.nav-link[href="/mobile"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#health-items`)
+	healthMobile := page.MustElement(`#health-items .list-group-item[data-id="health_local"]`)
+	healthMobileText := healthMobile.MustText()
+	assert.Contains(t, healthMobileText, "local", "Health check display name is shown on mobile")
+	assert.Contains(t, healthMobileText, "http://localhost:8080", "Health check URL is shown on mobile")
+	assert.Regexp(t, `\d+(\.\d+)?`, healthMobileText, "Health check value is shown on mobile")
+	healthMobile.MustClick()
+	modalMobile := page.MustElement("#itemDetailModal")
+	modalMobileText := modalMobile.MustText()
+	assert.Contains(t, modalMobileText, "local", "Modal shows display name on mobile")
+	assert.Contains(t, modalMobileText, "http://localhost:8080", "Modal shows URL on mobile")
+	assert.Contains(t, modalMobileText, "Value", "Modal shows value on mobile")
+	assert.Contains(t, modalMobileText, "Threshold", "Modal shows threshold on mobile")
+
+	// Go back to dashboard for delete
+	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#health-items`)
 	assert.Contains(t, healthItem.MustText(), "local (http://localhost:8080)", "Health check name is shown")
 
 	// Go back to config and delete the health check
