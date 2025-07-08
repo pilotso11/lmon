@@ -562,7 +562,16 @@
             }
 
             document.addEventListener("DOMContentLoaded", function () {
-                loadMobileItems();
+                fetchMobileIntervalAndStart();
+
+                // Attach refresh button handler
+                const refreshBtn = document.getElementById("refresh-btn");
+                if (refreshBtn) {
+                    refreshBtn.addEventListener("click", function () {
+                        loadMobileItemsWithCountdown();
+                    });
+                }
+
                 showMobileToggle();
                 window.addEventListener("resize", showMobileToggle);
 
