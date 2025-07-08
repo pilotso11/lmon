@@ -209,9 +209,11 @@
                                 value="{{ .default_disk_icon }}"
                             />
                         </div>
-                        <button type="submit" class="btn btn-primary">
-                            Add Disk Monitor
-                        </button>
+                        <div class="text-end mt-2">
+                            <button type="submit" class="btn btn-primary">
+                                Add Disk Monitor
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -280,9 +282,11 @@
                                 value="{{ .default_health_icon }}"
                             />
                         </div>
-                        <button type="submit" class="btn btn-primary">
-                            Add Health Check
-                        </button>
+                        <div class="text-end mt-2">
+                            <button type="submit" class="btn btn-primary">
+                                Add Health Check
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -541,7 +545,7 @@
                                     class="form-control"
                                     id="dashboard-title-inline"
                                     style="width: 250px; display: inline-block;"
-                                    value="${webConfig.dashboard_title || "Monitoring Dashboard"}"
+                                    value="${systemConfig.Title || "Monitoring Dashboard"}"
                                     required
                                 />
                             </div>
@@ -941,107 +945,6 @@
                         )
                     })
             })
-
-            // Update system form submission
-            document
-                .getElementById("update-system-form")
-                .addEventListener("submit", function (e) {
-                    e.preventDefault()
-
-                    fetch("/api/config")
-                        .then((response) => {
-                            if (!response.ok) {
-                                throw new Error(
-                                    "Failed to load configuration",
-                                )
-                            }
-                            const contentType =
-                                response.headers.get("content-type") || ""
-                            if (contentType.includes("application/json")) {
-                                return response.json()
-                            } else {
-                                return response.text()
-                            }
-                        })
-                        .then((config) => {
-                            // Update system thresholds and dashboard title
-                            const cpuThreshold = parseInt(
-                                document.getElementById("cpu-threshold")
-                                    .value,
-                            )
-                            const memThreshold = parseInt(
-                                document.getElementById("memory-threshold")
-                                    .value,
-                            )
-                            const dashboardTitle =
-                                document.getElementById(
-                                    "dashboard-title",
-                                ).value
-
-                            // Compose new system config
-                            const newSystemConfig = {
-                                ...config.Monitoring.System,
-                                cpu: {
-                                    ...config.Monitoring.System.cpu,
-                                    threshold: cpuThreshold,
-                                },
-                                memory: {
-                                    ...config.Monitoring.System.memory,
-                                    threshold: memThreshold,
-                                },
-                                title: dashboardTitle,
-                            }
-
-                            // Compose new config object
-                            const newConfig = {
-                                ...config,
-                                Monitoring: {
-                                    ...config.Monitoring,
-                                    System: newSystemConfig,
-                                },
-                            }
-
-                            // Save updated config
-                            return fetch("/api/config/system", {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify(
-                                    newConfig.Monitoring.System,
-                                ),
-                            })
-                        })
-                        .then((response) => {
-                            if (!response.ok) {
-                                throw new Error(
-                                    "Failed to update system settings",
-                                )
-                            }
-                            const contentType =
-                                response.headers.get("content-type") || ""
-                            if (contentType.includes("application/json")) {
-                                return response.json()
-                            } else {
-                                return response.text()
-                            }
-                        })
-                        .then((data) => {
-                            showToast("Success", data.message)
-                            loadConfig()
-                        })
-                        .catch((error) => {
-                            console.error(
-                                "Error updating system settings:",
-                                error,
-                            )
-                            showToast(
-                                "Error",
-                                "Failed to update system settings",
-                                true,
-                            )
-                        })
-                })
 
             // Add health check form submission
             const addHealthForm = document.getElementById("add-health-form");
