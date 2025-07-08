@@ -46,11 +46,16 @@ func TestDefaultConfigUIRod(t *testing.T) {
 
 	// Check for green status on CPU
 	cpuItem := page.MustElement(`#system-items .list-group-item[data-id="system_cpu"]`)
+	assert.Contains(t, cpuItem.MustText(), "cpu", "CPU display name is shown")
+	assert.Contains(t, cpuItem.MustText(), "50.0%", "CPU value is shown")
+
 	cpuGreen := cpuItem.MustHas(".status-indicator.status-ok")
 	assert.True(t, cpuGreen, "CPU item is green")
 
 	// Check for green status on Memory
 	memItem := page.MustElement(`#system-items .list-group-item[data-id="system_mem"]`)
+	assert.Contains(t, memItem.MustText(), "mem", "Memory display name is shown")
+	assert.Contains(t, memItem.MustText(), "50.0%", "Memory value is shown")
 	memGreen := memItem.MustHas(".status-indicator.status-ok")
 	assert.True(t, memGreen, "Memory item is green")
 
@@ -102,6 +107,8 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	// Assert its presence
 	diskItem := page.MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
 	assert.NotNil(t, diskItem, "Disk item 'root' is present in dashboard")
+	assert.Contains(t, diskItem.MustText(), "root (/)", "Disk name is shown")
+	assert.Contains(t, diskItem.MustText(), "50.0%", "Disk value is shown")
 
 	// Go back to config and delete the disk
 	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
@@ -164,6 +171,7 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	// Assert its presence
 	healthItem := page.MustElement(`#health-items .list-group-item[data-id="health_local"]`)
 	assert.NotNil(t, healthItem, "Health check item 'local' is present in dashboard")
+	assert.Contains(t, healthItem.MustText(), "local (http://localhost:8080)", "Health check name is shown")
 
 	// Go back to config and delete the health check
 	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
