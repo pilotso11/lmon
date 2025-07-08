@@ -38,7 +38,7 @@ func main() {
 	}
 
 	// subscribe to interrupts
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGKILL, os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	// Initialize logger
