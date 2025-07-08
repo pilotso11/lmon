@@ -197,9 +197,7 @@ func (s *Service) startMonitors(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
-				// Wait until 1 timeout
-				time.Sleep(to + -1*time.Millisecond)
+			case <-ticker.C: // wait
 			}
 		}
 	}(ctx)

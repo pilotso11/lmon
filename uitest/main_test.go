@@ -3,10 +3,12 @@ package uitest
 import (
 	"context"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/stretchr/testify/assert"
 
@@ -27,6 +29,17 @@ func TestServerHealth(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
+func getBrowser() *rod.Browser {
+	var browser *rod.Browser
+	if os.Getenv("CI") != "" {
+		u := launcher.New().Set("no-sandbox").MustLaunch()
+		browser = rod.New().ControlURL(u).MustConnect()
+	} else {
+		browser = rod.New().MustConnect()
+	}
+	return browser
+}
+
 // TestDefaultConfigUIRod verifies the UI for the default config using rod: green CPU, green Memory, no disk/healthcheck items.
 func TestDefaultConfigUIRod(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
@@ -35,7 +48,7 @@ func TestDefaultConfigUIRod(t *testing.T) {
 	s, _ := web.StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	browser := rod.New().MustConnect()
+	browser := getBrowser()
 	defer browser.MustClose()
 	page := browser.MustPage(s.ServerUrl)
 	defer page.MustClose()
@@ -75,7 +88,7 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	s, _ := web.StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	browser := rod.New().MustConnect()
+	browser := getBrowser()
 	defer browser.MustClose()
 	page := browser.MustPage(s.ServerUrl)
 	defer page.MustClose()
@@ -148,7 +161,7 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	s, _ := web.StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	browser := rod.New().MustConnect()
+	browser := getBrowser()
 	defer browser.MustClose()
 	page := browser.MustPage(s.ServerUrl)
 	defer page.MustClose()
