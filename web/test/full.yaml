@@ -1,0 +1,26 @@
+monitoring:
+    interval: 10
+    system:
+        cpu:
+            icon: cpu
+            threshold: 90
+        memory:
+            icon: speedometer
+            threshold: 90
+        title: LMON Dashboard
+    disk:
+        root:
+            path: /
+            icon: storage
+            threshold: 85
+    healthcheck:
+        google:
+            url: https://google.com
+            icon: activity
+            timeout: 1
+web:
+    host: 127.0.0.1
+    port: 0
+webhook:
+    enabled: false
+    url: http://localhost:8080/test_webhook

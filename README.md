@@ -1,4 +1,5 @@
 # lmon - Lightweight Monitoring Service
+![Coverage](https://img.shields.io/badge/Coverage-1-red)
 
 A lightweight monitoring service written in Go that monitors system resources, disk space, and application health.
 

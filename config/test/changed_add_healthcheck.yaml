@@ -1,0 +1,21 @@
+monitoring:
+    healthcheck:
+        test:
+            icon: test
+            timeout: 10
+            url: http://localhost:8080/test
+    interval: 60
+    system:
+        cpu:
+            icon: cpu
+            threshold: 90
+        memory:
+            icon: speedometer
+            threshold: 90
+        title: LMON Dashboard
+web:
+    host: 0.0.0.0
+    port: 8080
+webhook:
+    enabled: true
+    url: http://localhost:8080/test_webhook

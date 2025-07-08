@@ -1,0 +1,16 @@
+monitoring:
+    interval: 15
+    system:
+        cpu:
+            icon: cpuicon
+            threshold: 99
+        memory:
+            icon: memicon
+            threshold: 98
+        title: Test Dashboard
+web:
+    host: localhost
+    port: 8000
+webhook:
+    enabled: false
+    url: bad url

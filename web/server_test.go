@@ -1,658 +1,501 @@
+// server_test.go contains integration and unit tests for the lmon web server.
+// These tests cover HTTP endpoints, configuration management, static file serving, and webhook integration.
 package web
 
 import (
+	"context"
+	_ "embed"
 	"encoding/json"
-	"html/template"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"lmon/config"
-	"lmon/monitor"
+	"lmon/monitors"
 )
 
-// MockMonitorService is a mock implementation of the monitor service
-type MockMonitorService struct {
-	mock.Mock
+// TestNewServerWithContext_Smoke verifies that the server can be created, started, and stopped without panicking.
+func TestNewServerWithContext_Smoke(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	assert.NotPanics(t, func() {
+		ctx, cancel := context.WithCancel(t.Context())
+		s, _ := StartTestServer(ctx, t, "")
+		s.Start(ctx)
+
+		time.Sleep(10 * time.Millisecond)
+
+		cancel()
+	})
+
+	time.Sleep(50 * time.Millisecond)
 }
 
-// GetItems is a mock implementation of the GetItems method
-func (m *MockMonitorService) GetItems() []*monitor.Item {
-	args := m.Called()
-	return args.Get(0).([]*monitor.Item)
+// TestSelfHealthcheck checks that the /healthz endpoint returns HTTP 200 OK.
+func TestSelfHealthcheck(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	r, body := GetTestRequest(ctx, t, s, "/healthz")
+
+	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 }
 
-// GetItem is a mock implementation of the GetItem method
-func (m *MockMonitorService) GetItem(id string) *monitor.Item {
-	args := m.Called(id)
-	if args.Get(0) == nil {
-		return nil
+// TestGetIndex checks that the root and /index.html endpoints return the dashboard HTML.
+func TestGetIndex(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	r, body := GetTestRequest(ctx, t, s, "/")
+
+	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
+	assert.True(t, within(len(indexHtml), len(body), .10), "index returned is about the same length as the template")
+
+	r, body = GetTestRequest(ctx, t, s, "/index.html")
+
+	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
+	assert.True(t, within(len(indexHtml), len(body), .10), "index returned is about the same length as the template")
+}
+
+// within returns true if i2 is within the given tolerance of i.
+func within(i int, i2 int, tolerance float64) bool {
+	d := i - i2
+	if d < 0 {
+		d = -d
 	}
-	return args.Get(0).(*monitor.Item)
+	return float64(d)/float64(i) < tolerance
 }
 
-// UpdateItem is a mock implementation of the UpdateItem method
-func (m *MockMonitorService) UpdateItem(item *monitor.Item) {
-	m.Called(item)
+// TestGetConfig checks that the /config endpoint returns the configuration HTML.
+func TestGetConfig(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	r, body := GetTestRequest(ctx, t, s, "/config")
+
+	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
+	assert.True(t, within(len(configHtml), len(body), .10), "config returned is about the same length as the template")
 }
 
-// Start is a mock implementation of the Start method
-func (m *MockMonitorService) Start() {
-	m.Called()
+//go:embed static/icons/icon.svg
+var icon string
+
+// TestStatic checks that static files are served correctly.
+func TestStatic(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	r, body := GetTestRequest(ctx, t, s, "/static/icons/icon.svg")
+	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
+	assert.Equal(t, icon, body)
 }
 
-// Stop is a mock implementation of the Stop method
-func (m *MockMonitorService) Stop() {
-	m.Called()
-}
+// TestSetSystemConfig verifies updating the system configuration via the API.
+func TestSetSystemConfig(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
 
-// RefreshChecks is a mock implementation of the RefreshChecks method
-func (m *MockMonitorService) RefreshChecks() {
-	m.Called()
-}
-
-func TestServer_HandleGetItems(t *testing.T) {
-	// Set up Gin in test mode
-	gin.SetMode(gin.TestMode)
-
-	// Create mock monitor service
-	mockService := new(MockMonitorService)
-
-	// Create test items
-	items := []*monitor.Item{
-		{
-			ID:        "test-1",
-			Name:      "Test Item 1",
-			Type:      "test",
-			Status:    monitor.StatusOK,
-			Value:     50.0,
-			Threshold: 80.0,
-			Unit:      "%",
-			Icon:      "test",
-			Message:   "Test message 1",
+	cfg := config.SystemConfig{
+		CPU: config.SystemItem{
+			Threshold: 55,
+			Icon:      "cpu-icon",
 		},
-		{
-			ID:        "test-2",
-			Name:      "Test Item 2",
-			Type:      "test",
-			Status:    monitor.StatusWarning,
-			Value:     75.0,
-			Threshold: 80.0,
-			Unit:      "%",
-			Icon:      "test",
-			Message:   "Test message 2",
+		Memory: config.SystemItem{
+			Threshold: 66,
+			Icon:      "mem-icon",
 		},
+		Title: "new title",
 	}
 
-	// Set up mock expectations
-	mockService.On("GetItems").Return(items)
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/system", cfg)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Create test configuration
-	cfg := config.DefaultConfig()
-
-	// Create server with mock service
-	server := NewServer(cfg, mockService, os.TempDir())
-
-	// Create a test HTTP recorder and context
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	// Call the handler
-	server.handleGetItems(c)
-
-	// Check response
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	// Parse response body
-	var responseItems []*monitor.Item
-	err := json.Unmarshal(w.Body.Bytes(), &responseItems)
-	require.NoError(t, err)
-
-	// Verify response items
-	assert.Equal(t, len(items), len(responseItems))
-	assert.Equal(t, items[0].ID, responseItems[0].ID)
-	assert.Equal(t, items[1].ID, responseItems[1].ID)
-
-	// Verify mock expectations
-	mockService.AssertExpectations(t)
+	assert.Equal(t, cfg, s.config.Monitoring.System, "config applied")
 }
 
-func TestServer_HandleGetItem(t *testing.T) {
-	// Set up Gin in test mode
-	gin.SetMode(gin.TestMode)
+// TestSetInterval verifies updating the monitoring interval via the API.
+func TestSetInterval(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
 
-	// Create mock monitor service
-	mockService := new(MockMonitorService)
-
-	// Create test item
-	item := &monitor.Item{
-		ID:        "test-1",
-		Name:      "Test Item 1",
-		Type:      "test",
-		Status:    monitor.StatusOK,
-		Value:     50.0,
-		Threshold: 80.0,
-		Unit:      "%",
-		Icon:      "test",
-		Message:   "Test message 1",
+	data := struct {
+		Interval int
+	}{
+		Interval: 10,
 	}
 
-	// Set up mock expectations
-	mockService.On("GetItem", "test-1").Return(item)
-	mockService.On("GetItem", "non-existent").Return(nil)
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/interval", data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Create test configuration
-	cfg := config.DefaultConfig()
-
-	// Create server with mock service
-	server := NewServer(cfg, mockService, os.TempDir())
-
-	// Test case 1: Existing item
-	t.Run("Existing item", func(t *testing.T) {
-		// Create a test HTTP recorder and context
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "test-1"}}
-
-		// Call the handler
-		server.handleGetItem(c)
-
-		// Check response
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		// Parse response body
-		var responseItem monitor.Item
-		err := json.Unmarshal(w.Body.Bytes(), &responseItem)
-		require.NoError(t, err)
-
-		// Verify response item
-		assert.Equal(t, item.ID, responseItem.ID)
-		assert.Equal(t, item.Name, responseItem.Name)
-	})
-
-	// Test case 2: Non-existent item
-	t.Run("Non-existent item", func(t *testing.T) {
-		// Create a test HTTP recorder and context
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Params = gin.Params{gin.Param{Key: "id", Value: "non-existent"}}
-
-		// Call the handler
-		server.handleGetItem(c)
-
-		// Check response
-		assert.Equal(t, http.StatusNotFound, w.Code)
-
-		// Parse response body
-		var response map[string]string
-		err := json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-
-		// Verify response
-		assert.Contains(t, response, "error")
-		assert.Equal(t, "Item not found", response["error"])
-	})
-
-	// Verify mock expectations
-	mockService.AssertExpectations(t)
+	assert.Equal(t, 10, s.config.Monitoring.Interval, "config applied")
 }
 
-func TestServer_HandleGetConfig(t *testing.T) {
-	// Set up Gin in test mode
-	gin.SetMode(gin.TestMode)
+// TestAddDisk verifies adding a disk monitor via the API.
+func TestAddDisk(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
 
-	// Create mock monitor service
-	mockService := new(MockMonitorService)
+	data := config.DiskConfig{
+		Threshold: 77,
+		Icon:      "disk-icon",
+		Path:      ".",
+	}
+	id := "test-disk"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/disk/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Create test configuration
-	cfg := config.DefaultConfig()
-	cfg.Web.Host = "test-host"
-	cfg.Web.Port = 9090
-
-	// Create server with mock service
-	server := NewServer(cfg, mockService, os.TempDir())
-
-	// Create a test HTTP recorder and context
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	// Call the handler
-	server.handleGetConfig(c)
-
-	// Check response
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	// Parse response body
-	var responseConfig config.Config
-	err := json.Unmarshal(w.Body.Bytes(), &responseConfig)
-	require.NoError(t, err)
-
-	// Verify response config
-	assert.Equal(t, cfg.Web.Host, responseConfig.Web.Host)
-	assert.Equal(t, cfg.Web.Port, responseConfig.Web.Port)
-
-	// Verify JSON field names match what the JavaScript code expects
-	var jsonMap map[string]interface{}
-	err = json.Unmarshal(w.Body.Bytes(), &jsonMap)
-	require.NoError(t, err)
-
-	// Check top-level fields
-	assert.Contains(t, jsonMap, "web")
-	assert.Contains(t, jsonMap, "monitoring")
-	assert.Contains(t, jsonMap, "webhook")
-
-	// Check web fields
-	webMap := jsonMap["web"].(map[string]interface{})
-	assert.Contains(t, webMap, "host")
-	assert.Contains(t, webMap, "port")
-
-	// Check monitoring fields
-	monitoringMap := jsonMap["monitoring"].(map[string]interface{})
-	assert.Contains(t, monitoringMap, "interval")
-	assert.Contains(t, monitoringMap, "disk")
-	assert.Contains(t, monitoringMap, "system")
-	assert.Contains(t, monitoringMap, "healthchecks")
-
-	// Check system fields
-	systemMap := monitoringMap["system"].(map[string]interface{})
-	require.Contains(t, systemMap, "cpu")
-	require.Contains(t, systemMap, "memory")
-	assert.Contains(t, systemMap["cpu"], "icon")
-	assert.Contains(t, systemMap["memory"], "icon")
-	assert.Contains(t, systemMap["cpu"], "threshold")
-	assert.Contains(t, systemMap["memory"], "threshold")
-
-	// Check webhook fields
-	webhookMap := jsonMap["webhook"].(map[string]interface{})
-	assert.Contains(t, webhookMap, "enabled")
-	assert.Contains(t, webhookMap, "url")
+	assert.Equal(t, 1, len(s.config.Monitoring.Disk), "number of disk entries")
+	d2, ok := s.config.Monitoring.Disk[id]
+	assert.True(t, ok, "disk entry exists")
+	assert.Equal(t, data, d2, "disk entry applied")
 }
 
-func TestServer_HandleUpdateConfig(t *testing.T) {
-	// Set up Gin in test mode
-	gin.SetMode(gin.TestMode)
+// TestDeleteDisk verifies deleting a disk monitor via the API and handling of missing entries.
+// TestDeleteDisk verifies deleting a disk monitor and handling repeated deletes (not found).
+func TestDeleteDisk(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
 
-	// Create mock monitor service
-	mockService := new(MockMonitorService)
+	data := config.DiskConfig{
+		Threshold: 77,
+		Icon:      "disk-icon",
+		Path:      ".",
+	}
+	id := "test-disk"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/disk/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Set up mock expectations
-	mockService.On("RefreshChecks").Return()
+	assert.Equal(t, 1, len(s.config.Monitoring.Disk), "number of disk entries")
+	d2, ok := s.config.Monitoring.Disk[id]
+	assert.True(t, ok, "disk entry exists")
+	assert.Equal(t, data, d2, "disk entry applied")
 
-	// Create test configuration
-	cfg := config.DefaultConfig()
+	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/disk/"+id)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Create server with mock service
-	server := NewServer(cfg, mockService, os.TempDir())
+	assert.Equal(t, 0, len(s.config.Monitoring.Disk), "number of disk entries")
 
-	// Create a temporary file for the config
-	tmpfile, err := os.CreateTemp("", "test-config-*.yaml")
-	require.NoError(t, err)
-	defer func(name string) {
-		_ = os.Remove(name)
-	}(tmpfile.Name()) // Clean up the temporary file when done
+	// New: Ensure the disk is also removed from /api/items
+	resp, body = GetTestRequest(ctx, t, s, "/api/items")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	var stats map[string]monitors.Result
+	err := json.Unmarshal([]byte(body), &stats)
+	assert.NoError(t, err, "unmarshal")
+	_, exists := stats["disk_"+id]
+	assert.False(t, exists, "deleted disk should not be in /api/items")
 
-	// Set the config path to the temporary file
-	server.SetConfigPath(tmpfile.Name())
-
-	// Create a test HTTP recorder and context
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	// Create a test request body
-	updatedConfig := config.DefaultConfig()
-	updatedConfig.Web.Host = "updated-host"
-	updatedConfig.Web.Port = 9090
-	jsonData, err := json.Marshal(updatedConfig)
-	require.NoError(t, err)
-
-	// Set up the request
-	c.Request = httptest.NewRequest("POST", "/api/config", strings.NewReader(string(jsonData)))
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	// Call the handler
-	server.handleUpdateConfig(c)
-
-	// Check response
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	// Parse response body
-	var response map[string]string
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
-
-	// Verify response
-	assert.Contains(t, response, "message")
-	assert.Contains(t, response["message"], "Configuration updated")
+	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/disk/"+id)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
 }
 
-func TestServer_HandleIndex(t *testing.T) {
-	// Set up Gin in test mode
-	gin.SetMode(gin.TestMode)
+// TestAddHealthcheck verifies adding a healthcheck monitor via the API.
+func TestAddHealthcheck(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
 
-	// Create a mock router that doesn't actually render HTML
-	router := gin.New()
-	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "Mock Index Page")
-	})
+	data := config.HealthcheckConfig{
+		Timeout: 77,
+		Icon:    "disk-icon",
+		URL:     s.ServerUrl + "/healthz",
+	}
+	id := "test-health"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Create a test HTTP recorder and request
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/", nil)
-
-	// Serve the request
-	router.ServeHTTP(w, req)
-
-	// Check response
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "Mock Index Page")
+	assert.Equal(t, 1, len(s.config.Monitoring.Healthcheck), "number of healthcheck entries")
+	d2, ok := s.config.Monitoring.Healthcheck[id]
+	assert.True(t, ok, "healthcheck entry exists")
+	assert.Equal(t, data, d2, "healthcheck entry applied")
 }
 
-func TestServer_HandleConfigPage(t *testing.T) {
-	// Set up Gin in test mode
-	gin.SetMode(gin.TestMode)
+// TestDeleteHealthcheck verifies deleting a healthcheck monitor and handling repeated deletes (not found).
+func TestDeleteHealthcheck(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
 
-	// Create a mock router that doesn't actually render HTML
-	router := gin.New()
-	router.GET("/config", func(c *gin.Context) {
-		c.String(http.StatusOK, "Mock Config Page")
-	})
+	data := config.HealthcheckConfig{
+		Timeout: 77,
+		Icon:    "disk-icon",
+		URL:     s.ServerUrl + "/healthz",
+	}
+	id := "test-health"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Create a test HTTP recorder and request
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/config", nil)
+	assert.Equal(t, 1, len(s.config.Monitoring.Healthcheck), "number of healthcheck entries")
+	d2, ok := s.config.Monitoring.Healthcheck[id]
+	assert.True(t, ok, "healthcheck entry exists")
+	assert.Equal(t, data, d2, "healthcheck entry applied")
 
-	// Serve the request
-	router.ServeHTTP(w, req)
+	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/health/"+id)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Check response
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "Mock Config Page")
+	assert.Equal(t, 0, len(s.config.Monitoring.Healthcheck), "number of healthcheck entries")
+
+	// New: Ensure the healthcheck is also removed from /api/items
+	resp, body = GetTestRequest(ctx, t, s, "/api/items")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	var stats map[string]monitors.Result
+	err := json.Unmarshal([]byte(body), &stats)
+	assert.NoError(t, err, "unmarshal")
+	_, exists := stats["health_"+id]
+	assert.False(t, exists, "deleted healthcheck should not be in /api/items")
+
+	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/health/"+id)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
+
 }
 
-func TestTemplates_LoadAndParse(t *testing.T) {
-	// This test ensures that the embedded templates can be loaded and parsed without error
-	templFS, err := GetTemplatesFSWithRoot()
-	assert.NoError(t, err, "should load embedded templates FS")
+// TestSetWebhook verifies updating the webhook configuration via the API.
+func TestSetWebhook(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
 
-	// Try to parse all HTML templates in the embedded FS
-	_, err = template.ParseFS(templFS, "*.html")
-	assert.NoError(t, err, "should parse all embedded HTML templates")
-}
-
-func TestServer_StartAndStop(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.Web.Port = 0 // random port
-	mockService := new(MockMonitorService)
-	server := NewServer(cfg, mockService, os.TempDir())
-
-	// Start and Stop should not panic (we don't actually listen on a port in test)
-	err := server.Stop()
-	assert.NoError(t, err)
-}
-
-func TestServer_HandleHealthCheck_EdgeCases(t *testing.T) {
-	cfg := config.DefaultConfig()
-	mockService := new(MockMonitorService)
-	server := NewServer(cfg, mockService, os.TempDir())
-
-	// Case 1: No items at all (should be healthy)
-	mockService.On("GetItems").Return([]*monitor.Item{})
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	server.handleHealthCheck(c)
-	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]interface{}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, "healthy", resp["status"])
-
-	// Case 2: All items healthy
-	mockService = new(MockMonitorService)
-	server = NewServer(cfg, mockService, os.TempDir())
-	mockService.On("GetItems").Return([]*monitor.Item{
-		{ID: "1", Status: monitor.StatusOK},
-		{ID: "2", Status: monitor.StatusWarning},
-	})
-	w = httptest.NewRecorder()
-	c, _ = gin.CreateTestContext(w)
-	server.handleHealthCheck(c)
-	assert.Equal(t, http.StatusOK, w.Code)
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, "healthy", resp["status"])
-
-	// Case 3: At least one item critical
-	mockService = new(MockMonitorService)
-	server = NewServer(cfg, mockService, os.TempDir())
-	mockService.On("GetItems").Return([]*monitor.Item{
-		{ID: "1", Status: monitor.StatusOK},
-		{ID: "2", Status: monitor.StatusCritical},
-	})
-	w = httptest.NewRecorder()
-	c, _ = gin.CreateTestContext(w)
-	server.handleHealthCheck(c)
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, "unhealthy", resp["status"])
-}
-
-func TestGetTemplatesFS(t *testing.T) {
-	fs := GetTemplatesFS()
-	// Should not be zero value
-	assert.NotNil(t, fs)
-}
-
-func TestGetHTTPFileSystem(t *testing.T) {
-	httpFS := GetHTTPFileSystem()
-	assert.NotNil(t, httpFS)
-}
-
-func TestWebServer_Integration(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg := config.DefaultConfig()
-	cfg.Web.Port = 0 // random port if we ever use ListenAndServe
-
-	// Use a mock monitor service
-	mockService := new(MockMonitorService)
-	mockService.On("GetItems").Return([]*monitor.Item{
-		{
-			ID:        "test-1",
-			Name:      "Test Item 1",
-			Type:      "test",
-			Status:    monitor.StatusOK,
-			Value:     42.0,
-			Threshold: 80.0,
-			Unit:      "%",
-			Icon:      "test",
-			Message:   "Integration test",
-		},
-	})
-	mockService.On("GetItem", "test-1").Return(&monitor.Item{
-		ID:        "test-1",
-		Name:      "Test Item 1",
-		Type:      "test",
-		Status:    monitor.StatusOK,
-		Value:     42.0,
-		Threshold: 80.0,
-		Unit:      "%",
-		Icon:      "test",
-		Message:   "Integration test",
-	})
-	mockService.On("GetItem", "notfound").Return(nil)
-	mockService.On("RefreshChecks").Return()
-
-	server := NewServer(cfg, mockService, os.TempDir())
-
-	// Use httptest server for integration
-	ts := httptest.NewServer(server.router)
-	defer ts.Close()
-
-	// Test GET /api/items
-	resp, err := http.Get(ts.URL + "/api/items")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	var items []*monitor.Item
-	require.NoError(t, json.Unmarshal(body, &items))
-	assert.Len(t, items, 1)
-	assert.Equal(t, "test-1", items[0].ID)
-
-	// Test GET /api/items/:id (found)
-	resp, err = http.Get(ts.URL + "/api/items/test-1")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	body, _ = io.ReadAll(resp.Body)
-	var item monitor.Item
-	require.NoError(t, json.Unmarshal(body, &item))
-	assert.Equal(t, "test-1", item.ID)
-
-	// Test GET /api/items/:id (not found)
-	resp, err = http.Get(ts.URL + "/api/items/notfound")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-
-	// Test GET /api/config
-	resp, err = http.Get(ts.URL + "/api/config")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	// Test GET /healthz
-	resp, err = http.Get(ts.URL + "/healthz")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	// Test GET / (index page)
-	resp, err = http.Get(ts.URL + "/")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	// Test GET /config (config page)
-	resp, err = http.Get(ts.URL + "/config")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	// Test GET /static (should return 404 or 200 depending on static files present)
-	resp, err = http.Get(ts.URL + "/static/")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.True(t, resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotFound)
-
-	// Optionally, test a static file if any exist
-	staticDir := "web/static"
-	files, _ := os.ReadDir(staticDir)
-	for _, f := range files {
-		if !f.IsDir() {
-			resp, err := http.Get(ts.URL + "/static/" + f.Name())
-			require.NoError(t, err)
-			resp.Body.Close()
-			assert.True(t, resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotFound)
-		}
-		break
+	data := config.WebhookConfig{
+		Enabled: true,
+		URL:     s.ServerUrl + "/testhook",
 	}
 
-	client := &http.Client{Timeout: 2 * time.Second}
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/webhook", data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Test POST /api/config (update config)
-	updatedConfig := config.DefaultConfig()
-	updatedConfig.Web.Host = "integration-test"
-	jsonData, _ := json.Marshal(updatedConfig)
-	req, _ := http.NewRequest("POST", ts.URL+"/api/config", strings.NewReader(string(jsonData)))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, data, s.config.Webhook, "healthcheck entry applied")
+}
 
-	// Test POST /api/config (invalid JSON)
-	req, _ = http.NewRequest("POST", ts.URL+"/api/config", strings.NewReader("{invalid json"))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+// TestWebHookAndCallback verifies that webhook callbacks are triggered and received.
+func TestWebHookAndCallback(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, hook := StartTestServer(ctx, t, "")
+	s.Start(ctx)
 
-	// Test POST /api/config/disk (valid)
-	mockService.On("RefreshChecks").Return()
-	diskPayload := `{"path":"/testdisk","threshold":90,"icon":"storage"}`
-	req, _ = http.NewRequest("POST", ts.URL+"/api/config/disk", strings.NewReader(diskPayload))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	data := config.WebhookConfig{
+		Enabled: true,
+		URL:     s.ServerUrl + "/testhook",
+	}
 
-	// Test POST /api/config/disk (invalid JSON)
-	req, _ = http.NewRequest("POST", ts.URL+"/api/config/disk", strings.NewReader("{bad json"))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/webhook", data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
 
-	// Test POST /api/config/healthcheck (valid)
-	healthPayload := `{"name":"testhc","url":"http://localhost","interval":10,"timeout":5,"expected_status":200}`
-	req, _ = http.NewRequest("POST", ts.URL+"/api/config/healthcheck", strings.NewReader(healthPayload))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, data, s.config.Webhook, "healthcheck entry applied")
 
-	// Test POST /api/config/healthcheck (invalid JSON)
-	req, _ = http.NewRequest("POST", ts.URL+"/api/config/healthcheck", strings.NewReader("{bad json"))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	// Simulate a disk status change to trigger the webhook.
+	s.mapper.Impls.Disk.Current.Store(99)
+	d := config.DiskConfig{Threshold: 1, Icon: "", Path: "."}
+	id := "test-disk"
+	resp, body = PostTestRequest(ctx, t, s, "/api/config/disk/"+id, d)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 
-	// Test POST /api/config/webhook (valid)
-	webhookPayload := `{"enabled":true,"url":"http://localhost/webhook"}`
-	req, _ = http.NewRequest("POST", ts.URL+"/api/config/webhook", strings.NewReader(webhookPayload))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	time.Sleep(10 * time.Millisecond) // time for webhook to send
 
-	// Test POST /api/config/webhook (invalid JSON)
-	req, _ = http.NewRequest("POST", ts.URL+"/api/config/webhook", strings.NewReader("{bad json"))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, int32(1), hook.Cnt.Load(), "got hook")
+	assert.Contains(t, hook.LastMessage.Load(), "Red", "got hook")
+}
 
-	// Test DELETE /api/config/disk/:id (valid)
-	req, _ = http.NewRequest("DELETE", ts.URL+"/api/config/disk/testdisk", nil)
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+//go:embed test/postsave.yaml
+var expectedFile string
 
-	// Test DELETE /api/config/healthcheck/:id (valid)
-	req, _ = http.NewRequest("DELETE", ts.URL+"/api/config/healthcheck/testhc", nil)
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+// TestConfigSaved verifies that configuration changes are persisted to disk.
+func TestConfigSaved(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
 
-	// Test DELETE /api/config/unknown/:id (invalid type)
-	req, _ = http.NewRequest("DELETE", ts.URL+"/api/config/unknown/something", nil)
-	resp, err = client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	s, _ := StartTestServer(ctx, t, testFile)
+	s.Start(ctx)
+
+	data := struct {
+		Interval int
+	}{
+		Interval: 10,
+	}
+
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/interval", data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	assert.Equal(t, 10, s.config.Monitoring.Interval, "config applied")
+
+	bodyBytes, err := os.ReadFile(testFile)
+	assert.NoError(t, err, "read config file")
+
+	assert.Equal(t, expectedFile, string(bodyBytes), "config saved")
+}
+
+// TestMapper_SetConfig verifies that SetConfig applies all monitor types and persists configuration.
+func TestMapper_SetConfig(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+
+	l := config.NewLoader("config.yaml", []string{t.TempDir()})
+	cfg, _ := l.Load()
+
+	cfg.Monitoring.System.CPU.Threshold = 99
+	cfg.Monitoring.System.Memory.Threshold = 99
+
+	cfg.Monitoring.Disk["disk_test_d"] = config.DiskConfig{
+		Threshold: 99,
+		Icon:      "storage",
+		Path:      "/",
+	}
+	cfg.Monitoring.Healthcheck["health_test_h"] = config.HealthcheckConfig{
+		URL:     "http://localhost:8080/healtz",
+		Timeout: 1,
+		Icon:    "activity",
+	}
+
+	err := s.SetConfig(t.Context(), cfg.Monitoring)
+	assert.NoError(t, err, "SetConfig()")
+	assert.Equal(t, 4, s.monitor.Size(), "monitors setup")
+
+	cfg.Monitoring.Interval = 10
+	s.monitor.SetPeriod(ctx, 10*time.Second, 1*time.Second)
+
+	cfg2, _ := l.Load()
+	err = s.monitor.Save(cfg2)
+	assert.NoError(t, err, "save")
+	assert.Equal(t, cfg.Monitoring, cfg2.Monitoring, "config applied")
+}
+
+// TestGetItems verifies the /api/items endpoint and fetching individual items.
+func TestGetItems(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+
+	data, err := os.ReadFile("test/full.yaml")
+	require.NoError(t, err, "read test config")
+	err = os.WriteFile(testFile, data, 0644)
+	assert.NoError(t, err, "write test config")
+
+	s, _ := StartTestServer(ctx, t, testFile)
+	s.Start(ctx)
+
+	resp, body := GetTestRequest(ctx, t, s, "/api/items")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+
+	var stats map[string]monitors.Result
+	err = json.Unmarshal([]byte(body), &stats)
+	assert.NoError(t, err, "unmarshal")
+
+	assert.Equal(t, 4, len(stats), "stats entries")
+
+	t.Run("getItem cpu", func(t *testing.T) {
+		resp, body = GetTestRequest(ctx, t, s, "/api/items/system/cpu")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	})
+	t.Run("getItem mem", func(t *testing.T) {
+		resp, body = GetTestRequest(ctx, t, s, "/api/items/system/mem")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+
+	})
+	t.Run("getItem disk", func(t *testing.T) {
+		resp, body = GetTestRequest(ctx, t, s, "/api/items/disk/root")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+
+	})
+	t.Run("getItem health", func(t *testing.T) {
+		resp, body = GetTestRequest(ctx, t, s, "/api/items/health/google")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	})
+	t.Run("getItem missing", func(t *testing.T) {
+		resp, body = GetTestRequest(ctx, t, s, "/api/items/disk/missing")
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
+	})
+}
+
+// TestGetApiConfig verifies the /api/config endpoint returns the correct configuration.
+func TestGetApiConfig(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+
+	data, err := os.ReadFile("test/full.yaml")
+	require.NoError(t, err, "read test config")
+	err = os.WriteFile(testFile, data, 0644)
+	assert.NoError(t, err, "write test config")
+
+	s, _ := StartTestServer(ctx, t, testFile)
+	s.Start(ctx)
+
+	resp, body := GetTestRequest(ctx, t, s, "/api/config")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+
+	var cfg config.Config
+	err = json.Unmarshal([]byte(body), &cfg)
+	assert.NoError(t, err, "unmarshal")
+
+	assert.Equal(t, 90, cfg.Monitoring.System.CPU.Threshold)
+	assert.Equal(t, 90, cfg.Monitoring.System.Memory.Threshold)
+	assert.Equal(t, 85, cfg.Monitoring.Disk["root"].Threshold)
+	assert.Equal(t, "https://google.com", cfg.Monitoring.Healthcheck["google"].URL)
+}
+
+// TestBadJson verifies that invalid JSON in POST requests returns HTTP 400 Bad Request.
+func TestBadJson(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	resp, _ := PostTestRequest(ctx, t, s, "/api/config/system", "not json")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
+
+	resp, _ = PostTestRequest(ctx, t, s, "/api/config/interval", "not json")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
+}
+
+// TestDeleteBadType verifies that deleting a monitor with an invalid type returns HTTP 400 Bad Request.
+func TestDeleteBadType(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	resp, _ := DeleteTestRequest(ctx, t, s, "/api/config/bad/123")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
+
 }

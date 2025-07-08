@@ -1,143 +1,384 @@
 package config
 
 import (
+	_ "embed"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	//go:embed test/default.yaml
+	defaultYaml string
+
+	//go:embed test/changed.yaml
+	changedYaml string
+
+	//go:embed test/changed_add_disk.yaml
+	changedYamlAddDisk string
+
+	//go:embed test/changed_edit_before.yaml
+	changedYamlEditBefore string
+
+	//go:embed test/changed_edit_disk.yaml
+	changedYamlEditDisk string
+
+	//go:embed test/changed_add_remove_disk.yaml
+	changedYamlAddRemoveDisk string
+
+	//go:embed test/changed_add_healthcheck.yaml
+	changedYamlAddHealthcheck string
+	//go:embed test/changed_add_remove_healthcheck.yaml
+	changedYamlAddRemoveHealthcheck string
+	//go:embed test/changed_edit_healthcheck.yaml
+	changedYamlEditHealthcheck string
+
+	//go:embed test/default.env
+	defaultEnv string
+
+	//go:embed test/bad.yaml
+	badYaml string
+)
+
 func TestDefaultConfig(t *testing.T) {
-	cfg := DefaultConfig()
+	loader := NewLoader("test*.yaml", []string{os.TempDir()})
+	cfg, err := loader.Load()
+	require.NoError(t, err, "no error loading config")
+	require.NotNil(t, cfg, "no config loaded")
 
-	// Verify default values
-	assert.Equal(t, "0.0.0.0", cfg.Web.Host)
-	assert.Equal(t, 8080, cfg.Web.Port)
-	assert.Equal(t, "Monitoring Dashboard", cfg.Web.DashboardTitle)
-	assert.Equal(t, 60, cfg.Monitoring.Interval)
+	// web settings
+	assert.Equal(t, "0.0.0.0", cfg.Web.Host, "cfg.web.host")
+	assert.Equal(t, 8080, cfg.Web.Port, "cfg.web.port")
+	assert.Equal(t, "LMON Dashboard", cfg.Monitoring.System.Title, "cfg.web.dashboardTitle")
+
+	// monitoring settings
+	assert.Equal(t, 60, cfg.Monitoring.Interval, "cfg.monitoring.interval")
+
+	// System settings
+	assert.Equal(t, 90, cfg.Monitoring.System.CPU.Threshold, "cfg.monitoring.system.cpu.threshold")
+	assert.Equal(t, 90, cfg.Monitoring.System.Memory.Threshold, "cfg.monitoring.system.memory.threshold")
+	assert.Equal(t, "cpu", cfg.Monitoring.System.CPU.Icon, "cfg.monitoring.system.cpu.icon")
+	assert.Equal(t, "speedometer", cfg.Monitoring.System.Memory.Icon, "cfg.monitoring.system.memory.icon")
+
+	// Webhook settings
+	assert.True(t, cfg.Webhook.Enabled, "cfg.webhook.enabled")
+	assert.Equal(t, "http://localhost:8080/test_webhook", cfg.Webhook.URL, "cfg.webhook.url")
+
+	// Disk settings
+	assert.Equal(t, 0, len(cfg.Monitoring.Disk), "len(disk)")
+	// Healthcheck settings
+	assert.Equal(t, 0, len(cfg.Monitoring.Healthcheck), "len(healthcheck)")
+}
+
+func TestSaveDefaults(t *testing.T) {
+	testFiles := []string{"test.yaml", "test.env"}
+	expect := []string{defaultYaml, defaultEnv}
+	for i, f := range testFiles {
+		t.Run(f, func(t *testing.T) {
+			dir := t.TempDir()
+			testFile := strings.Join([]string{dir, f}, string(os.PathSeparator))
+
+			loader := NewLoader(testFile, nil)
+			cfg, err := loader.Load()
+			assert.NoError(t, err, "no error loading config")
+			require.NotNil(t, cfg, "no config loaded")
+
+			saveAndCheckContent(t, loader, cfg, testFile, expect[i])
+		})
+	}
+}
+
+func TestChangeValues(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	assert.NoError(t, err, "no error loading config")
+
+	cfg.Web.Host = "localhost"
+	cfg.Web.Port = 8000
+	cfg.Monitoring.System.Title = "Test Dashboard"
+	cfg.Webhook.Enabled = false
+	cfg.Webhook.URL = "bad url"
+	cfg.Monitoring.System.CPU.Threshold = 99
+	cfg.Monitoring.System.CPU.Icon = "cpuicon"
+	cfg.Monitoring.System.Memory.Threshold = 98
+	cfg.Monitoring.System.Memory.Icon = "memicon"
+	cfg.Monitoring.Interval = 15
+
+	saveAndCheckContent(t, loader, cfg, testFile, changedYaml)
+}
+
+func saveAndCheckContent(t *testing.T, loader *Loader, cfg *Config, testFile string, content string) {
+	t.Helper()
+	err := loader.Save(cfg)
+	assert.NoError(t, err, "saving config")
+	assert.FileExistsf(t, testFile, "output file exists")
+	body, err := os.ReadFile(testFile)
+	require.NoError(t, err, "no error reading output file")
+	bodyStr := string(body)
+	assert.Equal(t, content, bodyStr, "output file contents")
+}
+
+func TestAddFolders(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	assert.NoError(t, err, "no error loading config")
+
+	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test"}
+	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddDisk)
+}
+
+func TestAddHealthcheck(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	assert.NoError(t, err, "no error loading config")
+
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, "test"}
+	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddHealthcheck)
+}
+
+func TestRemoveFolder(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+
+	// set pre-edit config
+	err := os.WriteFile(testFile, []byte(changedYamlEditBefore), 0644)
+	assert.NoError(t, err, "Error creating initial file")
+
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	assert.NoError(t, err, "no error loading config")
+
+	// we already have the one to remove?
 	assert.Equal(t, 1, len(cfg.Monitoring.Disk))
-	assert.Equal(t, "/", cfg.Monitoring.Disk[0].Path)
-	assert.Equal(t, 80, cfg.Monitoring.Disk[0].Threshold)
-	assert.Equal(t, "storage", cfg.Monitoring.Disk[0].Icon)
-	assert.Equal(t, 90, cfg.Monitoring.System.CPU.Threshold)
-	assert.Equal(t, 90, cfg.Monitoring.System.Memory.Threshold)
-	assert.Equal(t, "cpu", cfg.Monitoring.System.CPU.Icon)
-	assert.Equal(t, "speedometer", cfg.Monitoring.System.Memory.Icon)
-	assert.Equal(t, 0, len(cfg.Monitoring.Healthchecks))
-	assert.False(t, cfg.Webhook.Enabled)
-	assert.Equal(t, "", cfg.Webhook.URL)
+
+	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test"}
+	delete(cfg.Monitoring.Disk, "root")
+
+	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddRemoveDisk)
 }
 
-func TestSaveAndLoad(t *testing.T) {
-	// Create a temporary file for testing
-	tmpfile, err := os.CreateTemp("", "config-*.yaml")
-	require.NoError(t, err)
-	defer func(name string) {
-		_ = os.Remove(name)
-	}(tmpfile.Name())
+func TestEditFolder(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
 
-	// Create a test configuration
-	cfg := DefaultConfig()
-	cfg.Web.Host = "127.0.0.1"
-	cfg.Web.Port = 9090
-	cfg.Web.DashboardTitle = "Custom Dashboard Title"
-	cfg.Monitoring.Interval = 30
-	cfg.Monitoring.Disk[0].Threshold = 90
-	cfg.Monitoring.System.CPU.Threshold = 70
-	cfg.Webhook.Enabled = true
-	cfg.Webhook.URL = "https://example.com/webhook"
+	// set pre-edit config
+	err := os.WriteFile(testFile, []byte(changedYamlEditBefore), 0644)
+	assert.NoError(t, err, "Error creating initial file")
 
-	// Add a health check
-	cfg.Monitoring.Healthchecks = append(cfg.Monitoring.Healthchecks, HealthcheckConfig{
-		Name:     "Test API",
-		URL:      "https://api.example.com/health",
-		Interval: 60,
-		Timeout:  5,
-		Icon:     "cloud",
-	})
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	assert.NoError(t, err, "no error loading config")
 
-	// Save the configuration
-	err = Save(cfg, tmpfile.Name())
-	require.NoError(t, err)
+	// we already have the one to edit?
+	assert.Equal(t, 1, len(cfg.Monitoring.Disk))
 
-	// Print the contents of the saved file for debugging
-	data, err := os.ReadFile(tmpfile.Name())
-	require.NoError(t, err)
-	t.Logf("Saved file contents:\n%s", string(data))
+	cfg.Monitoring.Disk["root"] = DiskConfig{
+		Threshold: 75,
+		Icon:      "test",
+		Path:      "/root",
+	}
 
-	// Set up environment for Load
-	_ = os.Setenv("LMON_WEB_HOST", "")
-	_ = os.Setenv("LMON_WEB_PORT", "")
-
-	// Load the configuration from the temporary file
-	loadedCfg, err := LoadFromFile(tmpfile.Name())
-	require.NoError(t, err)
-
-	// Verify loaded values match saved values
-	assert.Equal(t, cfg.Web.Host, loadedCfg.Web.Host, "Web.Host mismatch")
-	assert.Equal(t, cfg.Web.Port, loadedCfg.Web.Port, "Web.Port mismatch")
-	assert.Equal(t, cfg.Web.DashboardTitle, loadedCfg.Web.DashboardTitle, "Web.DashboardTitle mismatch")
-	assert.Equal(t, cfg.Monitoring.Interval, loadedCfg.Monitoring.Interval, "Monitoring.Interval mismatch")
-	assert.Equal(t, cfg.Monitoring.Disk[0].Threshold, loadedCfg.Monitoring.Disk[0].Threshold, "Disk[0].Threshold mismatch")
-	assert.Equal(t, cfg.Monitoring.System.CPU.Threshold, loadedCfg.Monitoring.System.CPU.Threshold, "System.CPUThreshold mismatch")
-	assert.Equal(t, cfg.Webhook.Enabled, loadedCfg.Webhook.Enabled, "Webhook.Enabled mismatch")
-	assert.Equal(t, cfg.Webhook.URL, loadedCfg.Webhook.URL, "Webhook.URL mismatch")
-
-	// Verify health check was loaded
-	require.Equal(t, 1, len(loadedCfg.Monitoring.Healthchecks))
-	assert.Equal(t, "Test API", loadedCfg.Monitoring.Healthchecks[0].Name)
-	assert.Equal(t, "https://api.example.com/health", loadedCfg.Monitoring.Healthchecks[0].URL)
+	saveAndCheckContent(t, loader, cfg, testFile, changedYamlEditDisk)
 }
 
-func TestLoadWithEnvironmentVariables(t *testing.T) {
-	// Set environment variables
-	_ = os.Setenv("LMON_WEB_HOST", "192.168.1.1")
-	_ = os.Setenv("LMON_WEB_PORT", "8888")
-	_ = os.Setenv("LMON_WEB_DASHBOARD_TITLE", "Environment Dashboard Title")
-	_ = os.Setenv("LMON_MONITORING_INTERVAL", "45")
-	_ = os.Setenv("LMON_WEBHOOK_ENABLED", "true")
-	_ = os.Setenv("LMON_WEBHOOK_URL", "https://example.org/webhook")
-	defer func() {
-		_ = os.Unsetenv("LMON_WEB_HOST")
-		_ = os.Unsetenv("LMON_WEB_PORT")
-		_ = os.Unsetenv("LMON_WEB_DASHBOARD_TITLE")
-		_ = os.Unsetenv("LMON_MONITORING_INTERVAL")
-		_ = os.Unsetenv("LMON_WEBHOOK_ENABLED")
-		_ = os.Unsetenv("LMON_WEBHOOK_URL")
-	}()
+func TestRemoveHealthCheck(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
 
-	// Load configuration
-	cfg, err := Load()
-	require.NoError(t, err)
+	// set pre-edit config
+	err := os.WriteFile(testFile, []byte(changedYamlEditBefore), 0644)
+	assert.NoError(t, err, "Error creating initial file")
 
-	// Verify environment variables were applied
-	assert.Equal(t, "192.168.1.1", cfg.Web.Host)
-	assert.Equal(t, 8888, cfg.Web.Port)
-	assert.Equal(t, "Environment Dashboard Title", cfg.Web.DashboardTitle)
-	assert.Equal(t, 45, cfg.Monitoring.Interval)
-	assert.True(t, cfg.Webhook.Enabled)
-	assert.Equal(t, "https://example.org/webhook", cfg.Webhook.URL)
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	assert.NoError(t, err, "no error loading config")
+
+	// we already have the one to edit?
+	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
+
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, "test"}
+	delete(cfg.Monitoring.Healthcheck, "self")
+
+	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddRemoveHealthcheck)
 }
 
-func TestLoadFromEmptyYAMLFile(t *testing.T) {
-	// Create a temporary empty YAML file
-	tmpfile, err := os.CreateTemp("", "empty-config-*.yaml")
-	require.NoError(t, err)
-	defer func(name string) {
-		_ = os.Remove(name)
-	}(tmpfile.Name())
+func TestLoadChangeAndSave(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
 
-	// Write nothing to the file (leave it empty)
-	require.NoError(t, tmpfile.Close())
+	// set pre-edit config
+	err := os.WriteFile(testFile, []byte(changedYamlEditBefore), 0644)
+	assert.NoError(t, err, "Error creating initial file")
 
-	// Load config from the empty file
-	cfg, err := LoadFromFile(tmpfile.Name())
-	require.NoError(t, err)
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	assert.NoError(t, err, "no error loading config")
 
-	// Should fallback to defaults
-	assert.Equal(t, DefaultConfig().Web.Host, cfg.Web.Host)
-	assert.Equal(t, DefaultConfig().Web.Port, cfg.Web.Port)
-	assert.Equal(t, DefaultConfig().Monitoring.Interval, cfg.Monitoring.Interval)
-	assert.Equal(t, DefaultConfig().Webhook.Enabled, cfg.Webhook.Enabled)
+	// we already have the one to edit?
+	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
+
+	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, "test"}
+
+	saveAndCheckContent(t, loader, cfg, testFile, changedYamlEditHealthcheck)
+}
+
+func TestBadYaml(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+
+	// set pre-edit config
+	err := os.WriteFile(testFile, []byte(badYaml), 0644)
+	assert.NoError(t, err, "Error creating initial file")
+
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	var cfgError viper.ConfigParseError
+	assert.ErrorAs(t, err, &cfgError, "error loading config")
+	assert.Nil(t, cfg, "no config loaded")
+
+}
+
+func TestNewLoader(t *testing.T) {
+	type test struct {
+		name        string
+		cfgFilename string
+		paths       []string
+		envName     string
+		envPaths    string
+		expectName  string
+		exepctPaths []string
+		expectType  string
+	}
+	tests := []test{
+		{
+			name:        "config.yaml",
+			cfgFilename: "config.yaml",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "config",
+			cfgFilename: "config",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "empty",
+			cfgFilename: "",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "/etc/lmon",
+			cfgFilename: "",
+			paths:       []string{"/etc/lmon"},
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"/etc/lmon"},
+		},
+		{
+			name:        "/etc/lmon & ./config.env",
+			cfgFilename: "./config.env",
+			paths:       []string{"/etc/lmon"},
+			expectName:  "config",
+			expectType:  "env",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "/var/lib/lmon/config.env",
+			cfgFilename: "/var/lib/lmon/config.env",
+			paths:       []string{"."},
+			expectName:  "config",
+			expectType:  "env",
+			exepctPaths: []string{"/var/lib/lmon"},
+		},
+		{
+			name:        "env config.yaml",
+			envName:     "config.yaml",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"."},
+		},
+		{
+			name:        "env ~/.lmon/config.yaml",
+			envName:     "~/.lmon/config.yaml",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"~/.lmon"},
+		},
+		{
+			name:        "env ~/.lmon & config.yaml",
+			envName:     "config.yaml",
+			envPaths:    "~/.lmon",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "yaml",
+			exepctPaths: []string{"~/.lmon"},
+		},
+		{
+			name:        "env ~/.lmon & ./config.toml",
+			envName:     "./config.toml",
+			envPaths:    "'~/.lmon",
+			paths:       nil,
+			expectName:  "config",
+			expectType:  "toml",
+			exepctPaths: []string{"."},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envName != "" {
+				t.Setenv("LMON_CONFIG_FILE", tt.envName)
+			}
+			if tt.envPaths != "" {
+				t.Setenv("LMON_CONFIG_PATH", tt.envPaths)
+			}
+			loadder := NewLoader(tt.cfgFilename, tt.paths)
+			assert.Equal(t, tt.expectName, loadder.name, "name")
+			assert.Equal(t, tt.exepctPaths, loadder.paths, "paths")
+			assert.Equal(t, tt.expectType, loadder.cfgType, "cfgType")
+		})
+	}
+}
+
+func Test_SanitiseName(t *testing.T) {
+	tests := []struct {
+		name  string
+		want  string
+		want1 bool
+	}{
+		{"clean", "clean", false},
+		{"clean-name", "clean-name", false},
+		{"clean_name", "clean_name", false},
+		{"clean name (sp)", "clean name (sp)", false},
+		{"clean.name", "clean_name", true},
+		{"    ", "unknown", true},
+		{" ", "unknown", true},
+		{" \t", "unknown", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, got1 := SanitiseName(tt.name)
+			assert.Equalf(t, tt.want, got, "SanitiseName(%v)", tt.name)
+			assert.Equalf(t, tt.want1, got1, "SanitiseName(%v)", tt.name)
+		})
+	}
 }
