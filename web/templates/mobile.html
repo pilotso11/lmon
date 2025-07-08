@@ -78,31 +78,53 @@
                 display: inline-block;
                 margin-right: 10px;
             }
-            .card {
-                margin-bottom: 20px;
-            }
-            .card-header {
-                font-weight: bold;
-            }
-            .refresh-btn {
-                margin-left: 10px;
-            }
             .item-icon {
                 font-size: 24px;
                 margin-right: 10px;
                 vertical-align: middle;
             }
-            #refresh-countdown {
+            .type-label {
                 font-size: 0.85em;
-                opacity: 0.8;
-                font-weight: normal;
+                font-weight: 500;
+                margin-left: 8px;
+                padding: 2px 8px;
+                border-radius: 8px;
+                background: #f1f3f4;
+                color: #333;
             }
-
-            /* Responsive font size for navbar-brand on small screens */
-            @media (max-width: 575.98px) {
-                .navbar-brand {
-                    font-size: 1rem; /* Reduce font size on small screens */
-                }
+            .mobile-toggle-link {
+                font-size: 1em;
+                margin-left: 1em;
+            }
+            .mobile-list-item {
+                padding: 12px 16px;
+                border-bottom: 1px solid #e9ecef;
+            }
+            .mobile-list-item.even {
+                background: #fff;
+            }
+            .mobile-list-item.odd {
+                background: #f8f9fa;
+            }
+            .mobile-line1 {
+                display: flex;
+                align-items: center;
+                gap: 0.5em;
+            }
+            .mobile-line2 {
+                display: flex;
+                align-items: flex-start;
+                margin-top: 2px;
+            }
+            .mobile-status-badge {
+                margin-left: 34px; /* icon (24px) + traffic light (20px) + gap */
+                min-width: 70px;
+            }
+            .mobile-detail {
+                margin-left: 12px;
+                color: #555;
+                font-size: 0.97em;
+                word-break: break-all;
             }
         </style>
     </head>
@@ -124,10 +146,12 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav ms-auto">
                         <li class="nav-item">
-                            <a class="nav-link active" href="/">Dashboard</a>
+                            <a class="nav-link" href="/">Dashboard</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/mobile">Mobile View</a>
+                            <a class="nav-link active" href="/mobile"
+                                >Mobile View</a
+                            >
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/config">Configuration</a>
@@ -150,50 +174,10 @@
                 </button>
             </div>
 
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">System</div>
-                        <div class="card-body" id="system-items">
-                            <div class="text-center">
-                                <div class="spinner-border" role="status">
-                                    <span class="visually-hidden"
-                                        >Loading...</span
-                                    >
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">Disk</div>
-                        <div class="card-body" id="disk-items">
-                            <div class="text-center">
-                                <div class="spinner-border" role="status">
-                                    <span class="visually-hidden"
-                                        >Loading...</span
-                                    >
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row mt-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">Health Checks</div>
-                        <div class="card-body" id="health-items">
-                            <div class="text-center">
-                                <div class="spinner-border" role="status">
-                                    <span class="visually-hidden"
-                                        >Loading...</span
-                                    >
-                                </div>
-                            </div>
-                        </div>
+            <div id="mobile-items-list">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
                     </div>
                 </div>
             </div>
@@ -255,6 +239,9 @@
 
             // Function to get icon
             function getIcon(item) {
+                if (item.Icon) {
+                    return `<i class="bi bi-${item.Icon} item-icon"></i>`;
+                }
                 if (item.icon) {
                     return `<i class="bi bi-${item.icon} item-icon"></i>`;
                 }
@@ -271,6 +258,21 @@
                         return '<i class="bi bi-activity item-icon"></i>';
                     default:
                         return '<i class="bi bi-graph-up item-icon"></i>';
+                }
+            }
+
+            function getTypeLabel(type) {
+                switch (type) {
+                    case "cpu":
+                    case "memory":
+                    case "system":
+                        return "System";
+                    case "disk":
+                        return "Disk";
+                    case "health":
+                        return "Health";
+                    default:
+                        return type.charAt(0).toUpperCase() + type.slice(1);
                 }
             }
 
@@ -344,16 +346,105 @@
                 return statusTexts[code] || "Unknown Status";
             }
 
-            // Function to load items
-            function loadItems() {
+            // Function to sort items by status: error/critical, warning, ok, unknown
+            function sortItemsByStatus(items) {
+                const statusOrder = {
+                    error: 0,
+                    critical: 0,
+                    warning: 1,
+                    ok: 2,
+                    unknown: 3,
+                };
+                return items.slice().sort((a, b) => {
+                    const aOrder =
+                        statusOrder[a.status] !== undefined
+                            ? statusOrder[a.status]
+                            : 99;
+                    const bOrder =
+                        statusOrder[b.status] !== undefined
+                            ? statusOrder[b.status]
+                            : 99;
+                    return aOrder - bOrder;
+                });
+            }
+
+            // Function to render all items as a single sorted list
+            function renderMobileItems(items) {
+                const sorted = sortItemsByStatus(items);
+                if (sorted.length === 0) {
+                    return '<div class="text-center">No items to display</div>';
+                }
+                let html = "";
+                sorted.forEach((item, idx) => {
+                    const statusClass = getStatusClass(item.status);
+                    const icon = getIcon(item);
+                    const typeLabel = getTypeLabel(item.type);
+                    const bgClass = idx % 2 === 0 ? "even" : "odd";
+                    let detail;
+                    if (item.type === "health") {
+                        detail =
+                            typeof item.value === "number"
+                                ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
+                                : item.value;
+                    } else {
+                        detail = `${item.unit === "%" ? parseFloat(item.value).toFixed(2) : item.value}${item.unit}`;
+                    }
+                    html += `
+                        <div class="mobile-list-item ${bgClass}" data-id="${item.id}">
+                            <div class="mobile-line1">
+                                ${icon}
+                                <span class="status-indicator ${statusClass}"></span>
+                                <span>${item.name}</span>
+                                <span class="type-label">${typeLabel}</span>
+                            </div>
+                            <div class="mobile-line2">
+                                <span class="mobile-status-badge">
+                                    <span class="badge ${statusClass}">${item.status}</span>
+                                </span>
+                                <span class="mobile-detail">${detail}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                return html;
+            }
+
+            // Mobile refresh logic
+            let mobileRefreshInterval = 60000; // default 60s
+            let nextMobileRefreshTime = 0;
+            let mobileRefreshTimer = null;
+
+            function updateMobileCountdown() {
+                const now = Date.now();
+                const timeLeft = Math.max(0, nextMobileRefreshTime - now);
+                const secondsLeft = Math.ceil(timeLeft / 1000);
+                const countdownElement =
+                    document.getElementById("refresh-countdown");
+                if (countdownElement) {
+                    if (secondsLeft > 0) {
+                        countdownElement.textContent = `(${secondsLeft}s)`;
+                    } else {
+                        countdownElement.textContent = "";
+                    }
+                }
+            }
+
+            function resetMobileCountdown() {
+                nextMobileRefreshTime = Date.now() + mobileRefreshInterval;
+                updateMobileCountdown();
+            }
+
+            function loadMobileItemsWithCountdown() {
+                loadMobileItems();
+                resetMobileCountdown();
+            }
+
+            function loadMobileItems() {
                 fetch("/api/items")
                     .then((response) => response.json())
                     .then((itemsMap) => {
-                        // itemsMap is an object: { id: Result, ... }
-                        // We need to convert it to an array and infer type/group from keys or values
                         const items = Object.entries(itemsMap).map(
                             ([id, result]) => {
-                                // Try to infer type from group or id
                                 let type = "";
                                 if (result.Group === "system") {
                                     if (id.endsWith("cpu")) type = "cpu";
@@ -370,12 +461,10 @@
                                 } else {
                                     type = result.Group || "";
                                 }
-                                // Try to extract threshold, unit, last_check, message if present (may not be)
                                 return {
                                     id,
                                     type,
                                     name: result.DisplayName || id,
-                                    // Map numeric status codes to string values
                                     status: (function () {
                                         const statusMap = {
                                             0: "unknown",
@@ -396,213 +485,97 @@
                                         return "unknown";
                                     })(),
                                     value: result.Value || "",
-                                    unit: result.Unit || "", // May not exist
-                                    threshold: result.Threshold || null, // May not exist
-                                    last_check: result.LastCheck || "", // May not exist
-                                    message: result.Message || "", // May not exist
-                                    icon: result.Icon || "", // May not exist
+                                    unit: result.Unit || "",
+                                    threshold: result.Threshold || null,
+                                    last_check: result.LastCheck || "",
+                                    message: result.Message || "",
+                                    icon: result.Icon || "",
                                 };
                             },
                         );
-
-                        const systemItems = items
-                            .filter(
-                                (item) =>
-                                    item.type === "cpu" ||
-                                    item.type === "memory",
-                            )
-                            .sort((a, b) => a.name.localeCompare(b.name));
-                        const diskItems = items.filter(
-                            (item) => item.type === "disk",
-                        );
-                        const healthItems = items.filter(
-                            (item) => item.type === "health",
-                        );
-
-                        // Render system items
-                        document.getElementById("system-items").innerHTML =
-                            renderItems(systemItems);
-
-                        // Render disk items
-                        document.getElementById("disk-items").innerHTML =
-                            renderItems(diskItems);
-
-                        // Render health items
-                        document.getElementById("health-items").innerHTML =
-                            renderItems(healthItems);
-
-                        // Add click handlers for item details
-                        document
-                            .querySelectorAll(".item-row")
-                            .forEach((row) => {
-                                row.addEventListener("click", function () {
-                                    const itemId = this.getAttribute("data-id");
-                                    showItemDetails(itemId, items);
-                                });
-                            });
+                        document.getElementById("mobile-items-list").innerHTML =
+                            renderMobileItems(items);
                     })
                     .catch((error) => {
-                        console.error("Error loading items:", error);
-                        document.getElementById("system-items").innerHTML =
-                            '<div class="alert alert-danger">Error loading system items</div>';
-                        document.getElementById("disk-items").innerHTML =
-                            '<div class="alert alert-danger">Error loading disk items</div>';
-                        document.getElementById("health-items").innerHTML =
-                            '<div class="alert alert-danger">Error loading health items</div>';
+                        document.getElementById("mobile-items-list").innerHTML =
+                            '<div class="alert alert-danger">Error loading items</div>';
                     });
             }
 
-            // Function to render items
-            function renderItems(items) {
-                if (items.length === 0) {
-                    return '<div class="text-center">No items to display</div>';
-                }
-
-                let html = '<div class="list-group">';
-
-                items.forEach((item) => {
-                    const statusClass = getStatusClass(item.status);
-                    const icon = getIcon(item);
-
-                    // Determine if item should be expanded (if status is not OK)
-                    const expanded =
-                        item.status.toLowerCase() !== "ok" ? "show" : "";
-
-                    html += `
-                    <div class="list-group-item item-row" data-id="${item.id}">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span style="display: inline-block;">${icon}</span>
-                                <span class="status-indicator ${statusClass}"></span>
-                                ${item.name}
-                            </div>
-                            <div>
-                                <span class="badge ${statusClass}">${item.status}</span>
-                                <span class="ms-2">${
-                                    item.type === "health"
-                                        ? typeof item.value === "number"
-                                            ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
-                                            : item.value
-                                        : `${item.unit === "%" ? parseFloat(item.value).toFixed(2) : item.value}${item.unit}`
-                                }</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                });
-
-                html += "</div>";
-                return html;
+            // Fetch interval from backend config and start auto-refresh
+            function fetchMobileIntervalAndStart() {
+                fetch("/api/config")
+                    .then((response) => response.json())
+                    .then((config) => {
+                        if (
+                            config &&
+                            config.Monitoring &&
+                            config.Monitoring.Interval
+                        ) {
+                            mobileRefreshInterval =
+                                config.Monitoring.Interval * 1000;
+                        } else {
+                            mobileRefreshInterval = 60000;
+                        }
+                        loadMobileItemsWithCountdown();
+                        if (mobileRefreshTimer)
+                            clearInterval(mobileRefreshTimer);
+                        mobileRefreshTimer = setInterval(
+                            loadMobileItemsWithCountdown,
+                            mobileRefreshInterval,
+                        );
+                        setInterval(updateMobileCountdown, 1000);
+                    })
+                    .catch(() => {
+                        // fallback
+                        mobileRefreshInterval = 60000;
+                        loadMobileItemsWithCountdown();
+                        if (mobileRefreshTimer)
+                            clearInterval(mobileRefreshTimer);
+                        mobileRefreshTimer = setInterval(
+                            loadMobileItemsWithCountdown,
+                            mobileRefreshInterval,
+                        );
+                        setInterval(updateMobileCountdown, 1000);
+                    });
             }
 
-            // Function to show item details
-            function showItemDetails(itemId, items) {
-                const item = items.find((i) => i.id === itemId);
-                if (!item) return;
+            // Mobile detection and toggle logic
+            function isMobile() {
+                return window.innerWidth <= 575;
+            }
 
-                const statusClass = getStatusClass(item.status);
-                const icon = getIcon(item);
-
-                let html = `
-                <div class="d-flex align-items-center mb-3">
-                    ${icon}
-                    <h4 class="mb-0">${item.name}</h4>
-                </div>
-                <div class="mb-3">
-                    <span class="badge ${statusClass} fs-6">${item.status}</span>
-                </div>
-                <div class="mb-3">
-                    <strong>Value:</strong> ${
-                        item.type === "health"
-                            ? typeof item.value === "number"
-                                ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
-                                : item.value
-                            : (item.unit === "%" &&
-                              !isNaN(parseFloat(item.value))
-                                  ? parseFloat(item.value).toFixed(2)
-                                  : item.value) + (item.unit || "")
-                    }
-                </div>
-                <div class="mb-3">
-                    <strong>Threshold:</strong> ${
-                        item.threshold !== undefined &&
-                        item.threshold !== null &&
-                        item.threshold !== 0
-                            ? item.unit === "%"
-                                ? parseFloat(item.threshold).toFixed(2)
-                                : item.threshold
-                            : "N/A"
-                    }${item.threshold !== undefined && item.threshold !== null && item.threshold !== 0 ? item.unit : ""}
-                </div>
-                <div class="mb-3">
-                    <strong>Last Check:</strong> ${item.last_check ? new Date(item.last_check).toLocaleString() : "N/A"}
-                </div>
-                <div class="mb-3">
-                    <strong>Message:</strong> ${item.message || ""}
-                </div>
-            `;
-
-                document.getElementById("modal-title").textContent = item.name;
-                document.getElementById("modal-body").innerHTML = html;
-
-                const modal = new bootstrap.Modal(
-                    document.getElementById("itemDetailModal"),
+            function showMobileToggle() {
+                // Show the toggle link/button if on mobile
+                const desktopLink = document.getElementById(
+                    "toggle-desktop-link",
                 );
-                modal.show();
-            }
-
-            // Variables for refresh countdown
-            let nextRefreshTime = 0;
-            let refreshInterval = 60000; // Default to 60 seconds (will be updated from server config)
-
-            // Function to update countdown display
-            function updateCountdown() {
-                const now = Date.now();
-                const timeLeft = Math.max(0, nextRefreshTime - now);
-                const secondsLeft = Math.ceil(timeLeft / 1000);
-
-                const countdownElement =
-                    document.getElementById("refresh-countdown");
-                if (secondsLeft > 0) {
-                    countdownElement.textContent = `(${secondsLeft}s)`;
+                const desktopBtn =
+                    document.getElementById("toggle-desktop-btn");
+                if (isMobile()) {
+                    if (desktopLink) desktopLink.style.display = "";
+                    if (desktopBtn) desktopBtn.style.display = "";
                 } else {
-                    countdownElement.textContent = "";
+                    if (desktopLink) desktopLink.style.display = "none";
+                    if (desktopBtn) desktopBtn.style.display = "none";
                 }
             }
 
-            // Function to reset countdown timer
-            function resetCountdown() {
-                nextRefreshTime = Date.now() + refreshInterval;
-                updateCountdown();
-            }
-
-            // Enhanced loadItems function that resets the countdown
-            function loadItemsWithCountdown() {
-                loadItems();
-                resetCountdown();
-            }
-
-            // Load items on page load
             document.addEventListener("DOMContentLoaded", function () {
-                // Get refresh interval from data attribute (in seconds) and convert to milliseconds
-                const refreshBtn = document.getElementById("refresh-btn");
-                const refreshIntervalSeconds =
-                    parseInt(
-                        refreshBtn.getAttribute("data-refresh-interval"),
-                    ) || 60;
-                refreshInterval = refreshIntervalSeconds * 1000;
+                loadMobileItems();
+                showMobileToggle();
+                window.addEventListener("resize", showMobileToggle);
 
-                loadItems();
-                resetCountdown();
-
-                // Set up refresh button
-                refreshBtn.addEventListener("click", loadItemsWithCountdown);
-
-                // Auto-refresh using the configured interval
-                setInterval(loadItemsWithCountdown, refreshInterval);
-
-                // Update countdown every second
-                setInterval(updateCountdown, 1000);
+                // Offer to redirect to mobile if on mobile and not already here
+                if (isMobile() && window.location.pathname !== "/mobile") {
+                    if (
+                        confirm(
+                            "You appear to be on a mobile device. Switch to mobile view?",
+                        )
+                    ) {
+                        window.location.href = "/mobile";
+                    }
+                }
             });
         </script>
     </body>

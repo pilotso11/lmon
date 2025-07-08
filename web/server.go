@@ -150,6 +150,7 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("GET /", s.handleTemplate())
 	s.router.HandleFunc("GET /index.html", s.handleTemplate())
 	s.router.HandleFunc("GET /config", s.handleTemplate())
+	s.router.HandleFunc("GET /mobile", s.handleTemplate())
 
 	// API endpoints for monitoring data and configuration management
 	s.router.HandleFunc("GET /api/items", s.handleGetItems)
@@ -254,6 +255,9 @@ var indexHtml string
 //go:embed templates/config.html
 var configHtml string
 
+//go:embed templates/mobile.html
+var mobileHtml string
+
 // handleTemplate returns an HTTP handler function that renders the main dashboard or configuration page.
 // Uses the embedded index.html and config.html templates and injects configuration values.
 func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
@@ -264,6 +268,11 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tConfig, err := template.New("config.html").Parse(configHtml)
+	if err != nil {
+		log.Printf("handleTemplate: %v", err)
+	}
+
+	tMobile, err := template.New("mobile.html").Parse(mobileHtml)
 	if err != nil {
 		log.Printf("handleTemplate: %v", err)
 	}
@@ -295,6 +304,8 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			err = tIndex.ExecuteTemplate(w, "index.html", data)
 		case "/config":
 			err = tConfig.ExecuteTemplate(w, "config.html", data)
+		case "/mobile":
+			err = tMobile.ExecuteTemplate(w, "mobile.html", data)
 		default:
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		}
