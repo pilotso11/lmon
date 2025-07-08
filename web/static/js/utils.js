@@ -170,9 +170,9 @@ export function normalizeItems(itemsMap) {
       if (id.endsWith("cpu")) type = "cpu";
       else if (id.endsWith("mem")) type = "memory";
       else type = "system";
-    } else if (result.Group === "filesystem") {
+    } else if (result.Group === "disk") {
       type = "disk";
-    } else if (result.Group === "healthcheck" || result.Group === "app") {
+    } else if (result.Group === "health") {
       type = "health";
     } else {
       type = result.Group || "";

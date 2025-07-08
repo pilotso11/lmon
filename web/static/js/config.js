@@ -272,7 +272,7 @@ function renderHealthConfig(healthItems) {
             <strong>${item.name}</strong>
           </div>
           <div>
-            <i class="bi bi-trash delete-btn" data-type="healthcheck" data-id="${item.name}"></i>
+            <i class="bi bi-trash delete-btn" data-type="health" data-id="${item.name}"></i>
           </div>
         </div>
         <div class="mt-2">
@@ -286,7 +286,7 @@ function renderHealthConfig(healthItems) {
 
   // Add delete event listeners
   document
-    .querySelectorAll('.delete-btn[data-type="healthcheck"]')
+    .querySelectorAll('.delete-btn[data-type="health"]')
     .forEach((btn) => {
       btn.addEventListener("click", function () {
         const id = this.getAttribute("data-id");
@@ -295,7 +295,7 @@ function renderHealthConfig(healthItems) {
         if (health) {
           detail = `${health.name} (${health.URL || ""})`;
         }
-        deleteMonitor("healthcheck", id, detail);
+        deleteMonitor("health", id, detail);
       });
     });
 }
@@ -515,7 +515,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       try {
         await fetchJson(
-          `/api/config/healthcheck/${encodeURIComponent(healthConfig.name)}`,
+          `/api/config/health/${encodeURIComponent(healthConfig.name)}`,
           {
             method: "POST",
             headers: {

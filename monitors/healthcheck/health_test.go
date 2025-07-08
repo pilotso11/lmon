@@ -63,10 +63,10 @@ func TestHealthcheck_Group(t *testing.T) {
 		expect  string
 		wantErr bool
 	}{
-		{"test", "http://test", 5, "", "app", false},
-		{"test path", "http://test/long", 5, "icon", "app", false},
-		{"test long server", "http://test.test.com/long", 5, "icon", "app", false},
-		{"test port", "https://test.test.com:1234/long", 5, "", "app", false},
+		{"test", "http://test", 5, "", "health", false},
+		{"test path", "http://test/long", 5, "icon", "health", false},
+		{"test long server", "http://test.test.com/long", 5, "icon", "health", false},
+		{"test port", "https://test.test.com:1234/long", 5, "", "health", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -91,10 +91,10 @@ func TestHealthcheck_Name(t *testing.T) {
 		expect  string
 		wantErr bool
 	}{
-		{"test", "http://test", 5, "", "healthcheck_test", false},
-		{"test path", "http://test/long", 5, "icon", "healthcheck_test path", false},
-		{"test long server", "http://test.test.com/long", 5, "icon", "healthcheck_test long server", false},
-		{"test port", "https://test.test.com:1234/long", 5, "", "healthcheck_test port", false},
+		{"test", "http://test", 5, "", "health_test", false},
+		{"test path", "http://test/long", 5, "icon", "health_test path", false},
+		{"test long server", "http://test.test.com/long", 5, "icon", "health_test long server", false},
+		{"test port", "https://test.test.com:1234/long", 5, "", "health_test port", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

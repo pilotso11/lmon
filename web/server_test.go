@@ -229,7 +229,7 @@ func TestAddHealthcheck(t *testing.T) {
 		URL:     s.ServerUrl + "/healthz",
 	}
 	id := "test-health"
-	resp, body := PostTestRequest(ctx, t, s, "/api/config/healthcheck/"+id, data)
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	assert.Equal(t, "OK\n", body)
 
@@ -252,7 +252,7 @@ func TestDeleteHealthcheck(t *testing.T) {
 		URL:     s.ServerUrl + "/healthz",
 	}
 	id := "test-health"
-	resp, body := PostTestRequest(ctx, t, s, "/api/config/healthcheck/"+id, data)
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	assert.Equal(t, "OK\n", body)
 
@@ -261,7 +261,7 @@ func TestDeleteHealthcheck(t *testing.T) {
 	assert.True(t, ok, "healthcheck entry exists")
 	assert.Equal(t, data, d2, "healthcheck entry applied")
 
-	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/healthcheck/"+id)
+	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/health/"+id)
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	assert.Equal(t, "OK\n", body)
 
@@ -273,10 +273,10 @@ func TestDeleteHealthcheck(t *testing.T) {
 	var stats map[string]monitors.Result
 	err := json.Unmarshal([]byte(body), &stats)
 	assert.NoError(t, err, "unmarshal")
-	_, exists := stats["healthcheck_"+id]
+	_, exists := stats["health_"+id]
 	assert.False(t, exists, "deleted healthcheck should not be in /api/items")
 
-	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/healthcheck/"+id)
+	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/health/"+id)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
 
 }
@@ -436,8 +436,8 @@ func TestGetItems(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 
 	})
-	t.Run("getItem healthcheck", func(t *testing.T) {
-		resp, body = GetTestRequest(ctx, t, s, "/api/items/healthcheck/google")
+	t.Run("getItem health", func(t *testing.T) {
+		resp, body = GetTestRequest(ctx, t, s, "/api/items/health/google")
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	})
 	t.Run("getItem missing", func(t *testing.T) {

@@ -167,7 +167,7 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("POST /api/config/interval", s.handleIntervalUpdate(ctx))
 	s.router.HandleFunc("POST /api/config/system", s.handleUpdateSystemConfig(ctx))
 	s.router.HandleFunc("POST /api/config/disk/{id}", s.handleAddDiskMonitor(ctx))
-	s.router.HandleFunc("POST /api/config/healthcheck/{id}", s.handleAddHealthCheck(ctx))
+	s.router.HandleFunc("POST /api/config/health/{id}", s.handleAddHealthCheck(ctx))
 	s.router.HandleFunc("POST /api/config/webhook", s.handleUpdateWebhook(ctx))
 	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor(ctx))
 }
@@ -514,7 +514,7 @@ func (s *Server) handleAddDiskMonitor(ctx context.Context) http.HandlerFunc {
 
 // handleAddHealthCheck processes a request to add a new health check monitor.
 // Expects a JSON body describing the health check to add.
-// Route: POST /api/config/healthcheck/{id}
+// Route: POST /api/config/health/{id}
 func (s *Server) handleAddHealthCheck(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
@@ -580,7 +580,7 @@ func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 		switch t {
 		case "disk":
 			m, _ = s.mapper.NewDisk(ctx, id, config.DiskConfig{})
-		case "healthcheck":
+		case "health":
 			m, _ = s.mapper.NewHealthcheck(ctx, id, config.HealthcheckConfig{})
 		default:
 			log.Printf("handleDeleteMonitor invalid type: %s", r.URL.String())

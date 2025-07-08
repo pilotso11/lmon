@@ -36,7 +36,7 @@ func TestMapper_NewHealthcheck(t *testing.T) {
 		Icon:    "",
 	})
 	assert.NoError(t, err, "should not error")
-	assert.Equal(t, "healthcheck_test", h.Name(), "should create healthcheck with correct name")
+	assert.Equal(t, "health_test", h.Name(), "should create healthcheck with correct name")
 }
 
 // TestMapper_NewCpu verifies that NewCpu creates a CPU monitor with the correct name and no error.

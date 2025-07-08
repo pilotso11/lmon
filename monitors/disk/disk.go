@@ -40,8 +40,8 @@ import (
 	"lmon/monitors"
 )
 
-const Icon = "storage"     // Default icon for disk monitors
-const Group = "filesystem" // Group name for disk monitors
+const Icon = "storage" // Default icon for disk monitors
+const Group = "disk"   // Group name for disk monitors
 const gigabyte = 1024 * 1024 * 1024
 
 // UsageProvider is an interface for obtaining disk usage statistics.
@@ -114,7 +114,7 @@ func (d Disk) Group() string {
 
 // Name returns the unique name/ID for the disk monitor.
 func (d Disk) Name() string {
-	return fmt.Sprintf("disk_%s", d.name)
+	return fmt.Sprintf("%s_%s", Group, d.name)
 }
 
 // Save persists the disk monitor's configuration to the provided config struct.

@@ -39,7 +39,7 @@ import (
 )
 
 const Icon = "activity" // Default icon for healthcheck monitors
-const Group = "app"     // Group name for healthcheck monitors
+const Group = "health"  // Group name for healthcheck monitors
 
 // UsageProvider is an interface for obtaining healthcheck usage statistics.
 // It allows for production and mock implementations.
@@ -122,7 +122,7 @@ func (d Healthcheck) Group() string {
 
 // Name returns the unique name/ID for the healthcheck monitor.
 func (d Healthcheck) Name() string {
-	return fmt.Sprintf("healthcheck_%s", d.name)
+	return fmt.Sprintf("%s_%s", Group, d.name)
 }
 
 // Save persists the healthcheck monitor's configuration to the provided config struct.
