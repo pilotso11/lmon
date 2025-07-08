@@ -694,8 +694,8 @@
                                 <strong>Webhook Notifications</strong>
                             </div>
                             <div>
-                                <span class="badge ${webhookConfig.enabled ? "bg-success" : "bg-secondary"}">
-                                    ${webhookConfig.enabled ? "Enabled" : "Disabled"}
+                                <span class="badge ${webhookConfig.Enabled ? "bg-success" : "bg-secondary"}">
+                                    ${webhookConfig.Enabled ? "Enabled" : "Disabled"}
                                 </span>
                             </div>
                         </div>
@@ -705,16 +705,16 @@
                                 class="form-control"
                                 id="webhook-url-inline"
                                 placeholder="Webhook URL"
-                                value="${webhookConfig.url || ""}"
+                                value="${webhookConfig.URL || ""}"
                                 style="width: 350px; display: inline-block;"
                                 required
                             />
                         </div>
                         <div class="mt-2 text-end">
                             ${
-            webhookConfig.enabled
+            webhookConfig.Enabled
                 ? `<button id="webhook-update-btn" class="btn btn-primary me-2" type="submit">Update Webhook</button>
-                                       <button id="webhook-disable-btn" class="btn btn-secondary" type="button">Disable Webhook</button>`
+                   <button id="webhook-disable-btn" class="btn btn-secondary" type="button">Disable Webhook</button>`
                 : `<button id="webhook-enable-btn" class="btn btn-primary" type="submit">Enable Webhook</button>`
         }
                         </div>
@@ -1044,19 +1044,26 @@
                 })
 
             // Add health check form submission
-            document
-                .getElementById("add-health-form")
-                .addEventListener("submit", function (e) {
-                    e.preventDefault()
+            const addHealthForm = document.getElementById("add-health-form");
+            if (addHealthForm) {
+                addHealthForm.addEventListener("submit", function (e) {
+                    e.preventDefault();
+
+                    const healthNameInput = document.getElementById("health-name");
+                    const healthUrlInput = document.getElementById("health-url");
+                    const healthTimeoutInput = document.getElementById("health-timeout");
+                    const healthIconInput = document.getElementById("health-icon");
+                    if (!healthNameInput || !healthUrlInput || !healthTimeoutInput || !healthIconInput) {
+                        showToast("Error", "Healthcheck form fields missing", true);
+                        return;
+                    }
 
                     const healthConfig = {
-                        name: document.getElementById("health-name").value,
-                        url: document.getElementById("health-url").value,
-                        timeout: parseInt(
-                            document.getElementById("health-timeout").value,
-                        ),
-                        icon: document.getElementById("health-icon").value,
-                    }
+                        name: healthNameInput.value,
+                        url: healthUrlInput.value,
+                        timeout: parseInt(healthTimeoutInput.value),
+                        icon: healthIconInput.value,
+                    };
 
                     // healthConfig must have a name property for the ID
                     fetch(
@@ -1077,44 +1084,34 @@
                             if (!response.ok) {
                                 throw new Error(
                                     "Failed to add health check",
-                                )
+                                );
                             }
                             const contentType =
-                                response.headers.get("content-type") || ""
+                                response.headers.get("content-type") || "";
                             if (contentType.includes("application/json")) {
-                                const contentType =
-                                    response.headers.get("content-type") ||
-                                    ""
-                                if (
-                                    contentType.includes("application/json")
-                                ) {
-                                    return response.json()
-                                } else {
-                                    return response.text()
-                                }
+                                return response.json();
                             } else {
-                                return response.text()
+                                return response.text();
                             }
                         })
                         .then((data) => {
-                            showToast("Success", data.message)
-                            loadConfig()
-                            document
-                                .getElementById("add-health-form")
-                                .reset()
+                            showToast("Success", data.message);
+                            loadConfig();
+                            if (addHealthForm) addHealthForm.reset();
                         })
                         .catch((error) => {
                             console.error(
                                 "Error adding health check:",
                                 error,
-                            )
+                            );
                             showToast(
                                 "Error",
                                 "Failed to add health check",
                                 true,
-                            )
-                        })
-                })
+                            );
+                        });
+                });
+            }
         }
     })
 
