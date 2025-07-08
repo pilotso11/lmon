@@ -358,3 +358,27 @@ func TestNewLoader(t *testing.T) {
 		})
 	}
 }
+
+func Test_SanitiseName(t *testing.T) {
+	tests := []struct {
+		name  string
+		want  string
+		want1 bool
+	}{
+		{"clean", "clean", false},
+		{"clean-name", "clean-name", false},
+		{"clean_name", "clean_name", false},
+		{"clean name (sp)", "clean name (sp)", false},
+		{"clean.name", "clean_name", true},
+		{"    ", "unknown", true},
+		{" ", "unknown", true},
+		{" \t", "unknown", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, got1 := SanitiseName(tt.name)
+			assert.Equalf(t, tt.want, got, "SanitiseName(%v)", tt.name)
+			assert.Equalf(t, tt.want1, got1, "SanitiseName(%v)", tt.name)
+		})
+	}
+}

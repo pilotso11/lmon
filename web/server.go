@@ -429,6 +429,7 @@ func (s *Server) saveConfig(w http.ResponseWriter) {
 		log.Printf("handleUpdateSystemConfig (save): %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
 	err = s.loader.Save(s.config)
 	if err != nil {
 		log.Printf("handleUpdateSystemConfig (save): %v", err)

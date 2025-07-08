@@ -17,6 +17,16 @@ type Config struct {
 	Webhook    WebhookConfig
 }
 
+func SanitiseName(name string) (string, bool) {
+	if strings.Contains(name, ".") {
+		return strings.ReplaceAll(name, ".", "_"), true
+	}
+	if strings.TrimSpace(name) == "" {
+		return "unknown", true
+	}
+	return name, false
+}
+
 // WebConfig represents the web server configuration
 type WebConfig struct {
 	Host string

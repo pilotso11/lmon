@@ -41,11 +41,13 @@ func NewMapper(impls *Implementations) Mapper {
 
 // NewDisk constructs a disk monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewDisk(ctx context.Context, name string, cfg config.DiskConfig) (disk.Disk, error) {
+	name, _ = config.SanitiseName(name)
 	return disk.NewDisk(name, cfg.Path, cfg.Threshold, cfg.Icon, d.Impls.Disk), nil
 }
 
 // NewHealthcheck constructs a healthcheck monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewHealthcheck(ctx context.Context, name string, cfg config.HealthcheckConfig) (healthcheck.Healthcheck, error) {
+	name, _ = config.SanitiseName(name)
 	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.Icon, d.Impls.Health)
 }
 

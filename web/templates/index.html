@@ -63,6 +63,10 @@
                 background-color: #dc3545;
                 color: white;
             }
+            .status-error {
+                background-color: #dc3545;
+                color: white;
+            }
             .status-unknown {
                 background-color: #6c757d;
                 color: white;
@@ -238,6 +242,8 @@
                     case "warning":
                         return "status-warning";
                     case "critical":
+                        return "status-critical";
+                    case "error":
                         return "status-critical";
                     default:
                         return "status-unknown";
