@@ -2,225 +2,245 @@ package uitest
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"net"
 	"net/http"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/proto"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 
-	"lmon/config"
-	"lmon/monitor"
 	"lmon/web"
 )
 
-// MockMonitorService is a mock implementation of the monitor service
-type MockMonitorService struct {
-	mock.Mock
-}
-
-// GetItems is a mock implementation of the GetItems method
-func (m *MockMonitorService) GetItems() []*monitor.Item {
-	args := m.Called()
-	return args.Get(0).([]*monitor.Item)
-}
-
-// GetItem is a mock implementation of the GetItem method
-func (m *MockMonitorService) GetItem(id string) *monitor.Item {
-	args := m.Called(id)
-	if args.Get(0) == nil {
-		return nil
-	}
-	return args.Get(0).(*monitor.Item)
-}
-
-// UpdateItem is a mock implementation of the UpdateItem method
-func (m *MockMonitorService) UpdateItem(item *monitor.Item) {
-	m.Called(item)
-}
-
-// Start is a mock implementation of the Start method
-func (m *MockMonitorService) Start() {
-	m.Called()
-}
-
-// Stop is a mock implementation of the Stop method
-func (m *MockMonitorService) Stop() {
-	m.Called()
-}
-
-// RefreshChecks is a mock implementation of the RefreshChecks method
-func (m *MockMonitorService) RefreshChecks() {
-	m.Called()
-}
-
-// findAvailablePort finds a random available port
-func findAvailablePort() (int, error) {
-	// Listen on port 0 to get a random available port
-	listener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-	defer func(listener net.Listener) {
-		_ = listener.Close()
-	}(listener)
-
-	// Get the port number
-	return listener.Addr().(*net.TCPAddr).Port, nil
-}
-
-// TestMain is the entry point for all tests in this package
-func TestMain(m *testing.M) {
-	// Check for a flag that indicates we should skip browser tests
-	// We can't use testing.Short() here because it's not initialized yet
-	for _, arg := range os.Args {
-		if arg == "-test.short=true" || arg == "-test.short" {
-			log.Println("Skipping UI tests in short mode")
-			os.Exit(0)
-		}
-	}
-
-	// Create a context that can be canceled
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Find a random available port
-	port, err := findAvailablePort()
-	if err != nil {
-		log.Fatalf("Failed to find available port: %v", err)
-	}
-	log.Printf("Using port %d for tests", port)
-
-	// Create a test configuration
-	cfg := config.DefaultConfig()
-	cfg.Web.Port = port // Use a random available port for the tests
-
-	// Create a mock monitor service
-	mockService := new(MockMonitorService)
-
-	// Set up mock expectations
-	mockService.On("Start").Return()
-	mockService.On("Stop").Return()
-	mockService.On("RefreshChecks").Return()
-	mockService.On("GetItems").Return([]*monitor.Item{
-		{
-			ID:        "cpu",
-			Name:      "CPU Usage",
-			Type:      "cpu",
-			Status:    monitor.StatusOK,
-			Value:     10.5,
-			Threshold: 80.0,
-			Unit:      "%",
-			Icon:      "cpu",
-			LastCheck: time.Now(),
-			Message:   "CPU usage is OK",
-		},
-		{
-			ID:        "memory",
-			Name:      "Memory Usage",
-			Type:      "memory",
-			Status:    monitor.StatusOK,
-			Value:     20.5,
-			Threshold: 80.0,
-			Unit:      "%",
-			Icon:      "speedometer",
-			LastCheck: time.Now(),
-			Message:   "Memory usage is OK",
-		},
-		{
-			ID:        "disk-root",
-			Name:      "Disk Usage (/)",
-			Type:      "disk",
-			Status:    monitor.StatusOK,
-			Value:     30.5,
-			Threshold: 80.0,
-			Unit:      "%",
-			Icon:      "hdd",
-			LastCheck: time.Now(),
-			Message:   "Disk usage is OK",
-		},
-		{
-			ID:        "disk-null-threshold",
-			Name:      "Disk Usage (null threshold)",
-			Type:      "disk",
-			Status:    monitor.StatusOK,
-			Value:     40.5,
-			Threshold: 0, // This will be treated as null/undefined in the UI
-			Unit:      "%",
-			Icon:      "hdd",
-			LastCheck: time.Now(),
-			Message:   "Disk with null threshold",
-		},
-	})
-	mockService.On("GetItem", mock.Anything).Return(nil)
-
-	// Create a web server with the mock service
-	tempFile, _ := os.CreateTemp("", "config*.yaml")
-	_ = tempFile.Close()
-	webServer := web.NewServerWithContext(ctx, cfg, mockService, tempFile.Name())
-
-	// Start the web server in a goroutine
-	go func() {
-		if err := webServer.Start(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Web server error: %v", err)
-		}
-	}()
-
-	// Set the port as an environment variable for other tests to use
-	_ = os.Setenv("LMON_TEST_PORT", fmt.Sprintf("%d", cfg.Web.Port))
-
-	// Wait for the server to start
-	if err := waitForServer(fmt.Sprintf("http://localhost:%d", cfg.Web.Port), 30*time.Second); err != nil {
-		log.Fatalf("Server did not start: %v", err)
-	}
-
-	// Run the tests
-	exitCode := m.Run()
-
-	// Shut down the server
-	cancel() // Cancel the context to trigger shutdown
-	if err := webServer.Stop(); err != nil {
-		log.Printf("Error shutting down server: %v", err)
-	}
-
-	// Exit with the test result
-	os.Exit(exitCode)
-}
-
-// waitForServer waits for the server to be ready
-func waitForServer(url string, timeout time.Duration) error {
-	start := time.Now()
-	for {
-		resp, err := http.Get(url)
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return nil
-			}
-		}
-
-		if time.Since(start) > timeout {
-			return fmt.Errorf("server did not respond within %s", timeout)
-		}
-
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
 // TestServerHealth tests that the server is healthy
 func TestServerHealth(t *testing.T) {
-	// Get the port from the environment variable
-	portStr := os.Getenv("LMON_TEST_PORT")
-	if portStr == "" {
-		t.Fatal("LMON_TEST_PORT environment variable not set")
-	}
+	ctx, canncel := context.WithCancel(t.Context())
+	defer canncel()
 
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%s", portStr))
-	assert.NoError(t, err)
+	s, _ := web.StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	resp, body := web.GetTestRequest(ctx, t, s, "/healthz")
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.NotEmpty(t, body, "body returned")
 	_ = resp.Body.Close()
+}
+
+func getBrowser() *rod.Browser {
+	var browser *rod.Browser
+	if os.Getenv("CI") != "" {
+		u := launcher.New().Set("no-sandbox").MustLaunch()
+		browser = rod.New().ControlURL(u).MustConnect()
+	} else {
+		browser = rod.New().MustConnect()
+	}
+	return browser
+}
+
+// TestDefaultConfigUIRod verifies the UI for the default config using rod: green CPU, green Memory, no disk/healthcheck items.
+func TestDefaultConfigUIRod(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s, _ := web.StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	browser := getBrowser()
+	defer browser.MustClose()
+	page := browser.MustPage(s.ServerUrl)
+	defer page.MustClose()
+
+	// Wait for CPU and Memory items to appear by data-id
+	page.Timeout(1 * time.Second).MustElement(`#system-items .list-group-item[data-id="system_cpu"]`)
+	page.Timeout(1 * time.Second).MustElement(`#system-items .list-group-item[data-id="system_mem"]`)
+
+	// Check for green status on CPU
+	cpuItem := page.MustElement(`#system-items .list-group-item[data-id="system_cpu"]`)
+	assert.Contains(t, cpuItem.MustText(), "cpu", "CPU display name is shown")
+	assert.Contains(t, cpuItem.MustText(), "50.0%", "CPU value is shown")
+
+	cpuGreen := cpuItem.MustHas(".status-indicator.status-ok")
+	assert.True(t, cpuGreen, "CPU item is green")
+
+	// Check for green status on Memory
+	memItem := page.MustElement(`#system-items .list-group-item[data-id="system_mem"]`)
+	assert.Contains(t, memItem.MustText(), "mem", "Memory display name is shown")
+	assert.Contains(t, memItem.MustText(), "50.0%", "Memory value is shown")
+	memGreen := memItem.MustHas(".status-indicator.status-ok")
+	assert.True(t, memGreen, "Memory item is green")
+
+	// Disk card should show "No items to display"
+	diskText := page.MustElement("#disk-items").MustText()
+	assert.Contains(t, diskText, "No items", "No disk items in default config")
+
+	// Health check card should show "No items to display"
+	healthText := page.MustElement("#health-items").MustText()
+	assert.Contains(t, healthText, "No items", "No healthcheck items in default config")
+}
+
+func TestAddDiskViaConfigUIRod(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s, _ := web.StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	browser := getBrowser()
+	defer browser.MustClose()
+	page := browser.MustPage(s.ServerUrl)
+	defer page.MustClose()
+
+	// Navigate to the config tab
+	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
+	// Wait for the config form to appear
+	page.Timeout(1 * time.Second).MustElement(`#add-disk-form`)
+
+	// Fill out the Add Disk Monitor form
+	page.MustElement(`#disk-name`).MustInput("root")
+	page.MustElement(`#disk-path`).MustInput("/")
+	// Optionally set threshold or icon if needed
+
+	// Submit the form
+	page.MustElement(`#add-disk-form button[type="submit"]`).MustClick()
+
+	// Wait for the disk to appear in the config list
+	page.Timeout(1*time.Second).MustElementR("#disk-config-items .config-item", "root.*\\(/\\)")
+
+	// Navigate back to dashboard
+	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	// Wait for dashboard system items to appear
+	page.Timeout(1 * time.Second).MustElement(`#system-items`)
+
+	// Wait for the disk item to appear in the dashboard
+	page.Timeout(1 * time.Second).MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
+
+	// Assert its presence on the dashboar
+	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	diskItem := page.MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
+	assert.NotNil(t, diskItem, "Disk item 'root' is present in dashboard")
+	diskText := diskItem.MustText()
+	assert.Contains(t, diskText, "root (/)", "Disk display name is shown")
+	assert.Regexp(t, `\d+(\.\d+)?%`, diskText, "Disk value is shown")
+
+	// --- MOBILE PAGE CHECKS ---
+	page.MustElement(`a.nav-link[href="/mobile"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#mobile-items-list`)
+	diskMobile := page.MustElement(`#mobile-items-list .mobile-list-item[data-id="disk_root"]`)
+	diskMobileText := diskMobile.MustText()
+	assert.Contains(t, diskMobileText, "root (/)", "Disk display name is shown on mobile")
+	assert.Regexp(t, `\d+(\.\d+)?%`, diskMobileText, "Disk value is shown on mobile")
+
+	// Go back to config and delete the disk
+	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#disk-config-items`)
+	page.MustElementR(`#disk-config-items .config-item`, "root.*\\(/\\)")
+	el := page.Timeout(1 * time.Second).MustElement(`button.delete-btn[data-type="disk"][data-id="root"]`)
+	wait, handle := page.HandleDialog()
+	go el.MustClick()
+	_ = wait()
+	_ = handle(&proto.PageHandleJavaScriptDialog{Accept: true})
+
+	// Wait for disk to be removed from config list
+	page.Timeout(1*time.Second).MustElementR(`#disk-config-items`, "No disk monitors configured")
+
+	// Go back to dashboard and verify disk is gone
+	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#disk-items`)
+	assert.Panics(t, func() {
+		page.Timeout(1 * time.Second).MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
+	}, "Disk item 'root' should be gone from dashboard")
+}
+
+func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s, _ := web.StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	browser := getBrowser()
+	defer browser.MustClose()
+	page := browser.MustPage(s.ServerUrl)
+	defer page.MustClose()
+
+	// Navigate to the config tab
+	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
+	// Wait for the health check form to appear
+	page.Timeout(1 * time.Second).MustElement(`#add-health-form`)
+
+	// Fill out the Add Health Check form
+	page.MustElement(`#health-name`).MustInput("local")
+	page.MustElement(`#health-url`).MustInput("http://localhost:8080")
+	page.MustElement(`#health-timeout`).MustInput("10")
+	// Optionally set icon if needed (leave as default)
+
+	// Submit the form
+	page.MustElement(`#add-health-form button[type="submit"]`).MustClick()
+
+	// Wait for the health check to appear in the config list
+	page.Timeout(1*time.Second).MustElementR("#health-config-items .config-item", "local")
+
+	// Navigate back to dashboard
+	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	// Wait for dashboard health items to appear
+	page.Timeout(1 * time.Second).MustElement(`#health-items`)
+
+	// Wait for the health check item to appear in the dashboard
+	page.Timeout(1 * time.Second).MustElement(`#health-items .list-group-item[data-id="health_local"]`)
+
+	// Assert its presence
+	healthItem := page.MustElement(`#health-items .list-group-item[data-id="health_local"]`)
+	assert.NotNil(t, healthItem, "Health check item 'local' is present in dashboard")
+	healthText := healthItem.MustText()
+	assert.Contains(t, healthText, "local", "Health check display name is shown")
+	assert.Contains(t, healthText, "http://localhost:8080", "Health check URL is shown")
+	assert.Regexp(t, `\d+(\.\d+)?`, healthText, "Health check value is shown")
+	// healthItem.MustClick()
+	// modal := page.MustElement("#itemDetailModal")
+	// modalText := modal.MustText()
+	// assert.Contains(t, modalText, "local", "Modal shows display name")
+	// assert.Contains(t, modalText, "http://localhost:8080", "Modal shows URL")
+	// assert.Contains(t, modalText, "Value", "Modal shows value")
+	// assert.Contains(t, modalText, "Threshold", "Modal shows threshold")
+	// modal.MustClick()
+
+	// --- MOBILE PAGE CHECKS ---
+	page.MustElement(`a.nav-link[href="/mobile"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#mobile-items-list`)
+	healthMobile := page.MustElement(`#mobile-items-list .mobile-list-item[data-id="health_local"]`)
+	healthMobileText := healthMobile.MustText()
+	assert.Contains(t, healthMobileText, "local", "Health check display name is shown on mobile")
+	assert.Contains(t, healthMobileText, "http://localhost:8080", "Health check URL is shown on mobile")
+	assert.Regexp(t, `\d+(\.\d+)?`, healthMobileText, "Health check value is shown on mobile")
+
+	// healthMobile.MustClick()
+	// modalMobile := page.MustElement("#itemDetailModal")
+	// modalMobileText := modalMobile.MustText()
+	// assert.Contains(t, modalMobileText, "local", "Modal shows display name on mobile")
+	// assert.Contains(t, modalMobileText, "http://localhost:8080", "Modal shows URL on mobile")
+	// assert.Contains(t, modalMobileText, "Value", "Modal shows value on mobile")
+	// assert.Contains(t, modalMobileText, "Threshold", "Modal shows threshold on mobile")
+
+	// Go back to config and delete the health check
+	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#health-config-items`)
+	page.MustElementR(`#health-config-items .config-item`, "local")
+	el := page.Timeout(1 * time.Second).MustElement(`button.delete-btn[data-type="health"][data-id="local"]`)
+	wait, handle := page.HandleDialog()
+	go el.MustClick()
+	_ = wait()
+	_ = handle(&proto.PageHandleJavaScriptDialog{Accept: true})
+
+	// Wait for health check to be removed from config list
+	page.Timeout(1*time.Second).MustElementR(`#health-config-items`, "No health checks configured")
+
+	// Go back to dashboard and verify health check is gone
+	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#health-items`)
+	assert.Panics(t, func() {
+		page.Timeout(1 * time.Second).MustElement(`#health-items .list-group-item[data-id="health_local"]`)
+	}, "Health check item 'local' should be gone from dashboard")
 }

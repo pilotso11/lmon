@@ -1,74 +1,139 @@
+// Package web provides the HTTP server and web interface for lmon,
+// including API endpoints for monitoring, configuration, and static content.
 package web
 
 import (
+	"bytes"
 	"context"
+	"embed"
+	_ "embed"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
+	"net"
 	"net/http"
+	"os"
+	"reflect"
+	"strings"
+	"sync"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"lmon/config"
+	"lmon/monitors"
+	"lmon/monitors/disk"
+	"lmon/monitors/healthcheck"
+	"lmon/monitors/mapper"
 )
 
-// Server represents the web server
+// Server encapsulates the HTTP server, configuration, and monitoring services.
+// It manages the lifecycle of the web server, routes, and provides thread-safe access to configuration.
 type Server struct {
-	config     *config.Config
-	monitor    MonitorServiceInterface
-	router     *gin.Engine
-	httpServer *http.Server
-	ctx        context.Context
-	configPath string
+	mu         sync.Mutex        // Mutex to protect concurrent access to server state.
+	config     *config.Config    // Application configuration.
+	loader     *config.Loader    // Configuration loader for persisting config changes.
+	monitor    *monitors.Service // Monitoring service for system and custom checks.
+	httpServer *http.Server      // Underlying HTTP server instance.
+	ctx        context.Context   // Context for server lifecycle and cancellation.
+	router     *http.ServeMux    // HTTP request router.
+	ServerUrl  string            // URL where the server is accessible.
+	mapper     mapper.Mapper     // Mapper for creating monitor implementations from config.
+	listener   net.Listener      // Network listener for incoming connections.
 }
 
-// NewServer creates a new web server
-func NewServer(cfg *config.Config, monitorService MonitorServiceInterface, cfgPath string) *Server {
-	return NewServerWithContext(context.Background(), cfg, monitorService, cfgPath)
-}
-
-// NewServerWithContext creates a new web server with the provided context
-func NewServerWithContext(ctx context.Context, cfg *config.Config, monitorService MonitorServiceInterface, configPath string) *Server {
-	// Create gin router
-	router := gin.Default()
-
-	// Load HTML templates from embedded filesystem
-	templ, err := GetTemplatesFSWithRoot()
-	if err != nil {
-		panic(err)
-	}
-	router.SetHTMLTemplate(template.Must(template.New("").ParseFS(templ, "*.html")))
+// NewServerWithContext creates a new Server instance using the provided context, configuration,
+// configuration loader, monitoring service, and mapper implementation.
+// If the port in the config is set to 0, the server will listen on a random available port.
+// Returns the initialized Server or an error if setup fails.
+// the server will listen on a random available port.
+func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *config.Loader, monitorService *monitors.Service, builder mapper.Mapper) (*Server, error) {
+	// Create router
+	router := http.NewServeMux()
 
 	// Create server
 	server := &Server{
-		config:     cfg,
-		monitor:    monitorService,
-		router:     router,
-		ctx:        ctx,
-		configPath: configPath,
+		config:  cfg,
+		monitor: monitorService,
+		router:  router,
+		ctx:     ctx,
+		mapper:  builder,
+		loader:  loader,
 	}
 
-	// Set up routes
-	server.setupRoutes()
+	addr := fmt.Sprintf("%s:%d", server.config.Web.Host, server.config.Web.Port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	server.ServerUrl = "http://" + ln.Addr().String()
+	server.listener = ln
 
-	return server
-}
-
-// Start starts the web server
-func (s *Server) Start() error {
-	addr := fmt.Sprintf("%s:%d", s.config.Web.Host, s.config.Web.Port)
-	s.httpServer = &http.Server{
-		Addr:    addr,
-		Handler: s.router,
+	server.httpServer = &http.Server{
+		Addr:    ln.Addr().String(),
+		Handler: LoggingHandler(os.Stdout, router),
 	}
 
-	return s.httpServer.ListenAndServe()
+	// Setup push to webhook callback
+	server.monitor.SetPush(server.pushToWebhook)
+
+	// Setup routes
+	server.setupRoutes(ctx)
+
+	err = server.SetConfig(ctx, cfg.Monitoring)
+	if err != nil {
+		log.Printf("NewServerWithContext: %v", err)
+		return nil, fmt.Errorf("failed to set initial configuration: %w", err)
+	}
+
+	// Automatically stop the server when the context is cancelled.
+	go func() {
+		<-ctx.Done()
+		log.Printf("Shutting down")
+	}()
+
+	return server, nil
 }
 
-// Stop stops the web server
+func LoggingHandler(stdout *os.File, router *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		// Log the request
+
+		// Call the actual handler
+		router.ServeHTTP(w, r)
+
+		elapsedTime := time.Since(start)
+		log.Printf("[%v] %s %s %s %v", start.Format("2006-01-02 15:04:05.000"), r.Method, r.URL.Path, r.RemoteAddr, elapsedTime)
+	})
+}
+
+// Start launches the web server in a separate goroutine.
+// Returns immediately after starting the server. The server will listen for incoming HTTP requests.
+func (s *Server) Start(ctx context.Context) {
+	rootUrl := "http://[::]"
+	url := strings.Replace(s.ServerUrl, rootUrl, "http://localhost", 1)
+
+	log.Printf("Starting webserver on: %v", url)
+	go func() {
+		_ = s.httpServer.Serve(s.listener)
+	}()
+
+	go func() {
+		<-ctx.Done()
+		log.Printf("Webserver stopping")
+		if err := s.Stop(); err != nil {
+			log.Printf("Error stopping webserver: %v", err)
+		}
+	}()
+}
+
+// Stop gracefully shuts down the web server, waiting up to 5 seconds for active connections to close.
+// Returns an error if shutdown fails.
 func (s *Server) Stop() error {
 	if s.httpServer != nil {
+		log.Printf("Stopping webserver")
 		// Create a timeout context for shutdown
 		ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
 		defer cancel()
@@ -77,256 +142,518 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-// SetConfigPath sets the path where the configuration will be saved
-func (s *Server) SetConfigPath(path string) {
-	s.configPath = path
+// setupRoutes registers all HTTP endpoints and their handlers for the web server.
+// This includes static assets, health checks, dashboard pages, and API endpoints for monitoring and configuration.
+func (s *Server) setupRoutes(ctx context.Context) {
+	// Serve static files (e.g., favicon)
+	s.router.HandleFunc("GET /static/", s.handleStatic)
+
+	// Health check endpoint for liveness/readiness probes
+	s.router.HandleFunc("GET /healthz", s.handleHealthCheck)
+
+	// Endpoint to test webhook integration
+	s.router.HandleFunc("POST /testhook", s.handleTestWebhook(ctx))
+
+	// Main dashboard and configuration pages
+	s.router.HandleFunc("GET /", s.handleTemplate())
+	s.router.HandleFunc("GET /index.html", s.handleTemplate())
+	s.router.HandleFunc("GET /config", s.handleTemplate())
+	s.router.HandleFunc("GET /mobile", s.handleTemplate())
+
+	// API endpoints for monitoring data and configuration management
+	s.router.HandleFunc("GET /api/items", s.handleGetItems)
+	s.router.HandleFunc("GET /api/items/{group}/{id}", s.handleGetItem)
+	s.router.HandleFunc("GET /api/config", s.handleGetConfig)
+	s.router.HandleFunc("POST /api/config/interval", s.handleIntervalUpdate(ctx))
+	s.router.HandleFunc("POST /api/config/system", s.handleUpdateSystemConfig(ctx))
+	s.router.HandleFunc("POST /api/config/disk/{id}", s.handleAddDiskMonitor(ctx))
+	s.router.HandleFunc("POST /api/config/health/{id}", s.handleAddHealthCheck(ctx))
+	s.router.HandleFunc("POST /api/config/webhook", s.handleUpdateWebhook(ctx))
+	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor(ctx))
 }
 
-// setupRoutes sets up the HTTP routes
-func (s *Server) setupRoutes() {
-	// Serve static files
-	s.router.Static("/static", "./web/static")
-
-	// API routes
-	api := s.router.Group("/api")
-	{
-		// Get all items
-		api.GET("/items", s.handleGetItems)
-
-		// Get a specific item
-		api.GET("/items/:id", s.handleGetItem)
-
-		// Get configuration
-		api.GET("/config", s.handleGetConfig)
-
-		// Update configuration
-		api.POST("/config", s.handleUpdateConfig)
-
-		// Add disk monitor
-		api.POST("/config/disk", s.handleAddDiskMonitor)
-
-		// Add health check monitor
-		api.POST("/config/healthcheck", s.handleAddHealthCheck)
-
-		// Update webhook configuration
-		api.POST("/config/webhook", s.handleUpdateWebhook)
-
-		// Delete a monitor
-		api.DELETE("/config/:type/:id", s.handleDeleteMonitor)
-	}
-
-	// Health check endpoint
-	s.router.GET("/healthz", s.handleHealthCheck)
-
-	// Web UI routes
-	s.router.GET("/", s.handleIndex)
-	s.router.GET("/config", s.handleConfigPage)
+// webhookPayload represents the JSON payload sent to a webhook endpoint.
+type webhookPayload struct {
+	Text string `json:"text"`
 }
 
-// handleIndex handles the index page request
-func (s *Server) handleIndex(c *gin.Context) {
-	c.HTML(http.StatusOK, "index.html", gin.H{
-		"title":            "lmon - Lightweight Monitoring",
-		"dashboard_title":  s.config.Web.DashboardTitle,
-		"refresh_interval": s.config.Monitoring.Interval,
-	})
-}
-
-// handleConfigPage handles the configuration page request
-func (s *Server) handleConfigPage(c *gin.Context) {
-	c.HTML(http.StatusOK, "config.html", gin.H{
-		"title":           "lmon - Configuration",
-		"dashboard_title": s.config.Web.DashboardTitle,
-	})
-}
-
-// handleGetItems handles the request to get all monitored items
-func (s *Server) handleGetItems(c *gin.Context) {
-	items := s.monitor.GetItems()
-	c.JSON(http.StatusOK, items)
-}
-
-// handleGetItem handles the request to get a specific monitored item
-func (s *Server) handleGetItem(c *gin.Context) {
-	id := c.Param("id")
-	item := s.monitor.GetItem(id)
-	if item == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Item not found"})
-		return
-	}
-	c.JSON(http.StatusOK, item)
-}
-
-// handleGetConfig handles the request to get the configuration
-func (s *Server) handleGetConfig(c *gin.Context) {
-	log.Printf("handleGetConfig: returning config: %+v", s.config)
-	c.JSON(http.StatusOK, s.config)
-}
-
-// handleUpdateConfig handles the request to update the configuration
-func (s *Server) handleUpdateConfig(c *gin.Context) {
-	var cfg config.Config
-	if err := c.ShouldBindJSON(&cfg); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid configuration: %v", err)})
-		return
-	}
-
-	// Update the server's in-memory configuration
-	s.config = &cfg
-
-	// Save configuration
-	if err := config.Save(s.config, s.configPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
-		return
-	}
-
-	// Trigger immediate refresh of all checks to apply new thresholds
-	s.monitor.RefreshChecks()
-
-	c.JSON(http.StatusOK, gin.H{"message": "Configuration updated successfully"})
-}
-
-// handleAddDiskMonitor handles the request to add a disk monitor
-func (s *Server) handleAddDiskMonitor(c *gin.Context) {
-	log.Println("handleAddDiskMonitor called")
-	var diskCfg config.DiskConfig
-	if err := c.ShouldBindJSON(&diskCfg); err != nil {
-		log.Printf("handleAddDiskMonitor: invalid disk config: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid disk configuration: %v", err)})
-		return
-	}
-
-	// Add disk monitor to configuration
-	s.config.Monitoring.Disk = append(s.config.Monitoring.Disk, diskCfg)
-	log.Printf("handleAddDiskMonitor: disk added: %+v", diskCfg)
-
-	// Save configuration
-	if err := config.Save(s.config, s.configPath); err != nil {
-		log.Printf("handleAddDiskMonitor: config.Save error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
-		return
-	}
-	log.Println("handleAddDiskMonitor: config.Save completed")
-
-	// Trigger immediate refresh of all checks to apply new disk monitor
-	s.monitor.RefreshChecks()
-
-	c.JSON(http.StatusOK, gin.H{"message": "Disk monitor added successfully"})
-}
-
-// handleAddHealthCheck handles the request to add a health check
-func (s *Server) handleAddHealthCheck(c *gin.Context) {
-	var healthCfg config.HealthcheckConfig
-	if err := c.ShouldBindJSON(&healthCfg); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid health check configuration: %v", err)})
-		return
-	}
-
-	// Add health check to configuration
-	s.config.Monitoring.Healthchecks = append(s.config.Monitoring.Healthchecks, healthCfg)
-
-	// Save configuration
-	if err := config.Save(s.config, s.configPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
-		return
-	}
-
-	// Trigger immediate refresh of all checks to apply new health check
-	s.monitor.RefreshChecks()
-
-	c.JSON(http.StatusOK, gin.H{"message": "Health check added successfully"})
-}
-
-// handleUpdateWebhook handles the request to update webhook configuration
-func (s *Server) handleUpdateWebhook(c *gin.Context) {
-	var webhookCfg config.WebhookConfig
-	if err := c.ShouldBindJSON(&webhookCfg); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid webhook configuration: %v", err)})
-		return
-	}
-
-	// Update webhook configuration
-	s.config.Webhook = webhookCfg
-
-	// Save configuration
-	if err := config.Save(s.config, s.configPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
-		return
-	}
-
-	// Trigger immediate refresh of all checks to apply new webhook configuration
-	s.monitor.RefreshChecks()
-
-	c.JSON(http.StatusOK, gin.H{"message": "Webhook configuration updated successfully"})
-}
-
-// handleDeleteMonitor handles the request to delete a monitor
-func (s *Server) handleDeleteMonitor(c *gin.Context) {
-	monitorType := c.Param("type")
-	monitorID := c.Param("id")
-
-	switch monitorType {
-	case "disk":
-		// Find and remove disk monitor
-		for i, disk := range s.config.Monitoring.Disk {
-			if disk.Path == monitorID {
-				s.config.Monitoring.Disk = append(s.config.Monitoring.Disk[:i], s.config.Monitoring.Disk[i+1:]...)
-				break
+// pushToWebhook asynchronously sends a notification to the configured webhook URL
+// when a monitor's result changes. The payload includes a summary message.
+func (s *Server) pushToWebhook(ctx context.Context, m monitors.Monitor, prev monitors.Result, result monitors.Result) {
+	// Do this in a goroutine because we need to relock to access config.
+	go func(ctx context.Context, msg string) {
+		s.mu.Lock()
+		wh := s.config.Webhook
+		s.mu.Unlock()
+		if wh.Enabled {
+			var body webhookPayload
+			body.Text = msg
+			payload, err := json.Marshal(body)
+			if err != nil {
+				log.Printf("pushToWebhook (json): %v", err)
+				return
+			}
+			req, err := http.NewRequestWithContext(ctx, "POST", wh.URL, bytes.NewBuffer(payload))
+			if err != nil {
+				log.Printf("pushToWebhook (newreq): %v", err)
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+			client := &http.Client{Timeout: 5 * time.Second}
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("pushToWebhook (req): %v", err)
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("pushToWebhook (status): %v", resp.Status)
+				return
 			}
 		}
-	case "healthcheck":
-		// Find and remove health check
-		for i, health := range s.config.Monitoring.Healthchecks {
-			if health.Name == monitorID {
-				s.config.Monitoring.Healthchecks = append(s.config.Monitoring.Healthchecks[:i], s.config.Monitoring.Healthchecks[i+1:]...)
-				break
-			}
-		}
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Unknown monitor type: %s", monitorType)})
-		return
-	}
-
-	// Save configuration
-	if err := config.Save(s.config, s.configPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save configuration: %v", err)})
-		return
-	}
-
-	// Trigger immediate refresh of all checks to apply monitor deletion
-	s.monitor.RefreshChecks()
-
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%s monitor deleted successfully", monitorType)})
+	}(ctx, fmt.Sprintf("%s: %s %s [ %s ]", m.DisplayName(), result.Status.String(), getResultArrow(prev, result), result.Value))
 }
 
-// handleHealthCheck handles the health check endpoint request
-func (s *Server) handleHealthCheck(c *gin.Context) {
-	// Get all monitored items to check overall system health
-	items := s.monitor.GetItems()
+// getResultArrow returns a unicode arrow indicating the trend of a monitor's status change.
+func getResultArrow(prev monitors.Result, result monitors.Result) any {
+	if prev.Status == monitors.RAGUnknown {
+		return ""
+	}
+	if result.Status > prev.Status {
+		return "\u2197" // trending up in health
+	} else {
+		return "\u2198" // trending down in health
+	}
+}
 
-	// Check if any item is in critical status
-	hasCritical := false
-	for _, item := range items {
-		if item.Status == "CRITICAL" {
-			hasCritical = true
-			break
+// handleHealthCheck responds with HTTP 200 OK for health check probes.
+// Used for liveness/readiness checks.
+func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
+}
+
+// handleTestWebhook handles a POST request to test webhook integration.
+// Expects a JSON body with a "text" field. Responds with HTTP 200 OK.
+func (s *Server) handleTestWebhook(_ context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var hook webhookPayload
+		ok := s.unmarshallBody(w, r, &hook)
+		if !ok {
+			return
+		}
+		log.Printf("handleTestWebhook: %v", hook)
+		if s.mapper.Impls.Webhook != nil {
+			s.mapper.Impls.Webhook(hook.Text)
+		}
+		http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
+	}
+}
+
+//go:embed static/*
+var staticFS embed.FS
+
+// handleStatic serves static files such as favicon or other assets under /static/.
+// Uses Go's embed.FS for serving files. Returns 404 for missing files.
+func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
+	http.ServeFileFS(w, r, staticFS, r.URL.Path)
+}
+
+//go:embed templates/index.html
+var indexHtml string
+
+//go:embed templates/config.html
+var configHtml string
+
+//go:embed templates/mobile.html
+var mobileHtml string
+
+// handleTemplate returns an HTTP handler function that renders the main dashboard or configuration page.
+// Uses the embedded index.html and config.html templates and injects configuration values.
+func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
+	// Load templates
+	tIndex, err := template.New("index.html").Parse(indexHtml)
+	if err != nil {
+		log.Printf("handleTemplate: %v", err)
+	}
+
+	tConfig, err := template.New("config.html").Parse(configHtml)
+	if err != nil {
+		log.Printf("handleTemplate: %v", err)
+	}
+
+	tMobile, err := template.New("mobile.html").Parse(mobileHtml)
+	if err != nil {
+		log.Printf("handleTemplate: %v", err)
+	}
+
+	// Handler
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		// If we failed to load ...
+		if err != nil {
+			log.Printf("handleIndex %v: %v", r.URL, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Template data
+		data := map[string]any{
+			"title":               s.config.Monitoring.System.Title,
+			"dashboard_title":     s.config.Monitoring.System.Title,
+			"refresh_interval":    s.config.Monitoring.Interval,
+			"default_disk_icon":   disk.Icon,        // from monitors/disk.Icon
+			"default_health_icon": healthcheck.Icon, // from monitors/healthcheck.Icon
+		}
+
+		// Execute the template
+		switch r.URL.Path {
+		case "/", "/index.html":
+			err = tIndex.ExecuteTemplate(w, "index.html", data)
+		case "/config":
+			err = tConfig.ExecuteTemplate(w, "config.html", data)
+		case "/mobile":
+			err = tMobile.ExecuteTemplate(w, "mobile.html", data)
+		default:
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		}
+
+		if err != nil {
+			log.Printf("handleTemplate %v: %v", r.URL, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
+}
 
-	// If any item is critical, return 503 Service Unavailable
-	// Otherwise return 200 OK
-	if hasCritical {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"status":  "unhealthy",
-			"message": "One or more monitored items are in CRITICAL state",
-		})
+// writeJson serializes the given data as JSON and writes it to the HTTP response.
+// Sets the Content-Type header to application/json. Returns 500 on error.
+func (s *Server) writeJson(w http.ResponseWriter, data any) {
+	payload, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("writeJson %v: %v", reflect.TypeOf(data), err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(payload)
+	if err != nil {
+		log.Printf("writeJson %v: %v", reflect.TypeOf(data), err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":    "healthy",
-		"message":   "All systems operational",
-		"timestamp": time.Now().Format(time.RFC3339),
-		"version":   "1.0.0", // You might want to get this from a version constant
-	})
+// handleGetItems responds with a JSON object containing all monitored items and their statuses.
+// Route: GET /api/items
+func (s *Server) handleGetItems(w http.ResponseWriter, r *http.Request) {
+	s.writeJson(w, s.monitor.Results())
+}
+
+// handleGetItem responds with a JSON object for a specific monitored item, identified by its group and ID.
+// Returns 404 if the item is not found.
+// Route: GET /api/items/{group}/{id}
+func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	group := r.PathValue("group")
+	items := s.monitor.Results()
+	item, ok := items[group+"_"+id]
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		log.Printf("handleGetItem: item not found: %s", id)
+		return
+	}
+	s.writeJson(w, item)
+}
+
+// handleGetConfig responds with the current server configuration as JSON.
+// Route: GET /api/config
+func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.writeJson(w, s.config)
+}
+
+// unmarshallBody reads and unmarshals the JSON request body into the provided data structure.
+// Returns true on success, or writes an error response and returns false on failure.
+func (s *Server) unmarshallBody(w http.ResponseWriter, r *http.Request, data any) bool {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("unmarshallBody %s: %v", r.URL, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return false
+	}
+
+	err = json.Unmarshal(body, data)
+	if err != nil {
+		log.Printf("unmarshallBody %s: %v", r.URL, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// handleUpdateSystemConfig processes a request to update the system configuration.
+// Expects a JSON body with the new configuration.
+// Route: POST /api/config/system
+func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		var cfg config.SystemConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		// Set title
+		s.config.Monitoring.System.Title = cfg.Title
+
+		// Apply cpu config
+		cpu, err := s.mapper.NewCpu(ctx, cfg.CPU)
+		if err != nil {
+			log.Printf("handleUpdateSystemConfig (cpu): %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		err = s.monitor.Add(ctx, cpu)
+		if err != nil {
+			log.Printf("handleUpdateSystemConfig (cpu): %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		// Apply mem config
+		mem, err := s.mapper.NewMem(ctx, cfg.Memory)
+		if err != nil {
+			log.Printf("handleUpdateSystemConfig (mem): %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		err = s.monitor.Add(ctx, mem)
+		if err != nil {
+			log.Printf("handleUpdateSystemConfig (mem): %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		s.saveConfig(w)
+	}
+}
+
+// saveConfig persists the current configuration to disk and responds with HTTP 200 OK on success.
+// If saving fails, responds with HTTP 500.
+func (s *Server) saveConfig(w http.ResponseWriter) {
+	// Save config
+	err := s.monitor.Save(s.config)
+	if err != nil {
+		log.Printf("handleUpdateSystemConfig (save): %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	err = s.loader.Save(s.config)
+	if err != nil {
+		log.Printf("handleUpdateSystemConfig (save): %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	// done
+	http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
+}
+
+// handleIntervalUpdate processes an HTTP request to update the monitoring interval configuration dynamically.
+// Expects a JSON body with an "Interval" field (seconds).
+// Route: POST /api/config/interval
+func (s *Server) handleIntervalUpdate(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		var cfg struct {
+			Interval int
+		}
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+		s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, time.Second)
+		s.saveConfig(w)
+	}
+}
+
+// handleAddDiskMonitor processes a request to add a new disk monitor.
+// Expects a JSON body describing the disk monitor to add.
+// Route: POST /api/config/disk/{id}
+func (s *Server) handleAddDiskMonitor(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		id := r.PathValue("id")
+		var cfg config.DiskConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		d, err := s.mapper.NewDisk(ctx, id, cfg)
+		if err != nil {
+			log.Printf("handleAddDiskMonitor %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = s.monitor.Add(ctx, d)
+		if err != nil {
+			log.Printf("handleAddDiskMonitor %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.saveConfig(w)
+	}
+}
+
+// handleAddHealthCheck processes a request to add a new health check monitor.
+// Expects a JSON body describing the health check to add.
+// Route: POST /api/config/health/{id}
+func (s *Server) handleAddHealthCheck(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		id := r.PathValue("id")
+		var cfg config.HealthcheckConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		d, err := s.mapper.NewHealthcheck(ctx, id, cfg)
+		if err != nil {
+			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = s.monitor.Add(ctx, d)
+		if err != nil {
+			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.saveConfig(w)
+	}
+}
+
+// handleUpdateWebhook processes a request to update the webhook configuration.
+// Expects a JSON body with the new webhook settings.
+// Route: POST /api/config/webhook
+func (s *Server) handleUpdateWebhook(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		var cfg config.WebhookConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		// Save webhook config
+		s.config.Webhook = cfg
+
+		s.saveConfig(w)
+	}
+
+}
+
+// handleDeleteMonitor processes a request to delete a monitor by type and ID.
+// Route: DELETE /api/config/{type}/{id}
+func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		t := r.PathValue("type")
+		id := r.PathValue("id")
+		var m monitors.Monitor
+		switch t {
+		case "disk":
+			m, _ = s.mapper.NewDisk(ctx, id, config.DiskConfig{})
+		case "health":
+			m, _ = s.mapper.NewHealthcheck(ctx, id, config.HealthcheckConfig{})
+		default:
+			log.Printf("handleDeleteMonitor invalid type: %s", r.URL.String())
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+		err := s.monitor.Remove(m)
+		if err != nil {
+			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
+			if errors.As(err, &monitors.ErrNotFound{}) {
+				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.saveConfig(w)
+	}
+}
+
+// SetConfig applies the provided monitoring configuration to the server and monitoring service.
+// This includes system, disk, and healthcheck monitors, as well as the monitoring interval.
+// Returns an error if any monitor fails to initialize or add.
+func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cpu, err := s.mapper.NewCpu(ctx, cfg.System.CPU)
+	if err != nil {
+		return err
+	}
+	if err = s.monitor.Add(ctx, cpu); err != nil {
+		return err
+	}
+	log.Printf("Set CPU  %v", cpu)
+
+	mem, err := s.mapper.NewMem(ctx, cfg.System.Memory)
+	if err != nil {
+		return err
+	}
+	if err := s.monitor.Add(ctx, mem); err != nil {
+		return err
+	}
+	log.Printf("Set MEM %v", cpu)
+
+	for name, i := range cfg.Disk {
+		newDisk, err := s.mapper.NewDisk(ctx, name, i)
+		if err != nil {
+			return err
+		}
+		if err := s.monitor.Add(ctx, newDisk); err != nil {
+			return err
+		}
+		log.Printf("Added Disk %v", newDisk)
+	}
+
+	for name, i := range cfg.Healthcheck {
+		newHealth, err := s.mapper.NewHealthcheck(ctx, name, i)
+		if err != nil {
+			return err
+		}
+		if err = s.monitor.Add(ctx, newHealth); err != nil {
+			return err
+		}
+		log.Printf("Added Healthcheck %v", newHealth)
+	}
+
+	// Set the monitoring interval to trigger the initial checks.
+	s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, time.Second)
+
+	log.Printf("Configuration applied")
+
+	return nil
+
 }

@@ -1,0 +1,12 @@
+monitoring:
+    interval: 45
+    - system:
+        cpu:
+        icon: cpu
+            threshold: 85
+web:
+    host: 0.0.0.1
+    port: 8081
+    title: Test Dashboard
+webhook:
+    enabled: flase
