@@ -1,0 +1,370 @@
+/**
+ * lmon mobile.js
+ * Extracted from mobile.html for maintainability and caching.
+ */
+
+// Function to get status class
+function getStatusClass(status) {
+    switch (status.toLowerCase()) {
+        case "ok":
+            return "status-ok";
+        case "warning":
+            return "status-warning";
+        case "critical":
+            return "status-critical";
+        case "error":
+            return "status-critical";
+        default:
+            return "status-unknown";
+    }
+}
+
+// Function to get icon
+function getIcon(item) {
+    if (item.Icon) {
+        return `<i class="bi bi-${item.Icon} item-icon"></i>`;
+    }
+    if (item.icon) {
+        return `<i class="bi bi-${item.icon} item-icon"></i>`;
+    }
+
+    // Default icons based on type
+    switch (item.type) {
+        case "cpu":
+            return '<i class="bi bi-cpu item-icon"></i>';
+        case "memory":
+            return '<i class="bi bi-speedometer item-icon"></i>';
+        case "disk":
+            return '<i class="bi bi-hdd item-icon"></i>';
+        case "health":
+            return '<i class="bi bi-activity item-icon"></i>';
+        default:
+            return '<i class="bi bi-graph-up item-icon"></i>';
+    }
+}
+
+function getTypeLabel(type) {
+    switch (type) {
+        case "cpu":
+        case "memory":
+        case "system":
+            return "System";
+        case "disk":
+            return "Disk";
+        case "health":
+            return "Health";
+        default:
+            return type.charAt(0).toUpperCase() + type.slice(1);
+    }
+}
+
+// Function to get HTTP status text
+function getHttpStatusText(code) {
+    const statusTexts = {
+        100: "Continue",
+        101: "Switching Protocols",
+        102: "Processing",
+        103: "Early Hints",
+        200: "OK",
+        201: "Created",
+        202: "Accepted",
+        203: "Non-Authoritative Information",
+        204: "No Content",
+        205: "Reset Content",
+        206: "Partial Content",
+        207: "Multi-Status",
+        208: "Already Reported",
+        226: "IM Used",
+        300: "Multiple Choices",
+        301: "Moved Permanently",
+        302: "Found",
+        303: "See Other",
+        304: "Not Modified",
+        305: "Use Proxy",
+        307: "Temporary Redirect",
+        308: "Permanent Redirect",
+        400: "Bad Request",
+        401: "Unauthorized",
+        402: "Payment Required",
+        403: "Forbidden",
+        404: "Not Found",
+        405: "Method Not Allowed",
+        406: "Not Acceptable",
+        407: "Proxy Authentication Required",
+        408: "Request Timeout",
+        409: "Conflict",
+        410: "Gone",
+        411: "Length Required",
+        412: "Precondition Failed",
+        413: "Payload Too Large",
+        414: "URI Too Long",
+        415: "Unsupported Media Type",
+        416: "Range Not Satisfiable",
+        417: "Expectation Failed",
+        418: "I'm a teapot",
+        421: "Misdirected Request",
+        422: "Unprocessable Entity",
+        423: "Locked",
+        424: "Failed Dependency",
+        425: "Too Early",
+        426: "Upgrade Required",
+        428: "Precondition Required",
+        429: "Too Many Requests",
+        431: "Request Header Fields Too Large",
+        451: "Unavailable For Legal Reasons",
+        500: "Internal Server Error",
+        501: "Not Implemented",
+        502: "Bad Gateway",
+        503: "Service Unavailable",
+        504: "Gateway Timeout",
+        505: "HTTP Version Not Supported",
+        506: "Variant Also Negotiates",
+        507: "Insufficient Storage",
+        508: "Loop Detected",
+        510: "Not Extended",
+        511: "Network Authentication Required",
+    };
+
+    return statusTexts[code] || "Unknown Status";
+}
+
+// Function to sort items by status: error/critical, warning, ok, unknown
+function sortItemsByStatus(items) {
+    const statusOrder = {
+        error: 0,
+        critical: 0,
+        warning: 1,
+        ok: 2,
+        unknown: 3,
+    };
+    return items.slice().sort((a, b) => {
+        const aOrder =
+            statusOrder[a.status] !== undefined
+                ? statusOrder[a.status]
+                : 99;
+        const bOrder =
+            statusOrder[b.status] !== undefined
+                ? statusOrder[b.status]
+                : 99;
+        return aOrder - bOrder;
+    });
+}
+
+// Function to render all items as a single sorted list
+function renderMobileItems(items) {
+    const sorted = sortItemsByStatus(items);
+    if (sorted.length === 0) {
+        return '<div class="text-center">No items to display</div>';
+    }
+    let html = "";
+    sorted.forEach((item, idx) => {
+        const statusClass = getStatusClass(item.status);
+        const icon = getIcon(item);
+        const typeLabel = getTypeLabel(item.type);
+        const bgClass = idx % 2 === 0 ? "even" : "odd";
+        let detail;
+        if (item.type === "health") {
+            detail =
+                typeof item.value === "number"
+                    ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
+                    : item.value;
+        } else {
+            detail = `${item.unit === "%" ? parseFloat(item.value).toFixed(2) : item.value}${item.unit}`;
+        }
+        html += `
+            <div class="mobile-list-item ${bgClass}" data-id="${item.id}">
+                <div class="mobile-line1">
+                    ${icon}
+                    <span class="status-indicator ${statusClass}"></span>
+                    <span>${item.name}</span>
+                    <span class="type-label">${typeLabel}</span>
+                </div>
+                <div class="mobile-line2">
+                    <span class="mobile-status-badge">
+                        <span class="badge ${statusClass}">${item.status}</span>
+                    </span>
+                    <span class="mobile-detail">${detail}</span>
+                </div>
+            </div>
+        `;
+    });
+    return html;
+}
+
+// Mobile refresh logic
+let mobileRefreshInterval = 60000; // default 60s
+let nextMobileRefreshTime = 0;
+let mobileRefreshTimer = null;
+
+function updateMobileCountdown() {
+    const now = Date.now();
+    const timeLeft = Math.max(0, nextMobileRefreshTime - now);
+    const secondsLeft = Math.ceil(timeLeft / 1000);
+    const countdownElement =
+        document.getElementById("refresh-countdown");
+    if (countdownElement) {
+        if (secondsLeft > 0) {
+            countdownElement.textContent = `(${secondsLeft}s)`;
+        } else {
+            countdownElement.textContent = "";
+        }
+    }
+}
+
+function resetMobileCountdown() {
+    nextMobileRefreshTime = Date.now() + mobileRefreshInterval;
+    updateMobileCountdown();
+}
+
+function loadMobileItemsWithCountdown() {
+    loadMobileItems();
+    resetMobileCountdown();
+}
+
+function loadMobileItems() {
+    fetch("/api/items")
+        .then((response) => response.json())
+        .then((itemsMap) => {
+            const items = Object.entries(itemsMap).map(
+                ([id, result]) => {
+                    let type = "";
+                    if (result.Group === "system") {
+                        if (id.endsWith("cpu")) type = "cpu";
+                        else if (id.endsWith("mem"))
+                            type = "memory";
+                        else type = "system";
+                    } else if (result.Group === "filesystem") {
+                        type = "disk";
+                    } else if (
+                        result.Group === "healthcheck" ||
+                        result.Group === "app"
+                    ) {
+                        type = "health";
+                    } else {
+                        type = result.Group || "";
+                    }
+                    return {
+                        id,
+                        type,
+                        name: result.DisplayName || id,
+                        status: (function () {
+                            const statusMap = {
+                                0: "unknown",
+                                1: "error",
+                                2: "critical",
+                                3: "warning",
+                                4: "ok",
+                            };
+                            if (typeof result.Status === "number") {
+                                return (
+                                    statusMap[result.Status] ||
+                                    "unknown"
+                                );
+                            }
+                            if (typeof result.Status === "string") {
+                                return result.Status.toLowerCase();
+                            }
+                            return "unknown";
+                        })(),
+                        value: result.Value || "",
+                        unit: result.Unit || "",
+                        threshold: result.Threshold || null,
+                        last_check: result.LastCheck || "",
+                        message: result.Message || "",
+                        icon: result.Icon || "",
+                    };
+                },
+            );
+            document.getElementById("mobile-items-list").innerHTML =
+                renderMobileItems(items);
+        })
+        .catch((error) => {
+            document.getElementById("mobile-items-list").innerHTML =
+                '<div class="alert alert-danger">Error loading items</div>';
+        });
+}
+
+// Fetch interval from backend config and start auto-refresh
+function fetchMobileIntervalAndStart() {
+    fetch("/api/config")
+        .then((response) => response.json())
+        .then((config) => {
+            if (
+                config &&
+                config.Monitoring &&
+                config.Monitoring.Interval
+            ) {
+                mobileRefreshInterval =
+                    config.Monitoring.Interval * 1000;
+            } else {
+                mobileRefreshInterval = 60000;
+            }
+            loadMobileItemsWithCountdown();
+            if (mobileRefreshTimer)
+                clearInterval(mobileRefreshTimer);
+            mobileRefreshTimer = setInterval(
+                loadMobileItemsWithCountdown,
+                mobileRefreshInterval,
+            );
+            setInterval(updateMobileCountdown, 1000);
+        })
+        .catch(() => {
+            // fallback
+            mobileRefreshInterval = 60000;
+            loadMobileItemsWithCountdown();
+            if (mobileRefreshTimer)
+                clearInterval(mobileRefreshTimer);
+            mobileRefreshTimer = setInterval(
+                loadMobileItemsWithCountdown,
+                mobileRefreshInterval,
+            );
+            setInterval(updateMobileCountdown, 1000);
+        });
+}
+
+// Mobile detection and toggle logic
+function isMobile() {
+    return window.innerWidth <= 575;
+}
+
+function showMobileToggle() {
+    // Show the toggle link/button if on mobile
+    const desktopLink = document.getElementById(
+        "toggle-desktop-link",
+    );
+    const desktopBtn =
+        document.getElementById("toggle-desktop-btn");
+    if (isMobile()) {
+        if (desktopLink) desktopLink.style.display = "";
+        if (desktopBtn) desktopBtn.style.display = "";
+    } else {
+        if (desktopLink) desktopLink.style.display = "none";
+        if (desktopBtn) desktopBtn.style.display = "none";
+    }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    fetchMobileIntervalAndStart();
+
+    // Attach refresh button handler
+    const refreshBtn = document.getElementById("refresh-btn");
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", function () {
+            loadMobileItemsWithCountdown();
+        });
+    }
+
+    showMobileToggle();
+    window.addEventListener("resize", showMobileToggle);
+
+    // Offer to redirect to mobile if on mobile and not already here
+    if (isMobile() && window.location.pathname !== "/mobile") {
+        if (
+            confirm(
+                "You appear to be on a mobile device. Switch to mobile view?",
+            )
+        ) {
+            window.location.href = "/mobile";
+        }
+    }
+});
