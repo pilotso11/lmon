@@ -48,44 +48,7 @@
             href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
             rel="stylesheet"
     />
-    <style>
-        .card {
-            margin-bottom: 20px;
-        }
-
-        .card-header {
-            font-weight: bold;
-        }
-
-        .item-icon {
-            font-size: 24px;
-            margin-right: 10px;
-            vertical-align: middle;
-        }
-
-        .config-item {
-            margin-bottom: 10px;
-            padding: 10px;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-        }
-
-        .config-item:hover {
-            background-color: #f8f9fa;
-        }
-
-        .delete-btn {
-            color: #dc3545;
-            cursor: pointer;
-        }
-
-        /* Responsive font size for navbar-brand on small screens */
-        @media (max-width: 575.98px) {
-            .navbar-brand {
-                font-size: 1rem; /* Reduce font size on small screens */
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/lmon.css">
     <script>
         const default_health_icon = "{{ .default_health_icon }}"
         const default_disk_icon = "{{ .default_disk_icon }}"

@@ -1,0 +1,78 @@
+/* lmon lmon.css - extracted from index.html, config.html, and mobile.html */
+
+/* Status styles */
+.status-ok {
+    background-color: #28a745;
+    color: white;
+}
+.status-warning {
+    background-color: #ffc107;
+    color: black;
+}
+.status-critical {
+    background-color: #dc3545;
+    color: white;
+}
+.status-error {
+    background-color: #dc3545;
+    color: white;
+}
+.status-unknown {
+    background-color: #6c757d;
+    color: white;
+}
+.status-indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 10px;
+}
+
+/* Card styles */
+.card {
+    margin-bottom: 20px;
+}
+.card-header {
+    font-weight: bold;
+}
+
+/* Button and icon styles */
+.refresh-btn {
+    margin-left: 10px;
+}
+.item-icon {
+    font-size: 24px;
+    margin-right: 10px;
+    vertical-align: middle;
+}
+#refresh-countdown {
+    font-size: 0.85em;
+    opacity: 0.8;
+    font-weight: normal;
+}
+
+/* Config page specific */
+.config-item {
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+.config-item:hover {
+    background-color: #f8f9fa;
+}
+.delete-btn {
+    color: #dc3545;
+    cursor: pointer;
+}
+
+/* Mobile page specific (if any) */
+/* Add any mobile-specific styles here if needed */
+
+/* Responsive font size for navbar-brand on small screens */
+@media (max-width: 575.98px) {
+    .navbar-brand {
+        font-size: 1rem; /* Reduce font size on small screens */
+    }
+}
