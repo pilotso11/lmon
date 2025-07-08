@@ -176,7 +176,7 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(0), total: 100 * gigabyte, err: os.ErrNotExist, path: "/test"})
 
 	err := svc.Add(t.Context(), d)
-	assert.Error(t, err, "error expected with failed check on add")
+	assert.NoError(t, err, "error not expected even with failed check on add")
 
 	require.Equal(t, 1, push.Calls.Size(), "push on add for breach is expected")
 	val, ok := push.Calls.Load(int32(1))

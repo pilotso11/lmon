@@ -9,6 +9,8 @@ import (
 	"go.uber.org/atomic"
 )
 
+var _ UsageProvider = (*MockHealthcheckProvider)(nil)
+
 // MockHealthcheckProvider is a mock implementation of UsageProvider for testing.
 // It allows simulation of HTTP status codes and errors.
 type MockHealthcheckProvider struct {

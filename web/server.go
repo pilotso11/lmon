@@ -38,7 +38,7 @@ type Server struct {
 	httpServer *http.Server      // Underlying HTTP server instance.
 	ctx        context.Context   // Context for server lifecycle and cancellation.
 	router     *http.ServeMux    // HTTP request router.
-	serverUrl  string            // URL where the server is accessible.
+	ServerUrl  string            // URL where the server is accessible.
 	mapper     mapper.Mapper     // Mapper for creating monitor implementations from config.
 	listener   net.Listener      // Network listener for incoming connections.
 }
@@ -67,7 +67,7 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 	if err != nil {
 		return nil, err
 	}
-	server.serverUrl = "http://" + ln.Addr().String()
+	server.ServerUrl = "http://" + ln.Addr().String()
 	server.listener = ln
 
 	server.httpServer = &http.Server{
@@ -111,13 +111,21 @@ func LoggingHandler(stdout *os.File, router *http.ServeMux) http.Handler {
 
 // Start launches the web server in a separate goroutine.
 // Returns immediately after starting the server. The server will listen for incoming HTTP requests.
-func (s *Server) Start() {
+func (s *Server) Start(ctx context.Context) {
 	rootUrl := "http://[::]"
-	url := strings.Replace(s.serverUrl, rootUrl, "http://localhost", 1)
+	url := strings.Replace(s.ServerUrl, rootUrl, "http://localhost", 1)
 
 	log.Printf("Starting webserver on: %v", url)
 	go func() {
 		_ = s.httpServer.Serve(s.listener)
+	}()
+
+	go func() {
+		<-ctx.Done()
+		log.Printf("Webserver stopping")
+		if err := s.Stop(); err != nil {
+			log.Printf("Error stopping webserver: %v", err)
+		}
 	}()
 }
 

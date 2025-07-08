@@ -6,6 +6,9 @@ import (
 	"go.uber.org/atomic"
 )
 
+var _ CpuProvider = (*MockCpuProvider)(nil)
+var _ MemProvider = (*MockMemProvider)(nil)
+
 // MockCpuProvider is a mock implementation of CpuProvider for testing.
 // It allows simulation of CPU usage and errors.
 type MockCpuProvider struct {

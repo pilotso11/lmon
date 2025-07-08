@@ -6,6 +6,8 @@ import (
 	"go.uber.org/atomic"
 )
 
+var _ UsageProvider = (*MockDiskProvider)(nil)
+
 // MockDiskProvider is a mock implementation of UsageProvider for testing.
 // It allows simulation of disk usage and errors.
 type MockDiskProvider struct {

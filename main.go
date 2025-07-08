@@ -67,7 +67,7 @@ func main() {
 		log.Fatalf("Failed to set initial config: %v", err)
 	}
 
-	server.Start()
+	server.Start(ctx)
 
 	// wait for interrupt
 	<-ctx.Done()
