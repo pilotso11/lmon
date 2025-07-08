@@ -67,7 +67,9 @@ function renderDiskConfig(diskItems) {
                 ? parseFloat(item.Threshold).toFixed(2)
                 : "N/A"
             }%</span>
-            <i class="bi bi-trash delete-btn ms-2" data-type="disk" data-id="${item.name}"></i>
+            <button type="button" class="btn btn-link p-0 delete-btn ms-2" data-type="disk" data-id="${item.name}" aria-label="Delete">
+              <i class="bi bi-trash"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -272,7 +274,9 @@ function renderHealthConfig(healthItems) {
             <strong>${item.name}</strong>
           </div>
           <div>
-            <i class="bi bi-trash delete-btn" data-type="health" data-id="${item.name}"></i>
+            <button type="button" class="btn btn-link p-0 delete-btn" data-type="health" data-id="${item.name}" aria-label="Delete">
+              <i class="bi bi-trash"></i>
+            </button>
           </div>
         </div>
         <div class="mt-2">

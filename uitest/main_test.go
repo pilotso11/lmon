@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/proto"
 	"github.com/stretchr/testify/assert"
 
 	"lmon/web"
@@ -101,6 +102,26 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	// Assert its presence
 	diskItem := page.MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
 	assert.NotNil(t, diskItem, "Disk item 'root' is present in dashboard")
+
+	// Go back to config and delete the disk
+	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#disk-config-items`)
+	page.MustElementR(`#disk-config-items .config-item`, "root.*\\(/\\)")
+	el := page.Timeout(1 * time.Second).MustElement(`button.delete-btn[data-type="disk"][data-id="root"]`)
+	wait, handle := page.HandleDialog()
+	go el.MustClick()
+	_ = wait()
+	_ = handle(&proto.PageHandleJavaScriptDialog{Accept: true})
+
+	// Wait for disk to be removed from config list
+	page.Timeout(1*time.Second).MustElementR(`#disk-config-items`, "No disk monitors configured")
+
+	// Go back to dashboard and verify disk is gone
+	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#disk-items`)
+	assert.Panics(t, func() {
+		page.Timeout(1 * time.Second).MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
+	}, "Disk item 'root' should be gone from dashboard")
 }
 
 func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
@@ -118,7 +139,7 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	// Navigate to the config tab
 	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
 	// Wait for the health check form to appear
-	page.Timeout(5 * time.Second).MustElement(`#add-health-form`)
+	page.Timeout(1 * time.Second).MustElement(`#add-health-form`)
 
 	// Fill out the Add Health Check form
 	page.MustElement(`#health-name`).MustInput("local")
@@ -143,4 +164,24 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	// Assert its presence
 	healthItem := page.MustElement(`#health-items .list-group-item[data-id="health_local"]`)
 	assert.NotNil(t, healthItem, "Health check item 'local' is present in dashboard")
+
+	// Go back to config and delete the health check
+	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#health-config-items`)
+	page.MustElementR(`#health-config-items .config-item`, "local")
+	el := page.Timeout(1 * time.Second).MustElement(`button.delete-btn[data-type="health"][data-id="local"]`)
+	wait, handle := page.HandleDialog()
+	go el.MustClick()
+	_ = wait()
+	_ = handle(&proto.PageHandleJavaScriptDialog{Accept: true})
+
+	// Wait for health check to be removed from config list
+	page.Timeout(1*time.Second).MustElementR(`#health-config-items`, "No health checks configured")
+
+	// Go back to dashboard and verify health check is gone
+	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#health-items`)
+	assert.Panics(t, func() {
+		page.Timeout(1 * time.Second).MustElement(`#health-items .list-group-item[data-id="health_local"]`)
+	}, "Health check item 'local' should be gone from dashboard")
 }
