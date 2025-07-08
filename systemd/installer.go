@@ -59,7 +59,7 @@ Description=lmon - Lightweight Monitoring Service
 After=network.target
 
 [Service]
-Group=simple
+Type=simple
 User=lmon
 Group=lmon
 WorkingDirectory=/opt/lmon
