@@ -592,7 +592,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 	if err = s.monitor.Add(ctx, cpu); err != nil {
 		return err
 	}
-	log.Printf("Set CPU  %v", cpu)
+	log.Printf("Set CPU %v", cpu)
 
 	mem, err := s.mapper.NewMem(ctx, cfg.System.Memory)
 	if err != nil {

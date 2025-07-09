@@ -135,6 +135,10 @@ func NewCpu(threshold int, icon string, provider CpuProvider) Cpu {
 	}
 }
 
+func (c Cpu) String() string {
+	return fmt.Sprintf("Cpu{threshold: %d, icon: %s}", c.threshold, c.icon)
+}
+
 // DisplayName returns a human-readable name for the CPU monitor.
 func (c Cpu) DisplayName() string {
 	return "cpu"

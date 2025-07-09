@@ -26,7 +26,7 @@ COPY --from=builder /app/lmon /app/lmon
 RUN mkdir -p /etc/lmon
 
 # Expose the web server port
-EXPOSE 8080
+EXPOSE 8080:8080
 
 # Set environment variables
 ENV LMON_WEB_HOST=0.0.0.0

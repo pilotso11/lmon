@@ -124,6 +124,11 @@ func NewHealthcheck(name string, urlRaw string, timeout int, icon string, impl U
 	}, nil
 }
 
+// String returns a string representation of the Healthcheck monitor.
+func (d Healthcheck) String() string {
+	return fmt.Sprintf("Healthcheck{name: %s, url: %s, timeout: %d, icon: %s}", d.name, d.url.String(), d.timeout, d.icon)
+}
+
 // DisplayName returns a human-readable name for the healthcheck monitor.
 func (d Healthcheck) DisplayName() string {
 	u := fmt.Sprintf("%s://%s", d.url.Scheme, d.url.Host)
