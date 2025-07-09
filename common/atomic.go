@@ -1,6 +1,8 @@
 package common
 
 import (
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -21,4 +23,21 @@ func NewAtomicDuration(d time.Duration) *AtomicDuration {
 	ad := &AtomicDuration{}
 	ad.Store(d)
 	return ad
+}
+
+type AtomicWriter struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (w *AtomicWriter) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
+}
+
+func (w *AtomicWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.String()
 }

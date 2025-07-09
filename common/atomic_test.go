@@ -27,3 +27,17 @@ func TestAtomicDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestAtomicWriter(t *testing.T) {
+	w := &AtomicWriter{}
+	n, err := w.Write([]byte("Hello, "))
+	assert.NoError(t, err, "AtomicWriter should not error on first write")
+	assert.Equal(t, 7, n, "AtomicWriter should return correct byte count on first write")
+	_, err = w.Write([]byte("World!"))
+	assert.NoError(t, err, "AtomicWriter should not error on first write")
+	assert.Equal(t, "Hello, World!", w.String(), "AtomicWriter should concatenate writes correctly")
+
+	_, err = w.Write([]byte(" More text."))
+	assert.NoError(t, err, "AtomicWriter should not error on subsequent writes")
+	assert.Equal(t, "Hello, World! More text.", w.String(), "AtomicWriter should concatenate all writes correctly")
+}

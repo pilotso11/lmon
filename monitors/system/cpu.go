@@ -29,6 +29,7 @@ package system
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -54,6 +55,7 @@ type CpuProvider interface {
 //
 // It tracks previous CPU times to calculate usage deltas.
 type defaultCpuProvider struct {
+	mu           sync.Mutex // Mutex to protect access to CPU times
 	prevCPUTimes cpu.TimesStat
 	lastCPUCheck time.Time
 }
@@ -67,6 +69,8 @@ func newDefaultCpuProvider() *defaultCpuProvider {
 
 // Usage returns the current CPU usage percentage.
 func (d *defaultCpuProvider) Usage() (float64, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	times, err := cpu.Times(false)
 	if err != nil {
 		return 0, err

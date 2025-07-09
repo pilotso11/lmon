@@ -14,13 +14,13 @@ func TestNewMockHealthcheckProvider(t *testing.T) {
 	assert.Equal(t, int32(200), m.Result.Load(), "Initial value should be 200")
 }
 
-// TestMockHealthcheckProvider_Check verifies the Check method returns the correct status code and error handling.
+// TestMockHealthcheckProvider_Check verifies the Check method returns the correct status RespCode and error handling.
 func TestMockHealthcheckProvider_Check(t *testing.T) {
 	m := NewMockHealthcheckProvider(200)
 	resp, err := m.Check(nil, nil, 0)
 	assert.NoError(t, err, "should not error")
 	assert.NotNil(t, resp, "response should not be nil")
-	assert.Equal(t, 200, resp.StatusCode, "should return status code 200")
+	assert.Equal(t, 200, resp.StatusCode, "should return status RespCode 200")
 
 	// Test with an error
 	m.err = assert.AnError

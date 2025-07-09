@@ -8,11 +8,14 @@ import (
 	"syscall"
 	"time"
 
+	"lmon/common"
 	"lmon/config"
 	"lmon/monitors"
 	"lmon/monitors/mapper"
 	"lmon/web"
 )
+
+var logWriter *common.AtomicWriter
 
 func main() {
 	// subscribe to interrupts
@@ -20,7 +23,12 @@ func main() {
 	defer cancel()
 
 	// Initialize logger
-	log.SetOutput(os.Stdout)
+	if logWriter != nil {
+		// for testing, redirect stdout to buffer
+		log.SetOutput(logWriter)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 	log.Println("Starting lmon - Lightweight Monitoring Service")
 
 	// load config

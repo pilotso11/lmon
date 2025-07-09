@@ -2,7 +2,6 @@
 package healthcheck
 
 import (
-	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 
+	"lmon/common"
 	"lmon/config"
 	"lmon/monitors"
 )
@@ -130,54 +130,12 @@ func TestHealthcheck_Save(t *testing.T) {
 	assert.Equal(t, 5, h.Timeout, "timeout")
 }
 
-// testServer is a helper for spinning up a local HTTP server for healthcheck integration tests.
-type testServer struct {
-	ts      *http.Server
-	code    atomic.Int32
-	msDelay atomic.Int32
-	url     string
-}
-
-// handler is the HTTP handler for the testServer, simulating various status codes and delays.
-func (ts *testServer) handler(w http.ResponseWriter, _ *http.Request) {
-	delay := ts.msDelay.Load()
-	code := int(ts.code.Load())
-	if delay > 0 {
-		time.Sleep(time.Duration(delay) * time.Millisecond)
-	}
-	if code == http.StatusOK {
-		w.WriteHeader(code)
-		_, _ = w.Write([]byte(http.StatusText(code)))
-	} else {
-		http.Error(w, http.StatusText(code), code)
-	}
-
-}
-
-// startTestServer spins up a test HTTP server for healthcheck integration tests.
-func startTestServer(t *testing.T, uri string) *testServer {
-	ts := &testServer{}
-	ts.ts = &http.Server{}
-	mux := http.NewServeMux()
-	mux.HandleFunc(uri, ts.handler)
-	ts.ts.Handler = mux
-
-	ln, err := net.Listen("tcp4", "127.0.0.1:0")
-	assert.NoError(t, err)
-	ts.url = "http://" + ln.Addr().String() + "/health"
-	go func() {
-		_ = ts.ts.Serve(ln)
-	}()
-
-	return ts
-}
-
 // TestHealthcheck_DefaultImplSmokeTest verifies the default implementation of Healthcheck.Check
 // for various HTTP status codes and simulated delays.
 func TestHealthcheck_DefaultImplSmokeTest(t *testing.T) {
-	ts := startTestServer(t, "/health")
+	ts := common.StartTestServer(t, "/health")
 	defer func() {
-		_ = ts.ts.Shutdown(t.Context())
+		_ = ts.Server.Shutdown(t.Context())
 	}()
 
 	tests := []struct {
@@ -195,9 +153,9 @@ func TestHealthcheck_DefaultImplSmokeTest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts.code.Store(tt.resp)
-			ts.msDelay.Store(tt.msDelay)
-			c, err := NewHealthcheck("test", ts.url, 1, "", nil)
+			ts.RespCode.Store(tt.resp)
+			ts.DelayMs.Store(tt.msDelay)
+			c, err := NewHealthcheck("test", ts.URL, 1, "", nil)
 			assert.NoError(t, err)
 			r := c.Check(t.Context())
 			assert.Equal(t, tt.expect, r.Status, "status not %s: %s", tt.expect.String(), r.Status.String())

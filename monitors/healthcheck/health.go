@@ -9,7 +9,7 @@
 //   - Uses a UsageProvider interface to abstract HTTP checks (default: Go's http.Client).
 //   - Configured with:
 //   - name: Logical name for the healthcheck.
-//   - url: URL to check.
+//   - URL: URL to check.
 //   - timeout: Timeout for the HTTP request.
 //   - icon: UI icon (optional).
 //   - On each check:
@@ -130,7 +130,7 @@ func NewHealthcheck(name string, urlRaw string, timeout int, icon string, impl U
 
 // String returns a string representation of the Healthcheck monitor.
 func (d Healthcheck) String() string {
-	return fmt.Sprintf("Healthcheck{name: %s, url: %s, timeout: %d, icon: %s}", d.name, d.url.String(), d.timeout, d.icon)
+	return fmt.Sprintf("Healthcheck{name: %s, URL: %s, timeout: %d, icon: %s}", d.name, d.url.String(), d.timeout, d.icon)
 }
 
 // DisplayName returns a human-readable name for the healthcheck monitor.
