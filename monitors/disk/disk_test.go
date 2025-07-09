@@ -150,8 +150,7 @@ func Test_Check_PushOnAddWithBreach(t *testing.T) {
 
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
 	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(90), total: 100 * gigabyte, err: nil, path: "/test"})
-	err := svc.Add(t.Context(), d)
-	assert.NoError(t, err)
+	svc.Add(t.Context(), d)
 
 	assert.Eventually(t, func() bool {
 		return push.Calls.Size() == 1
@@ -169,8 +168,7 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
 	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(0), total: 100 * gigabyte, err: os.ErrNotExist, path: "/test"})
 
-	err := svc.Add(t.Context(), d)
-	assert.NoError(t, err, "error not expected even with failed check on add")
+	svc.Add(t.Context(), d)
 
 	assert.Eventually(t, func() bool {
 		return 1 == push.Calls.Size()
@@ -209,8 +207,7 @@ func Test_Check_PushOnChange(t *testing.T) {
 			svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
 			impl := MockDiskProvider{Current: atomic.NewFloat64(tt.initial), total: 100 * gigabyte, path: "/test"}
 			d := NewDisk("test", "/test", 90, "", &impl)
-			err := svc.Add(t.Context(), d)
-			assert.NoError(t, err, "error not expected")
+			svc.Add(t.Context(), d)
 
 			assert.Eventually(t, func() bool {
 				return tt.initialCnt == push.Calls.Size()

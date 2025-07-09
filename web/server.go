@@ -30,7 +30,7 @@ import (
 // Server encapsulates the HTTP server, configuration, and monitoring services.
 // It manages the lifecycle of the web server, routes, and provides thread-safe access to configuration.
 type Server struct {
-	mu         sync.Mutex        // Mutex to protect concurrent access to server state.
+	mu         sync.Mutex        // Mutex to protect concurrent access to config.
 	config     *config.Config    // Application configuration.
 	loader     *config.Loader    // Configuration loader for persisting config changes.
 	monitor    *monitors.Service // Monitoring service for system and custom checks.
@@ -392,11 +392,7 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
-		err = s.monitor.Add(ctx, cpu)
-		if err != nil {
-			log.Printf("handleUpdateSystemConfig (cpu): %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		s.monitor.Add(ctx, cpu)
 
 		// Apply mem config
 		mem, err := s.mapper.NewMem(ctx, cfg.Memory)
@@ -405,11 +401,7 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
-		err = s.monitor.Add(ctx, mem)
-		if err != nil {
-			log.Printf("handleUpdateSystemConfig (mem): %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		s.monitor.Add(ctx, mem)
 
 		s.saveConfig(w)
 	}
@@ -477,12 +469,7 @@ func (s *Server) handleAddDiskMonitor(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		err = s.monitor.Add(ctx, d)
-		if err != nil {
-			log.Printf("handleAddDiskMonitor %s: %v", r.URL.String(), err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		s.monitor.Add(ctx, d)
 
 		s.saveConfig(w)
 	}
@@ -510,12 +497,7 @@ func (s *Server) handleAddHealthCheck(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		err = s.monitor.Add(ctx, d)
-		if err != nil {
-			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		s.monitor.Add(ctx, d)
 
 		s.saveConfig(w)
 	}
@@ -589,18 +571,14 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 	if err != nil {
 		return err
 	}
-	if err = s.monitor.Add(ctx, cpu); err != nil {
-		return err
-	}
+	s.monitor.Add(ctx, cpu)
 	log.Printf("Set CPU %v", cpu)
 
 	mem, err := s.mapper.NewMem(ctx, cfg.System.Memory)
 	if err != nil {
 		return err
 	}
-	if err := s.monitor.Add(ctx, mem); err != nil {
-		return err
-	}
+	s.monitor.Add(ctx, mem)
 	log.Printf("Set MEM %v", cpu)
 
 	for name, i := range cfg.Disk {
@@ -608,9 +586,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		if err != nil {
 			return err
 		}
-		if err := s.monitor.Add(ctx, newDisk); err != nil {
-			return err
-		}
+		s.monitor.Add(ctx, newDisk)
 		log.Printf("Added Disk %v", newDisk)
 	}
 
@@ -619,9 +595,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		if err != nil {
 			return err
 		}
-		if err = s.monitor.Add(ctx, newHealth); err != nil {
-			return err
-		}
+		s.monitor.Add(ctx, newHealth)
 		log.Printf("Added Healthcheck %v", newHealth)
 	}
 

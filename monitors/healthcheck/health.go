@@ -43,6 +43,11 @@ import (
 const Icon = "activity" // Default icon for healthcheck monitors
 const Group = "health"  // Group name for healthcheck monitors
 
+// client is the default HTTP client used for health checks to support connection pooling and reuse.
+var client = &http.Client{
+	Timeout: 5 * time.Second, // Default timeout for HTTP requests
+}
+
 // UsageProvider is an interface for obtaining healthcheck usage statistics.
 // It allows for production and mock implementations.
 type UsageProvider interface {
@@ -66,12 +71,11 @@ func NewDefaultHealthcheckProvider(msTimeout int) *DefaultHealthcheckProvider {
 // Returns the HTTP response or an error.
 func (p *DefaultHealthcheckProvider) Check(ctx context.Context, path *url.URL, msTimeout int) (*http.Response, error) {
 	to := time.Duration(msTimeout) * time.Millisecond
-	req, err := http.NewRequestWithContext(ctx, "GET", path.String(), nil)
+	toCtx, cancel := context.WithTimeout(ctx, to)
+	defer cancel()
+	req, err := http.NewRequestWithContext(toCtx, "GET", path.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-	client := http.Client{
-		Timeout: to,
 	}
 	resp, err := client.Do(req)
 	if err != nil {

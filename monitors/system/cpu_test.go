@@ -18,7 +18,7 @@ func TestNewCpu(t *testing.T) {
 	push := monitors.NewMockPush()
 	cpu := NewCpu(90, "", MockCpuProvider{Current: atomic.NewFloat64(0)})
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
-	_ = svc.Add(t.Context(), cpu)
+	svc.Add(t.Context(), cpu)
 	assert.Equal(t, 1, svc.Size(), "one monitor added")
 }
 

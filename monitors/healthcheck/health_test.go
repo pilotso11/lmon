@@ -20,7 +20,7 @@ func TestNewHealthcheck(t *testing.T) {
 	h, err := NewHealthcheck("local", "http://localhost/health", 5, "", MockHealthcheckProvider{Result: atomic.NewInt32(http.StatusOK)})
 	assert.NoError(t, err)
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
-	_ = svc.Add(t.Context(), h)
+	svc.Add(t.Context(), h)
 	assert.Equal(t, 1, svc.Size(), "one monitor added")
 }
 
