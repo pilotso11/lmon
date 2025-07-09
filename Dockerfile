@@ -23,7 +23,7 @@ WORKDIR /app
 COPY --from=builder /app/lmon /app/lmon
 
 # Create directories for configuration and static files
-RUN mkdir -p /etc/lmon/config
+RUN mkdir -p /etc/lmon
 
 # Expose the web server port
 EXPOSE 8080
@@ -31,7 +31,7 @@ EXPOSE 8080
 # Set environment variables
 ENV LMON_WEB_HOST=0.0.0.0
 ENV LMON_WEB_PORT=8080
-ENV LMON_CONFIG_PATH=/app/lmon/config
+ENV LMON_CONFIG_FILE=/etc/lmon/config.yaml
 
 # Note: To get accurate system-wide CPU and memory metrics, run the container with:
 # docker run --pid=host --privileged -v /proc:/proc:ro -v /:/hostroot:ro ...

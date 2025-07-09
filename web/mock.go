@@ -1,6 +1,8 @@
 package web
 
 import (
+	"net/http"
+
 	"go.uber.org/atomic"
 
 	"lmon/monitors/disk"
@@ -24,10 +26,10 @@ func (m *MockWebhookHandler) webhookCallback(msg string) {
 // NewMockImplementations returns a set of mock monitor providers and a webhook callback for testing.
 func NewMockImplementations(hook *MockWebhookHandler) *mapper.Implementations {
 	return &mapper.Implementations{
-		Disk:    disk.NewMockDiskProvider(50),
-		Health:  healthcheck.NewMockHealthcheckProvider(200),
-		Cpu:     system.NewMockCpuProvider(50),
-		Mem:     system.NewMockMemProvider(50),
+		Disk:    disk.NewMockDiskProvider(50),                          // percent usage
+		Health:  healthcheck.NewMockHealthcheckProvider(http.StatusOK), // http status code
+		Cpu:     system.NewMockCpuProvider(50),                         // percent usage
+		Mem:     system.NewMockMemProvider(50),                         // percent usage
 		Webhook: hook.webhookCallback,
 	}
 }
