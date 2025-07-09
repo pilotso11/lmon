@@ -66,7 +66,7 @@ func TestDefaultConfig(t *testing.T) {
 
 	// Webhook settings
 	assert.True(t, cfg.Webhook.Enabled, "cfg.webhook.enabled")
-	assert.Equal(t, "http://localhost:8080/test_webhook", cfg.Webhook.URL, "cfg.webhook.url")
+	assert.Equal(t, "http://localhost:8080/testhook", cfg.Webhook.URL, "cfg.webhook.url")
 
 	// Disk settings
 	assert.Equal(t, 0, len(cfg.Monitoring.Disk), "len(disk)")
