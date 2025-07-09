@@ -14,7 +14,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -72,7 +71,7 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 
 	server.httpServer = &http.Server{
 		Addr:    ln.Addr().String(),
-		Handler: LoggingHandler(os.Stdout, router),
+		Handler: LoggingHandler(router),
 	}
 
 	// Setup push to webhook callback
@@ -96,7 +95,7 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 	return server, nil
 }
 
-func LoggingHandler(stdout *os.File, router *http.ServeMux) http.Handler {
+func LoggingHandler(router *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		// Log the request
@@ -204,7 +203,7 @@ func (s *Server) pushToWebhook(ctx context.Context, m monitors.Monitor, prev mon
 
 // handleHealthCheck responds with HTTP 200 OK for health check probes.
 // Used for liveness/readiness checks.
-func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleHealthCheck(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
 }
 
@@ -322,7 +321,7 @@ func (s *Server) writeJson(w http.ResponseWriter, data any) {
 
 // handleGetItems responds with a JSON object containing all monitored items and their statuses.
 // Route: GET /api/items
-func (s *Server) handleGetItems(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetItems(w http.ResponseWriter, _ *http.Request) {
 	s.writeJson(w, s.monitor.Results())
 }
 
@@ -344,7 +343,7 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 
 // handleGetConfig responds with the current server configuration as JSON.
 // Route: GET /api/config
-func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.writeJson(w, s.config)
@@ -525,7 +524,7 @@ func (s *Server) handleAddHealthCheck(ctx context.Context) http.HandlerFunc {
 // handleUpdateWebhook processes a request to update the webhook configuration.
 // Expects a JSON body with the new webhook settings.
 // Route: POST /api/config/webhook
-func (s *Server) handleUpdateWebhook(ctx context.Context) http.HandlerFunc {
+func (s *Server) handleUpdateWebhook(_ context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()

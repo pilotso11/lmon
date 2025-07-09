@@ -14,15 +14,6 @@ import (
 	"lmon/monitors"
 )
 
-// TstNewDisk is a helper for quickly testing Disk creation and addition to a monitoring service.
-func TstNewDisk(t *testing.T) {
-	push := monitors.NewMockPush()
-	d := NewDisk("test", "/test", 90, "", MockDiskProvider{path: "/test", Current: atomic.NewFloat64(0), total: 100})
-	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
-	_ = svc.Add(t.Context(), d)
-	assert.Equal(t, 1, svc.Size(), "one monitor added")
-}
-
 // TestDisk_DisplayName verifies that DisplayName returns the expected string for various disk names and paths.
 func TestDisk_DisplayName(t *testing.T) {
 	tests := []struct {

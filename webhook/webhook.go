@@ -36,7 +36,9 @@ func Send(ctx context.Context, url string, msg string) error {
 	}
 
 	// read the body to ensure the request is complete
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
