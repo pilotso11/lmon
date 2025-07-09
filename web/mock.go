@@ -25,7 +25,7 @@ func (m *MockWebhookHandler) webhookCallback(msg string) {
 func NewMockImplementations(hook *MockWebhookHandler) *mapper.Implementations {
 	return &mapper.Implementations{
 		Disk:    disk.NewMockDiskProvider(50),
-		Health:  healthcheck.NewMockHealthcheckProvider(50),
+		Health:  healthcheck.NewMockHealthcheckProvider(200),
 		Cpu:     system.NewMockCpuProvider(50),
 		Mem:     system.NewMockMemProvider(50),
 		Webhook: hook.webhookCallback,

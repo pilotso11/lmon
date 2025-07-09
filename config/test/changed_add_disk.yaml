@@ -18,4 +18,4 @@ web:
     port: 8080
 webhook:
     enabled: true
-    url: http://localhost:8080/test_webhook
+    url: http://localhost:8080/testhook

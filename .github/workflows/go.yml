@@ -23,26 +23,26 @@ jobs:
       run: go build -v ./...
 
     - name: Test
-      run: go test -v -coverprofile=coverage.out ./...
+      run: go test -race -v -covermode=atomic -coverprofile=coverage.out ./...
 
-    - name: Generate coverage badge
-      uses: tj-actions/coverage-badge-go@v3
+    - name: Go Coverage Badge
+      uses: tj-actions/coverage-badge-go@v2
       with:
         filename: coverage.out
 
-    - name: Verify Changed files
-      uses: tj-actions/verify-changed-files@v20
+    - name: Verify changed files
+      uses: tj-actions/verify-changed-files@v16
       id: verify-changed-files
       with:
         files: README.md
 
-    - name: Commit changes
+    - name: Commit coverage badge
       if: steps.verify-changed-files.outputs.files_changed == 'true'
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add README.md
-        git commit -m "Updated coverage badge"
+        git commit -m "chore: Updated coverage badge."
 
     - name: Push coverage badge
       if: steps.verify-changed-files.outputs.files_changed == 'true'

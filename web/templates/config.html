@@ -41,14 +41,17 @@
     />
     <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg"/>
     <link rel="manifest" href="/static/manifest.json" />
+    <!-- bootstrap -->
     <link
             href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
             rel="stylesheet"
     />
+    <!-- bootstrap icons -->
     <link
             href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
             rel="stylesheet"
     />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.14.0-beta3/dist/css/bootstrap-select.min.css">
     <link rel="stylesheet" href="/static/css/lmon.css">
     <script>
         const default_health_icon = "{{ .default_health_icon }}"
@@ -125,54 +128,29 @@
                     <hr />
                     <h5>Add Disk Monitor</h5>
                     <form id="add-disk-form">
-                        <div class="mb-3">
-                            <label for="disk-name" class="form-label"
-                                >Name (ID)</label
-                            >
-                            <input
-                                type="text"
-                                class="form-control"
-                                id="disk-name"
-                                required
-                            />
+                        <div class="row align-items-center mb-2">
+                            <label for="disk-name" class="col-sm-4 col-form-label">Name (ID)</label>
+                            <div class="col-sm-8">
+                                <input type="text" class="form-control" id="disk-name" required />
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="disk-path" class="form-label"
-                                >Path</label
-                            >
-                            <input
-                                type="text"
-                                class="form-control"
-                                id="disk-path"
-                                required
-                            />
+                        <div class="row align-items-center mb-2">
+                            <label for="disk-path" class="col-sm-4 col-form-label">Path</label>
+                            <div class="col-sm-8">
+                                <input type="text" class="form-control" id="disk-path" required />
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label
-                                for="disk-threshold"
-                                class="form-label"
-                                >Threshold (%)</label
-                            >
-                            <input
-                                type="number"
-                                class="form-control"
-                                id="disk-threshold"
-                                min="1"
-                                max="100"
-                                value="80"
-                                required
-                            />
+                        <div class="row align-items-center mb-2">
+                            <label for="disk-threshold" class="col-sm-4 col-form-label">Threshold (%)</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" id="disk-threshold" min="1" max="100" value="80" required />
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="disk-icon" class="form-label"
-                                >Icon (Bootstrap Icon name)</label
-                            >
-                            <input
-                                type="text"
-                                class="form-control"
-                                id="disk-icon"
-                                value="{{ .default_disk_icon }}"
-                            />
+                        <div class="row align-items-center mb-2">
+                            <label for="disk-icon-dropdown" class="col-sm-4 col-form-label">Icon</label>
+                            <div class="col-sm-8">
+                                <div id="disk-icon-dropdown"></div>
+                            </div>
                         </div>
                         <div class="text-end mt-2">
                             <button type="submit" class="btn btn-primary">
@@ -199,53 +177,29 @@
                     <hr />
                     <h5>Add Health Check</h5>
                     <form id="add-health-form">
-                        <div class="mb-3">
-                            <label for="health-name" class="form-label"
-                                >Name (ID)</label
-                            >
-                            <input
-                                type="text"
-                                class="form-control"
-                                id="health-name"
-                                required
-                            />
+                        <div class="row align-items-center mb-2">
+                            <label for="health-name" class="col-sm-4 col-form-label">Name (ID)</label>
+                            <div class="col-sm-8">
+                                <input type="text" class="form-control" id="health-name" required />
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="health-url" class="form-label"
-                                >URL</label
-                            >
-                            <input
-                                type="url"
-                                class="form-control"
-                                id="health-url"
-                                required
-                            />
+                        <div class="row align-items-center mb-2">
+                            <label for="health-url" class="col-sm-4 col-form-label">URL</label>
+                            <div class="col-sm-8">
+                                <input type="url" class="form-control" id="health-url" required />
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label
-                                for="health-timeout"
-                                class="form-label"
-                                >Timeout (seconds)</label
-                            >
-                            <input
-                                type="number"
-                                class="form-control"
-                                id="health-timeout"
-                                min="1"
-                                value="10"
-                                required
-                            />
+                        <div class="row align-items-center mb-2">
+                            <label for="health-timeout" class="col-sm-4 col-form-label">Timeout (seconds)</label>
+                            <div class="col-sm-8">
+                                <input type="number" class="form-control" id="health-timeout" min="1" value="10" required />
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="health-icon" class="form-label"
-                                >Icon (Bootstrap Icon name)</label
-                            >
-                            <input
-                                type="text"
-                                class="form-control"
-                                id="health-icon"
-                                value="{{ .default_health_icon }}"
-                            />
+                        <div class="row align-items-center mb-2">
+                            <label for="health-icon-dropdown" class="col-sm-4 col-form-label">Icon</label>
+                            <div class="col-sm-8">
+                                <div id="health-icon-dropdown"></div>
+                            </div>
                         </div>
                         <div class="text-end mt-2">
                             <button type="submit" class="btn btn-primary">
@@ -288,7 +242,13 @@
     </div>
 </div>
 
+<!-- jQuery (must be first) -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Bootstrap JS (after jQuery) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<!-- bootstrap-select JS (after Bootstrap and jQuery) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.14.0-beta3/dist/js/bootstrap-select.min.js"></script>
+<!-- Your config.js (after everything else) -->
 <script type="module" src="/static/js/config.js"></script>
 </body>
 </html>

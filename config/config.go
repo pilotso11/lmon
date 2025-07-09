@@ -197,7 +197,7 @@ func (l *Loader) setDefaults() {
 	l.v.SetDefault("monitoring.system.title", "LMON Dashboard")
 
 	l.v.SetDefault("webhook.enabled", true)
-	l.v.SetDefault("webhook.url", "http://localhost:8080/test_webhook")
+	l.v.SetDefault("webhook.url", "http://localhost:8080/testhook")
 
 	// l.v.SetDefault("monitoring.disk.root.path", "/")
 	// l.v.SetDefault("monitoring.disk.root.threshold", 80)

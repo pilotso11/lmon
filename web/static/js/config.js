@@ -10,6 +10,97 @@ import { getIcon, showToast, fetchJson, handleFetchError } from "./utils.js";
 // Example: const default_disk_icon = "hdd"
 
 // Function to load configuration
+
+/**
+ * Bootstrap Icon choices for selectors.
+ */
+const iconChoices = [
+  { name: "cpu", icon: "cpu" },
+  { name: "memory", icon: "memory" },
+  { name: "sd-card", icon: "sd-card" },
+  { name: "hdd", icon: "hdd" },
+  { name: "hdd-network", icon: "hdd-network" },
+  { name: "hdd-rack", icon: "hdd-rack" },
+  { name: "device-hdd", icon: "device-hdd" },
+  { name: "database", icon: "database" },
+  { name: "pc-horizontal", icon: "pc-horizontal" },
+  { name: "pc", icon: "pc" },
+  { name: "activity", icon: "activity" },
+  { name: "heart-pulse", icon: "heart-pulse" },
+  { name: "speedometer", icon: "speedometer" },
+  { name: "speedometer2", icon: "speedometer2" },
+  { name: "bar-chart", icon: "bar-chart" },
+  { name: "graph-up", icon: "graph-up" },
+  { name: "router", icon: "router" },
+  { name: "wifi", icon: "wifi" },
+  { name: "house", icon: "house" },
+  { name: "building", icon: "building" },
+  { name: "lightning", icon: "lightning" },
+  { name: "lightbulb", icon: "lightbulb" },
+  { name: "lamp", icon: "lamp" },
+  { name: "at", icon: "at" },
+  { name: "battery", icon: "battery" },
+  // User-added custom icons:
+  { name: "globe", icon: "globe" },
+  { name: "printer", icon: "printer" },
+  { name: "folder", icon: "folder" },
+  { name: "shield", icon: "shield" },
+  { name: "collection", icon: "collection" },
+  { name: "envelope", icon: "envelope" },
+  { name: "inbox", icon: "inbox" },
+  { name: "people", icon: "people" },
+  { name: "person-circle", icon: "person-circle" },
+  { name: "webcam", icon: "webcam" },
+  { name: "volume-up", icon: "volume-up" },
+  { name: "voicemail", icon: "voicemail" },
+  { name: "tv", icon: "tv" },
+];
+
+/**
+ * Render a Bootstrap-select icon dropdown into a container.
+ * @param {string} containerId - The id of the container div.
+ * @param {string} selectId - The id for the <select> element.
+ * @param {string} defaultIcon - The default icon name.
+ */
+function renderIconDropdown(containerId, selectId, defaultIcon) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  let optionsHtml = iconChoices
+    .map(
+      (choice) =>
+        `<option value="${choice.icon}"${choice.icon === defaultIcon ? " selected" : ""} data-content='<i class="bi bi-${choice.icon}"></i> ${choice.name}'>
+          ${choice.name}
+        </option>`,
+    )
+    .join("");
+
+  container.innerHTML = `
+    <select class="selectpicker" id="${selectId}" data-live-search="true" data-width="100%" data-max-options="10" data-max-options-text="more...">
+      ${optionsHtml}
+    </select>
+  `;
+
+  // Initialize bootstrap-select
+  if (window.$ && typeof window.$.fn.selectpicker === "function") {
+    window.$(`#${selectId}`).selectpicker("render");
+  }
+}
+
+// Render icon dropdowns on DOMContentLoaded
+document.addEventListener("DOMContentLoaded", function () {
+  if (typeof default_disk_icon !== "undefined") {
+    renderIconDropdown("disk-icon-dropdown", "disk-icon", default_disk_icon);
+  }
+  if (typeof default_health_icon !== "undefined") {
+    renderIconDropdown(
+      "health-icon-dropdown",
+      "health-icon-select",
+      default_health_icon,
+    );
+  }
+});
+
 async function loadConfig() {
   try {
     const config = await fetchJson("/api/config");
@@ -457,7 +548,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const diskName = document.getElementById("disk-name").value.trim();
       const diskPath = document.getElementById("disk-path").value.trim();
-      const diskIcon = document.getElementById("disk-icon").value.trim();
+      const diskIcon = document.getElementById("disk-icon")
+        ? document.getElementById("disk-icon").value.trim()
+        : "";
       const diskThreshold = parseInt(
         document.getElementById("disk-threshold").value,
       );
@@ -499,7 +592,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const healthNameInput = document.getElementById("health-name");
       const healthUrlInput = document.getElementById("health-url");
       const healthTimeoutInput = document.getElementById("health-timeout");
-      const healthIconInput = document.getElementById("health-icon");
+      const healthIconInput = document.getElementById("health-icon-select");
       if (
         !healthNameInput ||
         !healthUrlInput ||
