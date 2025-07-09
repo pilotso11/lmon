@@ -3,22 +3,11 @@ module lmon
 go 1.24
 
 require (
-	github.com/PuerkitoBio/goquery v1.8.0
+	github.com/go-rod/rod v0.116.2
 	github.com/puzpuzpuz/xsync/v4 v4.1.0
 	github.com/shirou/gopsutil/v3 v3.24.1
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.8.4
-)
-
-require (
-	github.com/andybalholm/cascadia v1.3.1 // indirect
-	github.com/go-rod/rod v0.116.2 // indirect
-	github.com/ysmood/fetchup v0.2.3 // indirect
-	github.com/ysmood/goob v0.4.0 // indirect
-	github.com/ysmood/got v0.40.0 // indirect
-	github.com/ysmood/gson v0.7.3 // indirect
-	github.com/ysmood/leakless v0.9.0 // indirect
-	golang.org/x/net v0.19.0 // indirect
 )
 
 require (
@@ -42,6 +31,11 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
+	github.com/ysmood/fetchup v0.2.3 // indirect
+	github.com/ysmood/goob v0.4.0 // indirect
+	github.com/ysmood/got v0.40.0 // indirect
+	github.com/ysmood/gson v0.7.3 // indirect
+	github.com/ysmood/leakless v0.9.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.uber.org/atomic v1.9.0
 	go.uber.org/goleak v1.3.0

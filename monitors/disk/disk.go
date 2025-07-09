@@ -40,8 +40,8 @@ import (
 	"lmon/monitors"
 )
 
-const Icon = "storage" // Default icon for disk monitors
-const Group = "disk"   // Group name for disk monitors
+const Icon = "hdd"   // Default icon for disk monitors
+const Group = "disk" // Group name for disk monitors
 const gigabyte = 1024 * 1024 * 1024
 
 // UsageProvider is an interface for obtaining disk usage statistics.
