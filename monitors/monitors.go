@@ -141,15 +141,20 @@ func (s *Service) Results() map[string]Result {
 
 // SetPeriod changes the refresh period and timeout, and restarts the monitor checks.
 func (s *Service) SetPeriod(ctx context.Context, period time.Duration, timeout time.Duration) {
-	if timeout >= period || timeout == 0 {
-		timeout = time.Duration(float64(period) * 0.66)
-	}
+	timeout = sanitizeTimeout(timeout, period)
 	log.Printf("Setting new period %v and timeout %v", period, timeout)
 	s.period.Store(period)
 	s.timeout.Store(timeout)
 
 	s.stopMonitors()
 	s.startMonitors(ctx)
+}
+
+func sanitizeTimeout(timeout time.Duration, period time.Duration) time.Duration {
+	if timeout >= period || timeout == 0 {
+		timeout = time.Duration(float64(period) * 2 / 3)
+	}
+	return timeout
 }
 
 // stopMonitors stops all monitor routines and waits for them to finish.
@@ -175,12 +180,8 @@ func (s *Service) startMonitors(ctx context.Context) {
 		ticker := time.NewTicker(s.period.Load())
 		defer ticker.Stop()
 		for {
-			to := s.timeout.Load()
-			pd := s.period.Load()
-			if to >= pd || to == 0 {
-				to = pd * 2 / 3 // Default to 66% of period if timeout is invalid
-			}
-			// Safely clone the timeout
+			to := sanitizeTimeout(s.timeout.Load(), s.period.Load())
+
 			if func() bool {
 				toCtx, toCancel := context.WithTimeout(ctx, to)
 				defer toCancel()

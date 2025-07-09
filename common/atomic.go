@@ -6,7 +6,7 @@ import (
 )
 
 type AtomicDuration struct {
-	Value atomic.Int64 // Duration in milliseconds
+	Value atomic.Int64 // Duration in nanoseconds (raw time.Duration is int64).
 }
 
 func (a *AtomicDuration) Load() time.Duration {

@@ -161,7 +161,7 @@ func (d Healthcheck) Save(cfg *config.Config) {
 // Check performs a healthcheck by making an HTTP request to the configured URL.
 // Returns a Result with the status and value based on the HTTP response.
 func (d Healthcheck) Check(ctx context.Context) monitors.Result {
-	response, err := d.impl.Check(ctx, d.url, d.timeout*1000) // Convert ms to seconds for the provider
+	response, err := d.impl.Check(ctx, d.url, d.timeout*1000) // Convert seconds ms for the provider
 	if err != nil {
 		return monitors.Result{
 			Status: monitors.RAGError,
