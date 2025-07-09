@@ -1,0 +1,34 @@
+monitoring:
+  disk:
+    root:
+      icon: hdd
+      path: /
+      threshold: 80
+    home:
+      icon: hdd
+      path: /home
+      threshold: 80
+  healthcheck:
+    google:
+      icon: activity
+      timeout: 10
+      url: https://google.com
+    local:
+      icon: heart-pulse
+      timeout: 10
+      url: http://localhost:8080/healthz
+  interval: 60
+  system:
+    cpu:
+      icon: cpu
+      threshold: 85
+    memory:
+      icon: speedometer
+      threshold: 85
+    title: lmon Dashboard
+web:
+  host: 0.0.0.0
+  port: 8080
+webhook:
+  enabled: true
+  url: http://localhost:8080/testhook
