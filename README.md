@@ -5,7 +5,7 @@ A lightweight, extensible monitoring service written in Go. lmon monitors system
 
 [![Go](https://github.com/yourusername/lmon/actions/workflows/go.yml/badge.svg)](https://github.com/yourusername/lmon/actions/workflows/go.yml)
 [![Docker](https://github.com/yourusername/lmon/actions/workflows/docker.yml/badge.svg)](https://github.com/yourusername/lmon/actions/workflows/docker.yml)
-![Coverage](https://img.shields.io/badge/Coverage-0-red)
+![Coverage](https://img.shields.io/badge/Coverage-1-red)
 
 ---
 
