@@ -53,7 +53,7 @@ func main() {
 	}
 
 	// startup monitoring
-	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, time.Second, nil)
+	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, 10*time.Second, nil)
 
 	// start server
 	server, err := web.NewServerWithContext(ctx, cfg, l, mon, mapper.NewMapper(nil))

@@ -169,7 +169,7 @@ func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	svc.mu.Lock()
 	initialChecks := mon.Checks.Load()
-	initialPeriod := svc.period
+	initialPeriod := svc.period.Load()
 	svc.mu.Unlock()
 	require.GreaterOrEqual(t, initialChecks, int32(1), "should have at least one check")
 
@@ -178,7 +178,7 @@ func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 	svc.mu.Lock()
 	updatedPeriod := svc.period
 	svc.mu.Unlock()
-	assert.Equal(t, 10*time.Millisecond, updatedPeriod, "period should be updated")
+	assert.Equal(t, 10*time.Millisecond, time.Duration(updatedPeriod.Load()), "period should be updated")
 
 	// Wait for more checks to accumulate
 	time.Sleep(35 * time.Millisecond)
@@ -186,7 +186,7 @@ func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 	newChecks := mon.Checks.Load()
 	svc.mu.Unlock()
 	assert.Greater(t, newChecks, initialChecks+2, "checks should increase after period change")
-	assert.NotEqual(t, initialPeriod, updatedPeriod, "period should have changed")
+	assert.NotEqual(t, initialPeriod, updatedPeriod.Load(), "period should have changed")
 }
 
 // TestService_SetPeriod_Race verifies that SetPeriod and Results can be called concurrently without race conditions.

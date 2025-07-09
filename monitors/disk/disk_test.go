@@ -162,6 +162,9 @@ func Test_Check_PushOnAddWithBreach(t *testing.T) {
 	err := svc.Add(t.Context(), d)
 	assert.NoError(t, err)
 
+	assert.Eventually(t, func() bool {
+		return push.Calls.Size() == 1
+	}, 100*time.Millisecond, time.Millisecond, "push on add for breach is expected")
 	require.Equal(t, 1, push.Calls.Size(), "push on add for breach is expected")
 	val, ok := push.Calls.Load(int32(1))
 	assert.True(t, ok, "push exists")
@@ -178,6 +181,9 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 	err := svc.Add(t.Context(), d)
 	assert.NoError(t, err, "error not expected even with failed check on add")
 
+	assert.Eventually(t, func() bool {
+		return 1 == push.Calls.Size()
+	}, 100*time.Millisecond, time.Millisecond, "push on add for breach is expected")
 	require.Equal(t, 1, push.Calls.Size(), "push on add for breach is expected")
 	val, ok := push.Calls.Load(int32(1))
 	assert.True(t, ok, "push exists")
@@ -215,6 +221,9 @@ func Test_Check_PushOnChange(t *testing.T) {
 			err := svc.Add(t.Context(), d)
 			assert.NoError(t, err, "error not expected")
 
+			assert.Eventually(t, func() bool {
+				return tt.initialCnt == push.Calls.Size()
+			}, 100*time.Millisecond, time.Millisecond, "inial push count")
 			require.Equal(t, tt.initialCnt, push.Calls.Size(), "initial push cnt")
 			if tt.initialCnt > 0 {
 				va, ok := push.Calls.Load(int32(tt.initialCnt))

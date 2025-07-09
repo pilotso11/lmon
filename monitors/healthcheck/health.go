@@ -29,6 +29,8 @@ package healthcheck
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -50,31 +52,42 @@ type UsageProvider interface {
 // DefaultHealthcheckProvider is the default implementation of UsageProvider
 // using Go's http.Client.
 type DefaultHealthcheckProvider struct {
-	client http.Client
 }
 
 // NewDefaultHealthcheckProvider creates a new DefaultHealthcheckProvider with the given timeout in milliseconds.
 func NewDefaultHealthcheckProvider(msTimeout int) *DefaultHealthcheckProvider {
 	if msTimeout == 0 {
-		msTimeout = 5
+		msTimeout = 5000 // Default to 5000ms (5 seconds) if no timeout is specified
 	}
-	return &DefaultHealthcheckProvider{
-		client: http.Client{
-			Timeout: time.Millisecond * time.Duration(msTimeout),
-		},
-	}
+	return &DefaultHealthcheckProvider{}
 }
 
 // Check performs an HTTP GET request to the given URL with the specified timeout (ms).
 // Returns the HTTP response or an error.
 func (p *DefaultHealthcheckProvider) Check(ctx context.Context, path *url.URL, msTimeout int) (*http.Response, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(msTimeout)*time.Millisecond)
-	defer cancel()
+	to := time.Duration(msTimeout) * time.Millisecond
 	req, err := http.NewRequestWithContext(ctx, "GET", path.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-	return p.client.Do(req)
+	client := http.Client{
+		Timeout: to,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Error performing healthcheck: %s: %v", path.String(), err)
+		return nil, err
+	}
+	if resp == nil {
+		log.Printf("Healthcheck returned nil response for %s", path.String())
+		return nil, fmt.Errorf("nil response from healthcheck for %s", path.String())
+	}
+
+	// read the body to ensure the request is complete
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	return resp, err
 }
 
 // Healthcheck represents an HTTP endpoint health monitor.
@@ -137,7 +150,7 @@ func (d Healthcheck) Save(cfg *config.Config) {
 // Check performs a healthcheck by making an HTTP request to the configured URL.
 // Returns a Result with the status and value based on the HTTP response.
 func (d Healthcheck) Check(ctx context.Context) monitors.Result {
-	response, err := d.impl.Check(ctx, d.url, d.timeout)
+	response, err := d.impl.Check(ctx, d.url, d.timeout*1000) // Convert ms to seconds for the provider
 	if err != nil {
 		return monitors.Result{
 			Status: monitors.RAGError,

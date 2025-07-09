@@ -3,7 +3,6 @@
 package web
 
 import (
-	"bytes"
 	"context"
 	"embed"
 	_ "embed"
@@ -26,6 +25,7 @@ import (
 	"lmon/monitors/disk"
 	"lmon/monitors/healthcheck"
 	"lmon/monitors/mapper"
+	"lmon/webhook"
 )
 
 // Server encapsulates the HTTP server, configuration, and monitoring services.
@@ -172,47 +172,6 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor(ctx))
 }
 
-// webhookPayload represents the JSON payload sent to a webhook endpoint.
-type webhookPayload struct {
-	Text string `json:"text"`
-}
-
-// pushToWebhook asynchronously sends a notification to the configured webhook URL
-// when a monitor's result changes. The payload includes a summary message.
-func (s *Server) pushToWebhook(ctx context.Context, m monitors.Monitor, prev monitors.Result, result monitors.Result) {
-	// Do this in a goroutine because we need to relock to access config.
-	go func(ctx context.Context, msg string) {
-		s.mu.Lock()
-		wh := s.config.Webhook
-		s.mu.Unlock()
-		if wh.Enabled {
-			var body webhookPayload
-			body.Text = msg
-			payload, err := json.Marshal(body)
-			if err != nil {
-				log.Printf("pushToWebhook (json): %v", err)
-				return
-			}
-			req, err := http.NewRequestWithContext(ctx, "POST", wh.URL, bytes.NewBuffer(payload))
-			if err != nil {
-				log.Printf("pushToWebhook (newreq): %v", err)
-				return
-			}
-			req.Header.Set("Content-Type", "application/json")
-			client := &http.Client{Timeout: 5 * time.Second}
-			resp, err := client.Do(req)
-			if err != nil {
-				log.Printf("pushToWebhook (req): %v", err)
-				return
-			}
-			if resp.StatusCode != http.StatusOK {
-				log.Printf("pushToWebhook (status): %v", resp.Status)
-				return
-			}
-		}
-	}(ctx, fmt.Sprintf("%s: %s %s [ %s ]", m.DisplayName(), result.Status.String(), getResultArrow(prev, result), result.Value))
-}
-
 // getResultArrow returns a unicode arrow indicating the trend of a monitor's status change.
 func getResultArrow(prev monitors.Result, result monitors.Result) any {
 	if prev.Status == monitors.RAGUnknown {
@@ -222,6 +181,24 @@ func getResultArrow(prev monitors.Result, result monitors.Result) any {
 		return "\u2197" // trending up in health
 	} else {
 		return "\u2198" // trending down in health
+	}
+}
+
+// pushToWebhook asynchronously sends a notification to the configured webhook URL
+// when a monitor's result changes. The payload includes a summary message.
+func (s *Server) pushToWebhook(ctx context.Context, m monitors.Monitor, prev monitors.Result, result monitors.Result) {
+	// Do this in a goroutine because we need to relock to access config.
+	s.mu.Lock()
+	wh := s.config.Webhook
+	s.mu.Unlock()
+	if wh.Enabled {
+		msg := fmt.Sprintf("%s: %s %s [ %s ]", m.DisplayName(), result.Status.String(), getResultArrow(prev, result), result.Value)
+		go func() {
+			err := webhook.Send(ctx, wh.URL, msg)
+			if err != nil {
+				log.Printf("pushToWebhook:%s:  %v", wh.URL, err)
+			}
+		}()
 	}
 }
 
@@ -235,7 +212,7 @@ func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 // Expects a JSON body with a "text" field. Responds with HTTP 200 OK.
 func (s *Server) handleTestWebhook(_ context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var hook webhookPayload
+		var hook webhook.Payload
 		ok := s.unmarshallBody(w, r, &hook)
 		if !ok {
 			return
@@ -474,7 +451,7 @@ func (s *Server) handleIntervalUpdate(ctx context.Context) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, time.Second)
+		s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, 0)
 		s.saveConfig(w)
 	}
 }
@@ -650,7 +627,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 	}
 
 	// Set the monitoring interval to trigger the initial checks.
-	s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, time.Second)
+	s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, 0)
 
 	log.Printf("Configuration applied")
 
