@@ -11,6 +11,7 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"lmon/web"
 )
@@ -29,10 +30,11 @@ func TestServerHealth(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
-func getBrowser() *rod.Browser {
+func getBrowser(t *testing.T) *rod.Browser {
 	var browser *rod.Browser
 	if os.Getenv("CI") != "" {
-		u := launcher.New().Set("no-sandbox").MustLaunch()
+		u, err := launcher.New().Set("no-sandbox").Launch()
+		require.NoError(t, err, "rod launch")
 		browser = rod.New().ControlURL(u).MustConnect()
 	} else {
 		browser = rod.New().MustConnect()
@@ -48,7 +50,7 @@ func TestDefaultConfigUIRod(t *testing.T) {
 	s, _ := web.StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	browser := getBrowser()
+	browser := getBrowser(t)
 	defer browser.MustClose()
 	page := browser.MustPage(s.ServerUrl)
 	defer page.MustClose()
@@ -88,7 +90,7 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	s, _ := web.StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	browser := getBrowser()
+	browser := getBrowser(t)
 	defer browser.MustClose()
 	page := browser.MustPage(s.ServerUrl)
 	defer page.MustClose()
@@ -117,7 +119,7 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	// Wait for the disk item to appear in the dashboard
 	page.Timeout(1 * time.Second).MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
 
-	// Assert its presence on the dashboar
+	// Assert its presence on the dashboard
 	page.MustElement(`a.nav-link[href="/"]`).MustClick()
 	diskItem := page.MustElement(`#disk-items .list-group-item[data-id="disk_root"]`)
 	assert.NotNil(t, diskItem, "Disk item 'root' is present in dashboard")
@@ -161,42 +163,65 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	s, _ := web.StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	browser := getBrowser()
+	browser := getBrowser(t)
 	defer browser.MustClose()
 	page := browser.MustPage(s.ServerUrl)
 	defer page.MustClose()
 
 	// Navigate to the config tab
-	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
+	// err := page.WaitStable(time.Second)
+	// require.NoError(t, err, "page wait stable")
+
+	// Click on the config link
+	el, err := page.Element(`a.nav-link[href="/config"]`)
+	require.NoError(t, err, "find config link")
+	el.MustClick()
+
 	// Wait for the health check form to appear
-	page.Timeout(1 * time.Second).MustElement(`#add-health-form`)
+	_, err = page.Timeout(1 * time.Second).Element(`#add-health-form`)
+	require.NoError(t, err, "find health check form")
 
 	// Fill out the Add Health Check form
-	page.MustElement(`#health-name`).MustInput("local")
-	page.MustElement(`#health-url`).MustInput("http://localhost:8080")
-	page.MustElement(`#health-timeout`).MustInput("10")
-	// Optionally set icon if needed (leave as default)
+	el, err = page.Element(`#health-name`)
+	require.NoError(t, err, "find health check name input")
+	_ = el.MustInput("local")
+	el, err = page.Element(`#health-url`)
+	require.NoError(t, err, "find health check url input")
+	_ = el.Input("http://localhost:8080")
+	el, err = page.Element(`#health-timeout`)
+	require.NoError(t, err, "find health check timeout input")
+	_ = el.Input("10")
 
 	// Submit the form
-	page.MustElement(`#add-health-form button[type="submit"]`).MustClick()
+	el, err = page.Element(`#add-health-form button[type="submit"]`)
+	require.NoError(t, err, "find health check submit button")
+	el.MustClick()
 
 	// Wait for the health check to appear in the config list
-	page.Timeout(1*time.Second).MustElementR("#health-config-items .config-item", "local")
+	_, err = page.Timeout(1*time.Second).ElementR("#health-config-items .config-item", "local")
+	require.NoError(t, err, "find health check item in config list")
 
 	// Navigate back to dashboard
-	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	el, err = page.Element(`a.nav-link[href="/"]`)
+	require.NoError(t, err, "find dashboard link")
+	el.MustClick()
+
 	// Wait for dashboard health items to appear
-	page.Timeout(1 * time.Second).MustElement(`#health-items`)
+	_, err = page.Timeout(1 * time.Second).Element(`#health-items`)
+	require.NoError(t, err, "find health items")
 
 	// Wait for the health check item to appear in the dashboard
-	page.Timeout(1 * time.Second).MustElement(`#health-items .list-group-item[data-id="health_local"]`)
+	_, err = page.Timeout(1 * time.Second).Element(`#health-items .list-group-item[data-id="health_local"]`)
+	require.NoError(t, err, "find health check item in dashboard")
 
 	// Assert its presence
-	healthItem := page.MustElement(`#health-items .list-group-item[data-id="health_local"]`)
+	healthItem, err := page.Element(`#health-items .list-group-item[data-id="health_local"]`)
+	require.NoError(t, err, "find health check item in dashboard")
 	assert.NotNil(t, healthItem, "Health check item 'local' is present in dashboard")
 	healthText := healthItem.MustText()
 	assert.Contains(t, healthText, "local", "Health check display name is shown")
 	assert.Contains(t, healthText, "http://localhost:8080", "Health check URL is shown")
+	assert.Contains(t, healthText, "200 (OK)", "Health check status is shown")
 	assert.Regexp(t, `\d+(\.\d+)?`, healthText, "Health check value is shown")
 	// healthItem.MustClick()
 	// modal := page.MustElement("#itemDetailModal")
@@ -208,12 +233,16 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	// modal.MustClick()
 
 	// --- MOBILE PAGE CHECKS ---
-	page.MustElement(`a.nav-link[href="/mobile"]`).MustClick()
+	el, err = page.Element(`a.nav-link[href="/mobile"]`)
+	require.NoError(t, err, "find mobile link")
+	el.MustClick()
+
 	page.Timeout(1 * time.Second).MustElement(`#mobile-items-list`)
 	healthMobile := page.MustElement(`#mobile-items-list .mobile-list-item[data-id="health_local"]`)
 	healthMobileText := healthMobile.MustText()
 	assert.Contains(t, healthMobileText, "local", "Health check display name is shown on mobile")
 	assert.Contains(t, healthMobileText, "http://localhost:8080", "Health check URL is shown on mobile")
+	assert.Contains(t, healthMobileText, "200 (OK)", "Health status on mobile")
 	assert.Regexp(t, `\d+(\.\d+)?`, healthMobileText, "Health check value is shown on mobile")
 
 	// healthMobile.MustClick()
@@ -225,10 +254,15 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	// assert.Contains(t, modalMobileText, "Threshold", "Modal shows threshold on mobile")
 
 	// Go back to config and delete the health check
-	page.MustElement(`a.nav-link[href="/config"]`).MustClick()
-	page.Timeout(1 * time.Second).MustElement(`#health-config-items`)
-	page.MustElementR(`#health-config-items .config-item`, "local")
-	el := page.Timeout(1 * time.Second).MustElement(`button.delete-btn[data-type="health"][data-id="local"]`)
+	el, err = page.Element(`a.nav-link[href="/config"]`)
+	require.NoError(t, err, "find config link")
+	el.MustClick()
+	_, err = page.Timeout(1 * time.Second).Element(`#health-config-items`)
+	require.NoError(t, err, "find health check config items")
+	_, err = page.ElementR(`#health-config-items .config-item`, "local")
+	require.NoError(t, err, "find health check item in config list")
+	el, err = page.Timeout(1 * time.Second).Element(`button.delete-btn[data-type="health"][data-id="local"]`)
+	require.NoError(t, err, "find health check delete button")
 	wait, handle := page.HandleDialog()
 	go el.MustClick()
 	_ = wait()
@@ -238,7 +272,9 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	page.Timeout(1*time.Second).MustElementR(`#health-config-items`, "No health checks configured")
 
 	// Go back to dashboard and verify health check is gone
-	page.MustElement(`a.nav-link[href="/"]`).MustClick()
+	el, err = page.Element(`a.nav-link[href="/"]`)
+	require.NoError(t, err, "find dashboard link")
+	el.MustClick()
 	page.Timeout(1 * time.Second).MustElement(`#health-items`)
 	assert.Panics(t, func() {
 		page.Timeout(1 * time.Second).MustElement(`#health-items .list-group-item[data-id="health_local"]`)

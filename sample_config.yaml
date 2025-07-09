@@ -1,29 +1,34 @@
 monitoring:
-    interval: 60
-    disk:
-        - path: /
-          threshold: 80
-          icon: hdd
-        - path: /home
-          threshold: 80
-          icon: hdd
-    system:
-        cpu:
-            threshold: 90
-            icon: cpu
-        memory:
-            threshold: 90
-            icon: speedometer
-    healthchecks:
-        - name: "Self Check"
-          url: "http://localhost:8080/healthz"
-          interval: 60
-          timeout: 10
-          icon: "activity"
+  disk:
+    root:
+      icon: hdd
+      path: /
+      threshold: 80
+    home:
+      icon: hdd
+      path: /home
+      threshold: 80
+  healthcheck:
+    google:
+      icon: activity
+      timeout: 10
+      url: https://google.com
+    local:
+      icon: heart-pulse
+      timeout: 10
+      url: http://localhost:8080/healthz
+  interval: 60
+  system:
+    cpu:
+      icon: cpu
+      threshold: 85
+    memory:
+      icon: speedometer
+      threshold: 85
+    title: lmon Dashboard
 web:
-    host: 0.0.0.0
-    port: 8080
-    dashboard_title: "Monitoring Dashboard"
+  host: 0.0.0.0
+  port: 8080
 webhook:
-    enabled: false
-    url: ""
+  enabled: true
+  url: http://localhost:8080/testhook
