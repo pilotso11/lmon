@@ -84,6 +84,10 @@ func NewMem(threshold int, icon string, provider MemProvider) Mem {
 	}
 }
 
+func (c Mem) String() string {
+	return fmt.Sprintf("Mem{threshold: %d, icon: %s}", c.threshold, c.icon)
+}
+
 // DisplayName returns a human-readable name for the memory monitor.
 func (c Mem) DisplayName() string {
 	return "mem"

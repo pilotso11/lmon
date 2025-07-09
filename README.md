@@ -5,7 +5,7 @@ A lightweight, extensible monitoring service written in Go. lmon monitors system
 
 [![Go](https://github.com/yourusername/lmon/actions/workflows/go.yml/badge.svg)](https://github.com/yourusername/lmon/actions/workflows/go.yml)
 [![Docker](https://github.com/yourusername/lmon/actions/workflows/docker.yml/badge.svg)](https://github.com/yourusername/lmon/actions/workflows/docker.yml)
-![Coverage](https://img.shields.io/badge/Coverage-31-yellow)
+![Coverage](https://img.shields.io/badge/Coverage-0-red)
 
 ---
 
@@ -127,27 +127,6 @@ All config options can be set with the `LMON_` prefix. Examples:
 
 ### As a Systemd Service
 
-#### Automatic Installation
-
-```bash
-sudo ./lmon --install-service
-# To uninstall:
-sudo ./lmon --uninstall-service
-```
-
-This will:
-- Copy the binary to `/opt/lmon/lmon`
-- Install the systemd unit file to `/etc/systemd/system/lmon.service`
-- Create a user/group `lmon`
-- Create `/etc/lmon` for config
-- Enable the service
-
-After install, copy your config to `/etc/lmon/config.yaml` and start the service:
-
-```bash
-sudo systemctl start lmon
-```
-
 #### Manual Installation
 
 1. Copy the binary to `/opt/lmon/lmon`
@@ -202,6 +181,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 5s
+
 ```
 
 Run with:

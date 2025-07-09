@@ -3,7 +3,6 @@
 package web
 
 import (
-	"bytes"
 	"context"
 	"embed"
 	_ "embed"
@@ -15,7 +14,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -26,12 +24,13 @@ import (
 	"lmon/monitors/disk"
 	"lmon/monitors/healthcheck"
 	"lmon/monitors/mapper"
+	"lmon/webhook"
 )
 
 // Server encapsulates the HTTP server, configuration, and monitoring services.
 // It manages the lifecycle of the web server, routes, and provides thread-safe access to configuration.
 type Server struct {
-	mu         sync.Mutex        // Mutex to protect concurrent access to server state.
+	mu         sync.Mutex        // Mutex to protect concurrent access to config.
 	config     *config.Config    // Application configuration.
 	loader     *config.Loader    // Configuration loader for persisting config changes.
 	monitor    *monitors.Service // Monitoring service for system and custom checks.
@@ -72,7 +71,7 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 
 	server.httpServer = &http.Server{
 		Addr:    ln.Addr().String(),
-		Handler: LoggingHandler(os.Stdout, router),
+		Handler: LoggingHandler(router),
 	}
 
 	// Setup push to webhook callback
@@ -96,7 +95,7 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 	return server, nil
 }
 
-func LoggingHandler(stdout *os.File, router *http.ServeMux) http.Handler {
+func LoggingHandler(router *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		// Log the request
@@ -172,47 +171,6 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor(ctx))
 }
 
-// webhookPayload represents the JSON payload sent to a webhook endpoint.
-type webhookPayload struct {
-	Text string `json:"text"`
-}
-
-// pushToWebhook asynchronously sends a notification to the configured webhook URL
-// when a monitor's result changes. The payload includes a summary message.
-func (s *Server) pushToWebhook(ctx context.Context, m monitors.Monitor, prev monitors.Result, result monitors.Result) {
-	// Do this in a goroutine because we need to relock to access config.
-	go func(ctx context.Context, msg string) {
-		s.mu.Lock()
-		wh := s.config.Webhook
-		s.mu.Unlock()
-		if wh.Enabled {
-			var body webhookPayload
-			body.Text = msg
-			payload, err := json.Marshal(body)
-			if err != nil {
-				log.Printf("pushToWebhook (json): %v", err)
-				return
-			}
-			req, err := http.NewRequestWithContext(ctx, "POST", wh.URL, bytes.NewBuffer(payload))
-			if err != nil {
-				log.Printf("pushToWebhook (newreq): %v", err)
-				return
-			}
-			req.Header.Set("Content-Type", "application/json")
-			client := &http.Client{Timeout: 5 * time.Second}
-			resp, err := client.Do(req)
-			if err != nil {
-				log.Printf("pushToWebhook (req): %v", err)
-				return
-			}
-			if resp.StatusCode != http.StatusOK {
-				log.Printf("pushToWebhook (status): %v", resp.Status)
-				return
-			}
-		}
-	}(ctx, fmt.Sprintf("%s: %s %s [ %s ]", m.DisplayName(), result.Status.String(), getResultArrow(prev, result), result.Value))
-}
-
 // getResultArrow returns a unicode arrow indicating the trend of a monitor's status change.
 func getResultArrow(prev monitors.Result, result monitors.Result) any {
 	if prev.Status == monitors.RAGUnknown {
@@ -225,9 +183,27 @@ func getResultArrow(prev monitors.Result, result monitors.Result) any {
 	}
 }
 
+// pushToWebhook asynchronously sends a notification to the configured webhook URL
+// when a monitor's result changes. The payload includes a summary message.
+func (s *Server) pushToWebhook(ctx context.Context, m monitors.Monitor, prev monitors.Result, result monitors.Result) {
+	// Do this in a goroutine because we need to relock to access config.
+	s.mu.Lock()
+	wh := s.config.Webhook
+	s.mu.Unlock()
+	if wh.Enabled {
+		msg := fmt.Sprintf("%s: %s %s [ %s ]", m.DisplayName(), result.Status.String(), getResultArrow(prev, result), result.Value)
+		go func() {
+			err := webhook.Send(ctx, wh.URL, msg)
+			if err != nil {
+				log.Printf("pushToWebhook:%s:  %v", wh.URL, err)
+			}
+		}()
+	}
+}
+
 // handleHealthCheck responds with HTTP 200 OK for health check probes.
 // Used for liveness/readiness checks.
-func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleHealthCheck(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
 }
 
@@ -235,7 +211,7 @@ func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 // Expects a JSON body with a "text" field. Responds with HTTP 200 OK.
 func (s *Server) handleTestWebhook(_ context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var hook webhookPayload
+		var hook webhook.Payload
 		ok := s.unmarshallBody(w, r, &hook)
 		if !ok {
 			return
@@ -345,7 +321,7 @@ func (s *Server) writeJson(w http.ResponseWriter, data any) {
 
 // handleGetItems responds with a JSON object containing all monitored items and their statuses.
 // Route: GET /api/items
-func (s *Server) handleGetItems(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetItems(w http.ResponseWriter, _ *http.Request) {
 	s.writeJson(w, s.monitor.Results())
 }
 
@@ -367,7 +343,7 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 
 // handleGetConfig responds with the current server configuration as JSON.
 // Route: GET /api/config
-func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.writeJson(w, s.config)
@@ -416,11 +392,7 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
-		err = s.monitor.Add(ctx, cpu)
-		if err != nil {
-			log.Printf("handleUpdateSystemConfig (cpu): %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		s.monitor.Add(ctx, cpu)
 
 		// Apply mem config
 		mem, err := s.mapper.NewMem(ctx, cfg.Memory)
@@ -429,11 +401,7 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
-		err = s.monitor.Add(ctx, mem)
-		if err != nil {
-			log.Printf("handleUpdateSystemConfig (mem): %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		s.monitor.Add(ctx, mem)
 
 		s.saveConfig(w)
 	}
@@ -474,7 +442,7 @@ func (s *Server) handleIntervalUpdate(ctx context.Context) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, time.Second)
+		s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, 0)
 		s.saveConfig(w)
 	}
 }
@@ -501,12 +469,7 @@ func (s *Server) handleAddDiskMonitor(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		err = s.monitor.Add(ctx, d)
-		if err != nil {
-			log.Printf("handleAddDiskMonitor %s: %v", r.URL.String(), err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		s.monitor.Add(ctx, d)
 
 		s.saveConfig(w)
 	}
@@ -534,12 +497,7 @@ func (s *Server) handleAddHealthCheck(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		err = s.monitor.Add(ctx, d)
-		if err != nil {
-			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		s.monitor.Add(ctx, d)
 
 		s.saveConfig(w)
 	}
@@ -548,7 +506,7 @@ func (s *Server) handleAddHealthCheck(ctx context.Context) http.HandlerFunc {
 // handleUpdateWebhook processes a request to update the webhook configuration.
 // Expects a JSON body with the new webhook settings.
 // Route: POST /api/config/webhook
-func (s *Server) handleUpdateWebhook(ctx context.Context) http.HandlerFunc {
+func (s *Server) handleUpdateWebhook(_ context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -613,18 +571,14 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 	if err != nil {
 		return err
 	}
-	if err = s.monitor.Add(ctx, cpu); err != nil {
-		return err
-	}
-	log.Printf("Set CPU  %v", cpu)
+	s.monitor.Add(ctx, cpu)
+	log.Printf("Set CPU %v", cpu)
 
 	mem, err := s.mapper.NewMem(ctx, cfg.System.Memory)
 	if err != nil {
 		return err
 	}
-	if err := s.monitor.Add(ctx, mem); err != nil {
-		return err
-	}
+	s.monitor.Add(ctx, mem)
 	log.Printf("Set MEM %v", cpu)
 
 	for name, i := range cfg.Disk {
@@ -632,9 +586,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		if err != nil {
 			return err
 		}
-		if err := s.monitor.Add(ctx, newDisk); err != nil {
-			return err
-		}
+		s.monitor.Add(ctx, newDisk)
 		log.Printf("Added Disk %v", newDisk)
 	}
 
@@ -643,14 +595,12 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		if err != nil {
 			return err
 		}
-		if err = s.monitor.Add(ctx, newHealth); err != nil {
-			return err
-		}
+		s.monitor.Add(ctx, newHealth)
 		log.Printf("Added Healthcheck %v", newHealth)
 	}
 
 	// Set the monitoring interval to trigger the initial checks.
-	s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, time.Second)
+	s.monitor.SetPeriod(ctx, time.Duration(cfg.Interval)*time.Second, 0)
 
 	log.Printf("Configuration applied")
 

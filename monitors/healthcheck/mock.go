@@ -14,7 +14,7 @@ var _ UsageProvider = (*MockHealthcheckProvider)(nil)
 // MockHealthcheckProvider is a mock implementation of UsageProvider for testing.
 // It allows simulation of HTTP status codes and errors.
 type MockHealthcheckProvider struct {
-	Result *atomic.Int32 // HTTP status code to return
+	Result *atomic.Int32 // HTTP status RespCode to return
 	err    error         // Error to return from Check, if any
 }
 
@@ -29,7 +29,7 @@ func (m MockHealthcheckProvider) Check(_ context.Context, _ *url.URL, _ int) (*h
 	}, nil
 }
 
-// NewMockHealthcheckProvider creates a new MockHealthcheckProvider with the given HTTP status code.
+// NewMockHealthcheckProvider creates a new MockHealthcheckProvider with the given HTTP status RespCode.
 func NewMockHealthcheckProvider(code int) *MockHealthcheckProvider {
 	return &MockHealthcheckProvider{Result: atomic.NewInt32(int32(code))}
 }

@@ -14,15 +14,6 @@ import (
 	"lmon/monitors"
 )
 
-// TstNewDisk is a helper for quickly testing Disk creation and addition to a monitoring service.
-func TstNewDisk(t *testing.T) {
-	push := monitors.NewMockPush()
-	d := NewDisk("test", "/test", 90, "", MockDiskProvider{path: "/test", Current: atomic.NewFloat64(0), total: 100})
-	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
-	_ = svc.Add(t.Context(), d)
-	assert.Equal(t, 1, svc.Size(), "one monitor added")
-}
-
 // TestDisk_DisplayName verifies that DisplayName returns the expected string for various disk names and paths.
 func TestDisk_DisplayName(t *testing.T) {
 	tests := []struct {
@@ -159,9 +150,11 @@ func Test_Check_PushOnAddWithBreach(t *testing.T) {
 
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
 	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(90), total: 100 * gigabyte, err: nil, path: "/test"})
-	err := svc.Add(t.Context(), d)
-	assert.NoError(t, err)
+	svc.Add(t.Context(), d)
 
+	assert.Eventually(t, func() bool {
+		return push.Calls.Size() == 1
+	}, 100*time.Millisecond, time.Millisecond, "push on add for breach is expected")
 	require.Equal(t, 1, push.Calls.Size(), "push on add for breach is expected")
 	val, ok := push.Calls.Load(int32(1))
 	assert.True(t, ok, "push exists")
@@ -175,9 +168,11 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
 	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(0), total: 100 * gigabyte, err: os.ErrNotExist, path: "/test"})
 
-	err := svc.Add(t.Context(), d)
-	assert.NoError(t, err, "error not expected even with failed check on add")
+	svc.Add(t.Context(), d)
 
+	assert.Eventually(t, func() bool {
+		return 1 == push.Calls.Size()
+	}, 100*time.Millisecond, time.Millisecond, "push on add for breach is expected")
 	require.Equal(t, 1, push.Calls.Size(), "push on add for breach is expected")
 	val, ok := push.Calls.Load(int32(1))
 	assert.True(t, ok, "push exists")
@@ -212,9 +207,11 @@ func Test_Check_PushOnChange(t *testing.T) {
 			svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
 			impl := MockDiskProvider{Current: atomic.NewFloat64(tt.initial), total: 100 * gigabyte, path: "/test"}
 			d := NewDisk("test", "/test", 90, "", &impl)
-			err := svc.Add(t.Context(), d)
-			assert.NoError(t, err, "error not expected")
+			svc.Add(t.Context(), d)
 
+			assert.Eventually(t, func() bool {
+				return tt.initialCnt == push.Calls.Size()
+			}, 100*time.Millisecond, time.Millisecond, "inial push count")
 			require.Equal(t, tt.initialCnt, push.Calls.Size(), "initial push cnt")
 			if tt.initialCnt > 0 {
 				va, ok := push.Calls.Load(int32(tt.initialCnt))
