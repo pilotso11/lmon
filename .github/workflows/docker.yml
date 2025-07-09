@@ -28,7 +28,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: osherse/lmon
+          images: ${{ github.repository }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
