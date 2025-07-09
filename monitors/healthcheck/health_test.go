@@ -20,7 +20,7 @@ func TestNewHealthcheck(t *testing.T) {
 	h, err := NewHealthcheck("local", "http://localhost/health", 5, "", MockHealthcheckProvider{Result: atomic.NewInt32(http.StatusOK)})
 	assert.NoError(t, err)
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
-	_ = svc.Add(t.Context(), h)
+	svc.Add(t.Context(), h)
 	assert.Equal(t, 1, svc.Size(), "one monitor added")
 }
 
@@ -190,14 +190,14 @@ func TestHealthcheck_DefaultImplSmokeTest(t *testing.T) {
 		{"500", http.StatusInternalServerError, 0, monitors.RAGRed},
 		{"307 Redirected", http.StatusTemporaryRedirect, 0, monitors.RAGAmber},
 		{"404 Not found", http.StatusNotFound, 0, monitors.RAGAmber},
-		{"200 timeout", http.StatusOK, 100, monitors.RAGError},
+		{"200 timeout", http.StatusOK, 2000, monitors.RAGError},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ts.code.Store(tt.resp)
 			ts.msDelay.Store(tt.msDelay)
-			c, err := NewHealthcheck("test", ts.url, 20, "", nil)
+			c, err := NewHealthcheck("test", ts.url, 1, "", nil)
 			assert.NoError(t, err)
 			r := c.Check(t.Context())
 			assert.Equal(t, tt.expect, r.Status, "status not %s: %s", tt.expect.String(), r.Status.String())

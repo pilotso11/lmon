@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -12,31 +11,10 @@ import (
 	"lmon/config"
 	"lmon/monitors"
 	"lmon/monitors/mapper"
-	"lmon/systemd"
 	"lmon/web"
 )
 
 func main() {
-	// Parse command line flags
-	installFlag := flag.Bool("install-service", false, "Install lmon as a systemd service")
-	uninstallFlag := flag.Bool("uninstall-service", false, "Uninstall the lmon systemd service")
-	flag.Parse()
-
-	// Handle service installation/uninstallation
-	if *installFlag {
-		if err := systemd.InstallService(); err != nil {
-			log.Fatalf("Failed to install service: %v", err)
-		}
-		return
-	}
-
-	if *uninstallFlag {
-		if err := systemd.UninstallService(); err != nil {
-			log.Fatalf("Failed to uninstall service: %v", err)
-		}
-		return
-	}
-
 	// subscribe to interrupts
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -53,7 +31,7 @@ func main() {
 	}
 
 	// startup monitoring
-	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, time.Second, nil)
+	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, 10*time.Second, nil)
 
 	// start server
 	server, err := web.NewServerWithContext(ctx, cfg, l, mon, mapper.NewMapper(nil))

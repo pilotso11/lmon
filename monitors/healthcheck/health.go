@@ -29,6 +29,8 @@ package healthcheck
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -41,6 +43,11 @@ import (
 const Icon = "activity" // Default icon for healthcheck monitors
 const Group = "health"  // Group name for healthcheck monitors
 
+// client is the default HTTP client used for health checks to support connection pooling and reuse.
+var client = &http.Client{
+	Timeout: 5 * time.Second, // Default timeout for HTTP requests
+}
+
 // UsageProvider is an interface for obtaining healthcheck usage statistics.
 // It allows for production and mock implementations.
 type UsageProvider interface {
@@ -50,31 +57,43 @@ type UsageProvider interface {
 // DefaultHealthcheckProvider is the default implementation of UsageProvider
 // using Go's http.Client.
 type DefaultHealthcheckProvider struct {
-	client http.Client
 }
 
 // NewDefaultHealthcheckProvider creates a new DefaultHealthcheckProvider with the given timeout in milliseconds.
 func NewDefaultHealthcheckProvider(msTimeout int) *DefaultHealthcheckProvider {
 	if msTimeout == 0 {
-		msTimeout = 5
+		msTimeout = 5000 // Default to 5000ms (5 seconds) if no timeout is specified
 	}
-	return &DefaultHealthcheckProvider{
-		client: http.Client{
-			Timeout: time.Millisecond * time.Duration(msTimeout),
-		},
-	}
+	return &DefaultHealthcheckProvider{}
 }
 
 // Check performs an HTTP GET request to the given URL with the specified timeout (ms).
 // Returns the HTTP response or an error.
 func (p *DefaultHealthcheckProvider) Check(ctx context.Context, path *url.URL, msTimeout int) (*http.Response, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(msTimeout)*time.Millisecond)
+	to := time.Duration(msTimeout) * time.Millisecond
+	toCtx, cancel := context.WithTimeout(ctx, to)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", path.String(), nil)
+	req, err := http.NewRequestWithContext(toCtx, "GET", path.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-	return p.client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Error performing healthcheck: %s: %v", path.String(), err)
+		return nil, err
+	}
+	if resp == nil {
+		log.Printf("Healthcheck returned nil response for %s", path.String())
+		return nil, fmt.Errorf("nil response from healthcheck for %s", path.String())
+	}
+
+	// read the body to ensure the request is complete
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	return resp, err
 }
 
 // Healthcheck represents an HTTP endpoint health monitor.
@@ -109,6 +128,11 @@ func NewHealthcheck(name string, urlRaw string, timeout int, icon string, impl U
 	}, nil
 }
 
+// String returns a string representation of the Healthcheck monitor.
+func (d Healthcheck) String() string {
+	return fmt.Sprintf("Healthcheck{name: %s, url: %s, timeout: %d, icon: %s}", d.name, d.url.String(), d.timeout, d.icon)
+}
+
 // DisplayName returns a human-readable name for the healthcheck monitor.
 func (d Healthcheck) DisplayName() string {
 	u := fmt.Sprintf("%s://%s", d.url.Scheme, d.url.Host)
@@ -137,7 +161,7 @@ func (d Healthcheck) Save(cfg *config.Config) {
 // Check performs a healthcheck by making an HTTP request to the configured URL.
 // Returns a Result with the status and value based on the HTTP response.
 func (d Healthcheck) Check(ctx context.Context) monitors.Result {
-	response, err := d.impl.Check(ctx, d.url, d.timeout)
+	response, err := d.impl.Check(ctx, d.url, d.timeout*1000) // Convert ms to seconds for the provider
 	if err != nil {
 		return monitors.Result{
 			Status: monitors.RAGError,

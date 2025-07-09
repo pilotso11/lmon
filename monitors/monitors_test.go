@@ -19,15 +19,14 @@ func TestNewService(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
 	assert.NotNil(t, svc, "service started")
-	err := svc.Add(ctx, NewMockMonitor("test", "test"))
-	assert.NoError(t, err, "monitor added")
-	_, ok := svc.monitors["test"]
+	svc.Add(ctx, NewMockMonitor("test", "test"))
+	_, ok := svc.monitors.Load("test")
 	require.True(t, ok, "monitor added")
 	time.Sleep(15 * time.Millisecond)
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
-	assert.Equal(t, int32(3), svc.monitors["test"].(*MockMonitor).Checks.Load(), "checks called start + add + timer")
-	assert.Equal(t, 1, len(svc.result), "len result")
+	m, ok := svc.monitors.Load("test")
+	require.True(t, ok, "monitor exists")
+	assert.Equal(t, int32(3), m.(*MockMonitor).Checks.Load(), "checks called start + add + timer")
+	assert.Equal(t, 1, svc.result.Size(), "len result")
 
 	cancel()
 }
@@ -42,22 +41,22 @@ func TestService_Add(t *testing.T) {
 	m1 := NewMockMonitor("test1", "test")
 	m2 := NewMockMonitor("test2", "test")
 
-	err := svc.Add(ctx, m1)
-	assert.NoError(t, err, "add should succeed")
-	assert.Len(t, svc.monitors, 1, "one monitor added")
-	assert.Contains(t, svc.monitors, "test1", "monitor test1 added")
+	svc.Add(ctx, m1)
+	assert.Equal(t, 1, svc.monitors.Size(), "one monitor added")
+	_, ok := svc.monitors.Load("test1")
+	assert.True(t, ok, "monitor test1 added")
 
-	err = svc.Add(ctx, m2)
-	assert.NoError(t, err, "add should succeed")
-	assert.Len(t, svc.monitors, 2, "two monitors added")
-	assert.Contains(t, svc.monitors, "test2", "monitor test2 added")
+	svc.Add(ctx, m2)
+	assert.Equal(t, 2, svc.monitors.Size(), "two monitors added")
+	_, ok = svc.monitors.Load("test2")
+	assert.True(t, ok, "monitor test2 added")
 
 	// Test overwriting existing monitor
 	m3 := NewMockMonitor("test1", "test")
-	err = svc.Add(ctx, m3)
-	assert.NoError(t, err, "add should succeed")
-	assert.Len(t, svc.monitors, 2, "monitor count unchanged")
-	assert.Same(t, m3, svc.monitors["test1"], "monitor was replaced")
+	svc.Add(ctx, m3)
+	assert.Equal(t, 2, svc.monitors.Size(), "monitor count unchanged")
+	m, _ := svc.monitors.Load("test1")
+	assert.Same(t, m3, m, "monitor was replaced")
 }
 
 // TestService_Remove verifies removing monitors from the Service, including error handling for missing monitors.
@@ -71,16 +70,18 @@ func TestService_Remove(t *testing.T) {
 	m2 := NewMockMonitor("test2", "test")
 
 	// Add monitors
-	_ = svc.Add(ctx, m1)
-	_ = svc.Add(ctx, m2)
-	assert.Len(t, svc.monitors, 2, "two monitors added")
+	svc.Add(ctx, m1)
+	svc.Add(ctx, m2)
+	assert.Equal(t, 2, svc.monitors.Size(), "two monitors added")
 
 	// Test successful removal
 	err := svc.Remove(m1)
 	assert.NoError(t, err, "remove should succeed")
-	assert.Len(t, svc.monitors, 1, "one monitor should remain")
-	assert.NotContains(t, svc.monitors, "test1", "monitor test1 should be removed")
-	assert.Contains(t, svc.monitors, "test2", "monitor test2 should remain")
+	assert.Equal(t, 1, svc.monitors.Size(), "one monitor should remain")
+	_, ok := svc.monitors.Load("test1")
+	assert.False(t, ok, "monitor test1 should be removed")
+	_, ok = svc.monitors.Load("test2")
+	assert.True(t, ok, "monitor test2 should remain")
 
 	// Test removing non-existent monitor
 	err = svc.Remove(m1)
@@ -91,7 +92,7 @@ func TestService_Remove(t *testing.T) {
 	// Test removing the last monitor
 	err = svc.Remove(m2)
 	assert.NoError(t, err, "remove should succeed")
-	assert.Len(t, svc.monitors, 0, "no monitors should remain")
+	assert.Equal(t, 0, svc.monitors.Size(), "no monitors should remain")
 }
 
 // TestService_Results_CloneAndRace verifies that Results returns a safe-to-mutate clone and tests for race conditions.
@@ -102,7 +103,7 @@ func TestService_Results_CloneAndRace(t *testing.T) {
 
 	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
 	mon := NewMockMonitor("race", "race")
-	_ = svc.Add(ctx, mon)
+	svc.Add(ctx, mon)
 
 	// Wait for at least one check to occur
 	time.Sleep(15 * time.Millisecond)
@@ -127,9 +128,10 @@ func TestService_Results_CloneAndRace(t *testing.T) {
 		v.Value = "bad"
 	}
 
-	for _, v := range svc.result {
+	svc.result.Range(func(_ string, v Result) bool {
 		assert.NotEqual(t, "bad", v.Value, "internal results should be unchanged after mutation of copy")
-	}
+		return true
+	})
 
 	// Race test: call Results() concurrently and mutate the returned maps
 	var wg sync.WaitGroup
@@ -163,28 +165,22 @@ func TestService_SetPeriod_UpdatesPeriodAndRestarts(t *testing.T) {
 
 	svc := NewService(ctx, 50*time.Millisecond, time.Millisecond, nil)
 	mon := NewMockMonitor("period", "period")
-	_ = svc.Add(ctx, mon)
+	svc.Add(ctx, mon)
 
 	// Wait for at least one check
 	time.Sleep(60 * time.Millisecond)
-	svc.mu.Lock()
 	initialChecks := mon.Checks.Load()
-	initialPeriod := svc.period
-	svc.mu.Unlock()
+	initialPeriod := svc.period.Load()
 	require.GreaterOrEqual(t, initialChecks, int32(1), "should have at least one check")
 
 	// Change period to a much shorter interval
 	svc.SetPeriod(ctx, 10*time.Millisecond, 0)
-	svc.mu.Lock()
-	updatedPeriod := svc.period
-	svc.mu.Unlock()
+	updatedPeriod := svc.period.Load()
 	assert.Equal(t, 10*time.Millisecond, updatedPeriod, "period should be updated")
 
 	// Wait for more checks to accumulate
 	time.Sleep(35 * time.Millisecond)
-	svc.mu.Lock()
 	newChecks := mon.Checks.Load()
-	svc.mu.Unlock()
 	assert.Greater(t, newChecks, initialChecks+2, "checks should increase after period change")
 	assert.NotEqual(t, initialPeriod, updatedPeriod, "period should have changed")
 }
@@ -197,7 +193,7 @@ func TestService_SetPeriod_Race(t *testing.T) {
 
 	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
 	mon := NewMockMonitor("race", "race")
-	_ = svc.Add(ctx, mon)
+	svc.Add(ctx, mon)
 
 	done := make(chan struct{})
 	go func() {

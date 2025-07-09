@@ -6,10 +6,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"maps"
 	"sync"
 	"time"
 
+	"github.com/puzpuzpuz/xsync/v4"
+
+	"lmon/common"
 	"lmon/config"
 )
 
@@ -74,11 +76,10 @@ type PushFunc func(ctx context.Context, m Monitor, prev, result Result)
 // Service manages the lifecycle of monitors, periodic checks, and result storage.
 // It is safe for concurrent use.
 type Service struct {
-	mu       sync.Mutex
-	period   time.Duration
-	timeout  time.Duration
-	monitors map[string]Monitor
-	result   map[string]Result
+	period   *common.AtomicDuration
+	timeout  *common.AtomicDuration
+	monitors *xsync.Map[string, Monitor] // Map of monitor names to Monitor instances
+	result   *xsync.Map[string, Result]
 	cancel   context.CancelFunc
 	push     PushFunc
 	wg       sync.WaitGroup
@@ -90,10 +91,10 @@ type Service struct {
 // push: callback for result changes (may be nil).
 func NewService(ctx context.Context, period time.Duration, timeout time.Duration, push PushFunc) *Service {
 	s := Service{
-		period:   period,
-		timeout:  timeout,
-		monitors: make(map[string]Monitor),
-		result:   make(map[string]Result),
+		period:   common.NewAtomicDuration(period),
+		timeout:  common.NewAtomicDuration(timeout),
+		monitors: xsync.NewMap[string, Monitor](),
+		result:   xsync.NewMap[string, Result](),
 		push:     push,
 	}
 	s.startMonitors(ctx)
@@ -102,57 +103,50 @@ func NewService(ctx context.Context, period time.Duration, timeout time.Duration
 
 // SetPush sets or clears the push callback function.
 // If push is nil, no callback will be invoked on result changes.
+// We don't lock anything here because the push function is only called once during setup in
+// normal operation.
 func (s *Service) SetPush(push PushFunc) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.push = push
 }
 
-// Add adds a monitor to the service and performs an initial check.
-// Returns an error if the initial check fails.
-func (s *Service) Add(ctx context.Context, m Monitor) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// Add adds a monitor to the service and performs an initial check asynchronously.
+func (s *Service) Add(ctx context.Context, m Monitor) {
+	s.monitors.Store(m.Name(), m)
 
-	s.monitors[m.Name()] = m
-
-	// Synchronously check so any error can be reported back to the user
-	result := m.Check(ctx)
-	s.checkStoreAndPush(ctx, m, result)
-	return nil
+	// As Synchronously check
+	go func() {
+		result := m.Check(ctx)
+		s.checkStoreAndPush(ctx, m, result)
+	}()
 }
 
 // Remove removes a monitor from the service by its name.
 // Returns ErrNotFound if the monitor does not exist.
 func (s *Service) Remove(m Monitor) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	name := m.Name()
-	_, ok := s.monitors[name]
+	_, ok := s.monitors.Load(name)
 	if !ok {
 		return ErrNotFound{Name: name}
 	}
-	delete(s.monitors, name)
-	delete(s.result, name) // Remove any pending result immediately
+	s.monitors.Delete(name)
+	s.result.Delete(name) // Remove any pending result immediately
 	return nil
 }
 
 // Results return a clone of the current monitor results map.
 // The returned map can be safely mutated by the caller.
 func (s *Service) Results() map[string]Result {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return maps.Clone(s.result)
+	return xsync.ToPlainMap(s.result)
 }
 
 // SetPeriod changes the refresh period and timeout, and restarts the monitor checks.
 func (s *Service) SetPeriod(ctx context.Context, period time.Duration, timeout time.Duration) {
-	s.mu.Lock()
-	s.period = period
-	s.timeout = timeout
-	s.mu.Unlock()
+	if timeout >= period || timeout == 0 {
+		timeout = time.Duration(float64(period) * 0.66)
+	}
+	log.Printf("Setting new period %v and timeout %v", period, timeout)
+	s.period.Store(period)
+	s.timeout.Store(timeout)
 
 	s.stopMonitors()
 	s.startMonitors(ctx)
@@ -176,28 +170,31 @@ func (s *Service) startMonitors(ctx context.Context) {
 	s.wg.Add(1)
 	go func(ctx context.Context) {
 		defer s.wg.Done()
-		s.mu.Lock()
 		// Validate timeout length
-		if s.timeout > s.period/2 || s.timeout == 0 {
-			s.timeout = s.period / 2
-		}
-		log.Printf("Starting monitors with period %v and timeout %v", s.period, s.timeout)
-		ticker := time.NewTicker(s.period)
-		s.mu.Unlock()
+		log.Printf("Starting monitors with period %v and timeout %v", s.period.Load(), s.timeout.Load())
+		ticker := time.NewTicker(s.period.Load())
 		defer ticker.Stop()
 		for {
+			to := s.timeout.Load()
+			pd := s.period.Load()
+			if to >= pd || to == 0 {
+				to = pd * 2 / 3 // Default to 66% of period if timeout is invalid
+			}
 			// Safely clone the timeout
-			s.mu.Lock()
-			to := s.timeout
-			s.mu.Unlock()
-			timeout, toCancel := context.WithTimeout(ctx, to)
-			s.checkMonitors(timeout)
-			toCancel()
+			if func() bool {
+				toCtx, toCancel := context.WithTimeout(ctx, to)
+				defer toCancel()
+				s.checkMonitors(toCtx)
 
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C: // wait
+				// call cancel to release resources before we start the next tick or on end.
+				select {
+				case <-ctx.Done():
+					return true
+				case <-ticker.C: // wait
+					return false
+				}
+			}() {
+				return // cascade shutdown
 			}
 		}
 	}(ctx)
@@ -206,29 +203,25 @@ func (s *Service) startMonitors(ctx context.Context) {
 // checkMonitors checks all monitors and updates the result map.
 // Each check runs in its own goroutine in parallel.
 func (s *Service) checkMonitors(ctx context.Context) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for _, m := range s.monitors {
+	s.monitors.Range(func(key string, m Monitor) bool {
 		go func(ctx context.Context, m Monitor) {
 			result := m.Check(ctx)
 			result.DisplayName = m.DisplayName()
 			result.Group = m.Group()
 
 			// Store and push result if changed or first non-green
-			s.mu.Lock()
-			defer s.mu.Unlock()
 			s.checkStoreAndPush(ctx, m, result)
 		}(ctx, m)
-	}
+		return true
+	})
 }
 
 // checkStoreAndPush updates the result map and triggers the push callback if needed.
 func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Result) {
 	result.DisplayName = m.DisplayName()
 	result.Group = m.Group()
-	prev, ok := s.result[m.Name()] // get previous result
-	s.result[m.Name()] = result
+	prev, ok := s.result.Load(m.Name()) // get previous result
+	s.result.Store(m.Name(), result)
 	switch {
 	case ok && prev.Status != result.Status && s.push != nil,
 		!ok && result.Status != RAGGreen && s.push != nil:
@@ -238,25 +231,21 @@ func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Resul
 
 // Size returns the number of monitors currently managed by the service.
 func (s *Service) Size() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return len(s.monitors)
+	return s.monitors.Size()
 }
 
 // Save persists the current monitor configuration to the provided config struct.
 // It clears disk and healthcheck entries and saves all monitors' configs.
 func (s *Service) Save(cfg *config.Config) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	// Remove all disks and healthchecks from config
 	cfg.Monitoring.Disk = make(map[string]config.DiskConfig)
 	cfg.Monitoring.Healthcheck = make(map[string]config.HealthcheckConfig)
 
 	// Save all the monitors
-	for _, m := range s.monitors {
+	s.monitors.Range(func(key string, m Monitor) bool {
 		m.Save(cfg)
-	}
-	cfg.Monitoring.Interval = int(s.period / time.Second)
+		return true
+	})
+	cfg.Monitoring.Interval = int(s.period.Load() / time.Second)
 	return nil
 }
