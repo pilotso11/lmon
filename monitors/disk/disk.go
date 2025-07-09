@@ -102,6 +102,11 @@ func NewDisk(name string, path string, threshold int, icon string, impl UsagePro
 	}
 }
 
+// String returns a string representation of the Disk monitor.
+func (d Disk) String() string {
+	return fmt.Sprintf("Disk{name: %s, path: %s, threshold: %d, icon: %s}", d.name, d.path, d.threshold, d.icon)
+}
+
 // DisplayName returns a human-readable name for the disk monitor.
 func (d Disk) DisplayName() string {
 	return fmt.Sprintf("%s (%s)", d.name, d.path)

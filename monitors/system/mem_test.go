@@ -18,7 +18,7 @@ func TestNewMem(t *testing.T) {
 	push := monitors.NewMockPush()
 	d := NewMem(90, "", MockMemProvider{Current: atomic.NewFloat64(0)})
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
-	_ = svc.Add(t.Context(), d)
+	svc.Add(t.Context(), d)
 	assert.Equal(t, 1, svc.Size(), "one monitor added")
 }
 
