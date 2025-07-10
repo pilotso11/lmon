@@ -29,6 +29,54 @@ import (
 	"lmon/webhook"
 )
 
+type IconItem struct {
+	Name string // Name of the Icon, used for display and identification.
+	Icon string // Icon class Name, e.g., "bi-cpu" for Bootstrap Icons.
+}
+
+func defaultIconList() []IconItem {
+	return []IconItem{
+		{Name: "cpu", Icon: "bi-cpu"},
+		{Name: "memory", Icon: "bi-memory"},
+		{Name: "sd-card", Icon: "bi-sd-card"},
+		{Name: "hdd", Icon: "bi-hdd"},
+		{Name: "hdd-network", Icon: "bi-hdd-network"},
+		{Name: "hdd-rack", Icon: "bi-hdd-rack"},
+		{Name: "device-hdd", Icon: "bi-device-hdd"},
+		{Name: "database", Icon: "bi-database"},
+		{Name: "pc-horizontal", Icon: "bi-pc-horizontal"},
+		{Name: "pc", Icon: "bi-pc"},
+		{Name: "activity", Icon: "bi-activity"},
+		{Name: "heart-pulse", Icon: "bi-heart-pulse"},
+		{Name: "speedometer", Icon: "bi-speedometer"},
+		{Name: "speedometer2", Icon: "bi-speedometer2"},
+		{Name: "bar-chart", Icon: "bi-bar-chart"},
+		{Name: "graph-up", Icon: "bi-graph-up"},
+		{Name: "router", Icon: "bi-router"},
+		{Name: "wifi", Icon: "bi-wifi"},
+		{Name: "house", Icon: "bi-house"},
+		{Name: "building", Icon: "bi-building"},
+		{Name: "lightning", Icon: "bi-lightning"},
+		{Name: "lightbulb", Icon: "bi-lightbulb"},
+		{Name: "lamp", Icon: "bi-lamp"},
+		{Name: "at", Icon: "bi-at"},
+		{Name: "battery", Icon: "bi-battery"},
+		{Name: "globe", Icon: "bi-globe"},
+		{Name: "printer", Icon: "bi-printer"},
+		{Name: "folder", Icon: "bi-folder"},
+		{Name: "shield", Icon: "bi-shield"},
+		{Name: "collection", Icon: "bi-collection"},
+		{Name: "envelope", Icon: "bi-envelope"},
+		{Name: "inbox", Icon: "bi-inbox"},
+		{Name: "people", Icon: "bi-people"},
+		{Name: "person-circle", Icon: "bi-person-circle"},
+		{Name: "webcam", Icon: "bi-webcam"},
+		{Name: "volume-up", Icon: "bi-volume-up"},
+		{Name: "voicemail", Icon: "bi-voicemail"},
+		{Name: "tv", Icon: "bi-tv"},
+	}
+}
+
 // Server encapsulates the HTTP server, configuration, and monitoring services.
 // It manages the lifecycle of the web server, routes, and provides thread-safe access to configuration.
 type Server struct {
@@ -296,15 +344,15 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 		slices.SortFunc(mobileItems, func(a, b UIResult) int {
 			return int(a.Status - b.Status)
 		})
-		// sort systemItems by display name
+		// sort systemItems by display Name
 		slices.SortFunc(systemItems, func(a, b UIResult) int {
 			return strings.Compare(a.DisplayName, b.DisplayName)
 		})
-		// sort diskItems by display name
+		// sort diskItems by display Name
 		slices.SortFunc(diskItems, func(a, b UIResult) int {
 			return strings.Compare(a.DisplayName, b.DisplayName)
 		})
-		// sort healthItems by display name
+		// sort healthItems by display Name
 		slices.SortFunc(healthItems, func(a, b UIResult) int {
 			return strings.Compare(a.DisplayName, b.DisplayName)
 		})
@@ -326,6 +374,8 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			"MobileItems":         mobileItems,
 			"ActivePage":          activeTemplate,
 			"UpdateAt":            time.Now().Format("2006-01-02 15:04:05Z"),
+			"Config":              s.config,
+			"IconChoices":         defaultIconList(), // health
 		}
 
 		// Execute the template

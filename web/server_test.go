@@ -103,7 +103,7 @@ func TestStatic(t *testing.T) {
 	s, _ := StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	r, body := GetTestRequest(ctx, t, s, "/static/icons/icon.svg")
+	r, body := GetTestRequest(ctx, t, s, "/static/icons/Icon.svg")
 	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
 	assert.Equal(t, icon, body)
 }
@@ -118,11 +118,11 @@ func TestSetSystemConfig(t *testing.T) {
 	cfg := config.SystemConfig{
 		CPU: config.SystemItem{
 			Threshold: 55,
-			Icon:      "cpu-icon",
+			Icon:      "cpu-Icon",
 		},
 		Memory: config.SystemItem{
 			Threshold: 66,
-			Icon:      "mem-icon",
+			Icon:      "mem-Icon",
 		},
 		Title: "new title",
 	}
@@ -163,7 +163,7 @@ func TestAddDisk(t *testing.T) {
 
 	data := config.DiskConfig{
 		Threshold: 77,
-		Icon:      "disk-icon",
+		Icon:      "disk-Icon",
 		Path:      ".",
 	}
 	id := "test-disk"
@@ -187,7 +187,7 @@ func TestDeleteDisk(t *testing.T) {
 
 	data := config.DiskConfig{
 		Threshold: 77,
-		Icon:      "disk-icon",
+		Icon:      "disk-Icon",
 		Path:      ".",
 	}
 	id := "test-disk"
@@ -228,7 +228,7 @@ func TestAddHealthcheck(t *testing.T) {
 
 	data := config.HealthcheckConfig{
 		Timeout: 77,
-		Icon:    "disk-icon",
+		Icon:    "disk-Icon",
 		URL:     s.ServerUrl + "/healthz",
 	}
 	id := "test-health"
@@ -251,7 +251,7 @@ func TestDeleteHealthcheck(t *testing.T) {
 
 	data := config.HealthcheckConfig{
 		Timeout: 77,
-		Icon:    "disk-icon",
+		Icon:    "disk-Icon",
 		URL:     s.ServerUrl + "/healthz",
 	}
 	id := "test-health"
@@ -509,24 +509,24 @@ func Test_newUIResult(t *testing.T) {
 			System: config.SystemConfig{
 				CPU: config.SystemItem{
 					Threshold: 90,
-					Icon:      "cpu-icon",
+					Icon:      "cpu-Icon",
 				},
 				Memory: config.SystemItem{
 					Threshold: 90,
-					Icon:      "mem-icon",
+					Icon:      "mem-Icon",
 				},
 			},
 			Disk: map[string]config.DiskConfig{
 				"test_d": {
 					Threshold: 90,
-					Icon:      "disk-icon",
+					Icon:      "disk-Icon",
 				},
 			},
 			Healthcheck: map[string]config.HealthcheckConfig{
 				"test_h": {
 					URL:     "http://localhost:8080/healtz",
 					Timeout: 1,
-					Icon:    "health-icon",
+					Icon:    "health-Icon",
 				},
 			},
 		},
@@ -543,10 +543,10 @@ func Test_newUIResult(t *testing.T) {
 		args args
 		want UIResult
 	}{
-		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: "disk-icon", Group: disk.Group, Threshold: 90, TypeLabel: "Disk"}},
-		{"health", args{"health_test_h", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "health-icon", Group: healthcheck.Group, TypeLabel: "Health"}},
-		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "cpu-icon", Group: system.Group, DisplayName: "cpu", Threshold: 90, TypeLabel: "System"}},
-		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{Status: monitors.RAGAmber, Icon: "mem-icon", Group: system.Group, DisplayName: "mem", Threshold: 90, TypeLabel: "System"}},
+		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: "disk-Icon", Group: disk.Group, Threshold: 90, TypeLabel: "Disk"}},
+		{"health", args{"health_test_h", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "health-Icon", Group: healthcheck.Group, TypeLabel: "Health"}},
+		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "cpu-Icon", Group: system.Group, DisplayName: "cpu", Threshold: 90, TypeLabel: "System"}},
+		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{Status: monitors.RAGAmber, Icon: "mem-Icon", Group: system.Group, DisplayName: "mem", Threshold: 90, TypeLabel: "System"}},
 		{"disk-fallback", args{"disk_test_not-found", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: disk.Icon, Group: disk.Group, Threshold: 0, TypeLabel: "Disk"}},
 		{"health-fallback", args{"health_test_not-found", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: healthcheck.Icon, Group: healthcheck.Group, TypeLabel: "Health"}},
 		{"fallback", args{"unknown_unknown", monitors.Result{Group: "unknown", Status: monitors.RAGError}}, UIResult{Status: monitors.RAGError, Icon: "folder", Group: "unknown"}},
