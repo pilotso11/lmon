@@ -142,13 +142,13 @@ function renderDiskConfig(diskItems) {
   }
 
   let html = "";
-
+  console.log(diskItems);
   diskItems.forEach((item) => {
     html += `
       <div class="config-item">
         <div class="d-flex justify-content-between align-items-center">
-          <div>
-            ${getIcon(item)}
+          <div>        
+            ${getIcon({ icon: item.Icon, type: "disk"})}
             <strong>${item.name} (${item.Path || "(no path)"})</strong>
           </div>
           <div>
@@ -354,13 +354,13 @@ function renderHealthConfig(healthItems) {
   }
 
   let html = "";
-
+  console.log(healthItems);
   healthItems.forEach((item) => {
     html += `
       <div class="config-item">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            ${getIcon({ icon: item.icon, type: "health" })}
+            ${getIcon({ icon: item.Icon, type: "health" })}
             <strong>${item.name}</strong>
           </div>
           <div>
