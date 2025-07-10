@@ -42,6 +42,7 @@ import (
 
 const CpuIcon = "cpu"  // Default icon for CPU monitors
 const Group = "system" // Group name for system monitors
+const CPUDisplayName = "cpu"
 
 // CpuProvider is an interface for obtaining CPU usage statistics.
 // It allows for production and mock implementations.
@@ -170,7 +171,7 @@ func (c Cpu) String() string {
 
 // DisplayName returns a human-readable name for the CPU monitor.
 func (c Cpu) DisplayName() string {
-	return "cpu"
+	return CPUDisplayName
 }
 
 // Group returns the group/category for the CPU monitor.
