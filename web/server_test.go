@@ -63,12 +63,12 @@ func TestGetIndex(t *testing.T) {
 	r, body := GetTestRequest(ctx, t, s, "/")
 
 	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
-	assert.True(t, within(len(indexHtml), len(body), .10), "index returned is about the same length as the template")
+	assert.Less(t, 7000, len(body), "index returned is about the same length as the template")
 
 	r, body = GetTestRequest(ctx, t, s, "/index.html")
 
 	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
-	assert.True(t, within(len(indexHtml), len(body), .10), "index returned is about the same length as the template")
+	assert.Less(t, 7000, len(body), "index returned is about the same length as the template")
 }
 
 // within returns true if i2 is within the given tolerance of i.
@@ -90,7 +90,7 @@ func TestGetConfig(t *testing.T) {
 	r, body := GetTestRequest(ctx, t, s, "/config")
 
 	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
-	assert.True(t, within(len(configHtml), len(body), .10), "config returned is about the same length as the template")
+	assert.Less(t, 7000, len(body), "config returned is about the same length as the template")
 }
 
 //go:embed static/icons/icon.svg
@@ -543,12 +543,12 @@ func Test_newUIResult(t *testing.T) {
 		args args
 		want UIResult
 	}{
-		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: "disk-icon", Group: disk.Group, Threshold: 90}},
-		{"health", args{"health_test_h", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "health-icon", Group: healthcheck.Group}},
-		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "cpu-icon", Group: system.Group, DisplayName: "cpu", Threshold: 90}},
-		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{Status: monitors.RAGAmber, Icon: "mem-icon", Group: system.Group, DisplayName: "mem", Threshold: 90}},
-		{"disk-fallback", args{"disk_test_not-found", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: disk.Icon, Group: disk.Group}},
-		{"health-fallback", args{"health_test_not-found", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: healthcheck.Icon, Group: healthcheck.Group}},
+		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: "disk-icon", Group: disk.Group, Threshold: 90, TypeLabel: "Disk"}},
+		{"health", args{"health_test_h", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "health-icon", Group: healthcheck.Group, TypeLabel: "Health"}},
+		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "cpu-icon", Group: system.Group, DisplayName: "cpu", Threshold: 90, TypeLabel: "System"}},
+		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{Status: monitors.RAGAmber, Icon: "mem-icon", Group: system.Group, DisplayName: "mem", Threshold: 90, TypeLabel: "System"}},
+		{"disk-fallback", args{"disk_test_not-found", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: disk.Icon, Group: disk.Group, Threshold: 0, TypeLabel: "Disk"}},
+		{"health-fallback", args{"health_test_not-found", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: healthcheck.Icon, Group: healthcheck.Group, TypeLabel: "Health"}},
 		{"fallback", args{"unknown_unknown", monitors.Result{Group: "unknown", Status: monitors.RAGError}}, UIResult{Status: monitors.RAGError, Icon: "folder", Group: "unknown"}},
 	}
 	for _, tt := range tests {

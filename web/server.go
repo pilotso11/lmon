@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -234,44 +235,79 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	http.ServeFileFS(w, r, staticFS, r.URL.Path)
 }
 
-//go:embed templates/index.html
-var indexHtml string
-
-//go:embed templates/config.html
-var configHtml string
-
-//go:embed templates/mobile.html
-var mobileHtml string
+//go:embed templates/*
+var templateFS embed.FS
 
 // handleTemplate returns an HTTP handler function that renders the main dashboard or configuration page.
 // Uses the embedded index.html and config.html templates and injects configuration values.
 func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 	// Load templates
-	tIndex, err := template.New("index.html").Parse(indexHtml)
+	templ, err := template.ParseFS(templateFS, "templates/*.html")
 	if err != nil {
-		log.Printf("handleTemplate: %v", err)
+		log.Printf("handleTemplate (Parse Error): %v", err)
+		return func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "Internal Server Error: template parse issue, check logs", http.StatusInternalServerError)
+		}
 	}
-
-	tConfig, err := template.New("config.html").Parse(configHtml)
-	if err != nil {
-		log.Printf("handleTemplate: %v", err)
-	}
-
-	tMobile, err := template.New("mobile.html").Parse(mobileHtml)
-	if err != nil {
-		log.Printf("handleTemplate: %v", err)
-	}
+	log.Printf("handleTemplate: templates loaded")
 
 	// Handler
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		// If we failed to load ...
-		if err != nil {
-			log.Printf("handleIndex %v: %v", r.URL, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+		// select the template based on the URL path
+		page := "404.html"
+		activeTemplate := "dashboard"
+		switch r.URL.Path {
+		case "/", "index.html":
+			page = "index.html"
+			activeTemplate = "dashboard"
+		case "/config":
+			page = "config.html"
+			activeTemplate = "config"
+		case "/mobile":
+			page = "mobile.html"
+			activeTemplate = "mobile"
+		default:
+			page = r.URL.Path[1:]
+		}
+
+		items := s.joinConfigToResults(s.monitor.Results())
+		systemItems := make([]UIResult, 0, 2)
+		diskItems := make([]UIResult, 0, len(items))
+		healthItems := make([]UIResult, 0, len(items))
+		mobileItems := make([]UIResult, 0, len(items))
+		for _, item := range items {
+			switch item.Group {
+			case system.Group:
+				systemItems = append(systemItems, item)
+			case disk.Group:
+				diskItems = append(diskItems, item)
+			case healthcheck.Group:
+				healthItems = append(healthItems, item)
+			}
+			mobileItems = append(mobileItems, item)
+		}
+		// sort mobileItems by status
+		slices.SortFunc(mobileItems, func(a, b UIResult) int {
+			return int(a.Status - b.Status)
+		})
+		// sort systemItems by display name
+		slices.SortFunc(systemItems, func(a, b UIResult) int {
+			return strings.Compare(a.DisplayName, b.DisplayName)
+		})
+		// sort diskItems by display name
+		slices.SortFunc(diskItems, func(a, b UIResult) int {
+			return strings.Compare(a.DisplayName, b.DisplayName)
+		})
+		// sort healthItems by display name
+		slices.SortFunc(healthItems, func(a, b UIResult) int {
+			return strings.Compare(a.DisplayName, b.DisplayName)
+		})
+		for i, item := range mobileItems {
+			item.EvenRow = i%2 == 0 // Set even row for styling
+			mobileItems[i] = item
 		}
 
 		// Template data
@@ -281,23 +317,19 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			"refresh_interval":    s.config.Monitoring.Interval,
 			"default_disk_icon":   disk.Icon,        // from monitors/disk.Icon
 			"default_health_icon": healthcheck.Icon, // from monitors/healthcheck.Icon
+			"SystemItems":         systemItems,
+			"DiskItems":           diskItems,
+			"HealthItems":         healthItems,
+			"MobileItems":         mobileItems,
+			"ActivePage":          activeTemplate,
 		}
 
 		// Execute the template
-		switch r.URL.Path {
-		case "/", "/index.html":
-			err = tIndex.ExecuteTemplate(w, "index.html", data)
-		case "/config":
-			err = tConfig.ExecuteTemplate(w, "config.html", data)
-		case "/mobile":
-			err = tMobile.ExecuteTemplate(w, "mobile.html", data)
-		default:
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		}
+		err = templ.ExecuteTemplate(w, page, data)
 
 		if err != nil {
 			log.Printf("handleTemplate %v: %v", r.URL, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Template error - check logs", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -320,16 +352,6 @@ func (s *Server) writeJson(w http.ResponseWriter, data any) {
 	}
 }
 
-type UIResult struct {
-	Icon        string
-	Status      monitors.RAG // The RAG status of the check
-	Value       string       // Human-readable value or message
-	Value2      string       // Optional second value for additional context
-	Group       string       // Group/category of the monitor
-	DisplayName string       // Display name for UI
-	Threshold   int          // Threshold for the monitor, if applicable
-}
-
 // handleGetItems responds with a JSON object containing all monitored items and their statuses.
 // Route: GET /api/items
 func (s *Server) handleGetItems(w http.ResponseWriter, _ *http.Request) {
@@ -346,52 +368,6 @@ func (s *Server) joinConfigToResults(items map[string]monitors.Result) map[strin
 		results[id] = newUIResult(id, item, s.config)
 	}
 	return results
-}
-
-// Find icon and add it to the result.
-func newUIResult(id string, item monitors.Result, c *config.Config) UIResult {
-	icon := "folder" // default icon if no specific icon is found
-	threshold := 0   // default threshold if not set
-	switch item.Group {
-	case disk.Group:
-		icon = disk.Icon // fallback to the default disk icon
-		for k, d := range c.Monitoring.Disk {
-			if item.Group+"_"+k == id {
-				icon = d.Icon
-				threshold = d.Threshold
-				break
-			}
-		}
-	case healthcheck.Group:
-		icon = healthcheck.Icon // fallback to the default health icon
-		for k, h := range c.Monitoring.Healthcheck {
-			if item.Group+"_"+k == id {
-				icon = h.Icon
-				break
-			}
-		}
-	case system.Group:
-		switch item.DisplayName {
-		case system.CPUDisplayName:
-			icon = c.Monitoring.System.CPU.Icon
-			threshold = c.Monitoring.System.CPU.Threshold
-		case system.MemDisplayName:
-			icon = c.Monitoring.System.Memory.Icon
-			threshold = c.Monitoring.System.Memory.Threshold
-		}
-	default:
-		// fallback to a generic icon if no specific icon is found
-	}
-
-	return UIResult{
-		Icon:        icon,
-		Status:      item.Status,
-		Value:       item.Value,
-		Value2:      item.Value2,
-		Group:       item.Group,
-		DisplayName: item.DisplayName,
-		Threshold:   threshold,
-	}
 }
 
 // handleGetItem responds with a JSON object for a specific monitored item, identified by its group and ID.

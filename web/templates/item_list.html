@@ -1,0 +1,28 @@
+{{ define "itemList" }}
+  {{ if not . }}
+    <div class="text-center">No items to display</div>
+  {{ else }}
+    <div class="list-group">
+      {{ range . }}
+        <div class="list-group-item item-row item-container" data-id="{{ .ID }}">
+          <div class="d-flex justify-content-between align-items-start">
+            <div class="item-status">
+                <span style="display: inline-block;"><i class="bi bi-{{ .Icon }} item-icon"></i></span>
+              <span class="status-indicator {{ .StatusClass }}"></span>
+            </div>
+            <div class="item-stack">
+              <div class="item-detail1">
+                <span>{{ .DisplayName }}</span>
+                <span class="badge {{ .StatusClass }}">{{ .Status }}</span>
+                <span class="ms-2">{{ .Value }}</span>
+              </div>
+              <div class="item-detail2">
+                <span class="ms-2">{{ .Value2 }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      {{ end }}
+    </div>
+  {{ end }}
+{{ end }}

@@ -1,0 +1,28 @@
+{{ define "mobileItemList" }}
+  {{ if not . }}
+    <div class="text-center">No items to display</div>
+  {{ else }}
+    {{/* Sorting should be done in the backend for Go templates, but if your engine supports it, sort by status here */}}
+    {{ range $idx, $item := . }}
+      {{ $bgClass := "" }}
+      {{ if $item.EvenRow }}{{ $bgClass = "even" }}{{ else }}{{ $bgClass = "odd" }}{{ end }}
+      <div class="mobile-list-item {{ $bgClass }}" data-id="{{ $item.ID }}">
+        <div class="mobile-line1">
+          <div><i class="bi bi-{{ .Icon }} item-icon"></i></div>
+          <div class="status-indicator {{ $item.StatusClass }}"></div>
+          <div>{{ $item.DisplayName }}</div>
+          <div class="type-label ms-auto">{{ $item.TypeLabel }}</div>
+        </div>
+        <div class="mobile-line2">
+          <span class="mobile-status-badge">
+            <span class="badge {{ $item.StatusClass }}">{{ $item.Status }}</span>
+          </span>
+          <span class="mobile-detail">{{ $item.Value }}</span>
+        </div>
+        <div class="mobile-line3">
+          <span class="mobile-detail2">{{ $item.Value2 }}</span>
+        </div>
+      </div>
+    {{ end }}
+  {{ end }}
+{{ end }}

@@ -1,0 +1,31 @@
+{{ define "nav" }}
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="/">
+            <i class="bi bi-graph-up"></i>
+            lmon - Lightweight Monitoring
+        </a>
+        <button
+            class="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarNav"
+        >
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link{{ if eq .ActivePage "dashboard" }} active{{ end }}" href="/">Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link{{ if eq .ActivePage "mobile" }} active{{ end }}" href="/mobile">Mobile View</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link{{ if eq .ActivePage "config" }} active{{ end }}" href="/config">Configuration</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+{{ end }}
