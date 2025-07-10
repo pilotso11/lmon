@@ -85,12 +85,12 @@ func TestCpu_Check_Mock(t *testing.T) {
 		threshold int
 		want      monitors.Result
 	}{
-		{"green 50", 50, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "50.0% (1 CPUs)", Value2: "Load Avg (1m/5m/15m)  50.0 37.5 25.0"}},
-		{"green 90", 80, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "80.0% (1 CPUs)", Value2: "Load Avg (1m/5m/15m)  80.0 60.0 40.0"}},
-		{"amber 81", 81, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "81.0% (1 CPUs)", Value2: "Load Avg (1m/5m/15m)  81.0 60.8 40.5"}},
-		{"amber 89", 89, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "89.0% (1 CPUs)", Value2: "Load Avg (1m/5m/15m)  89.0 66.8 44.5"}},
-		{"red 90", 90, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "90.0% (1 CPUs)", Value2: "Load Avg (1m/5m/15m)  90.0 67.5 45.0"}},
-		{"red 100", 100, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "100.0% (1 CPUs)", Value2: "Load Avg (1m/5m/15m)  100.0 75.0 50.0"}},
+		{"green 50", 50, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "50.0% (8 CPUs)", Value2: "Load Avg (1m/5m/15m)  50.0 37.5 25.0"}},
+		{"green 90", 80, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "80.0% (8 CPUs)", Value2: "Load Avg (1m/5m/15m)  80.0 60.0 40.0"}},
+		{"amber 81", 81, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "81.0% (8 CPUs)", Value2: "Load Avg (1m/5m/15m)  81.0 60.8 40.5"}},
+		{"amber 89", 89, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "89.0% (8 CPUs)", Value2: "Load Avg (1m/5m/15m)  89.0 66.8 44.5"}},
+		{"red 90", 90, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "90.0% (8 CPs)", Value2: "Load Avg (1m/5m/15m)  90.0 67.5 45.0"}},
+		{"red 100", 100, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "100.0% (8 CPUs)", Value2: "Load Avg (1m/5m/15m)  100.0 75.0 50.0"}},
 		{"err", 100, os.ErrPermission, 90, monitors.Result{Status: monitors.RAGError, Value: "error getting CPU Current: permission denied"}},
 	}
 

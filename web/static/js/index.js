@@ -6,7 +6,6 @@
 import {
   getStatusClass,
   getIcon,
-  getHttpStatusText,
   normalizeItems,
   fetchJson,
   handleFetchError,
@@ -34,13 +33,7 @@ function renderItems(items) {
                     </div>
                     <div>
                         <span class="badge ${statusClass}">${item.status}</span>
-                        <span class="ms-2">${
-                          item.type === "health"
-                            ? typeof item.value === "number"
-                              ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
-                              : item.value
-                            : `${item.unit === "%" ? parseFloat(item.value).toFixed(2) : item.value}${item.unit}`
-                        }</span>
+                        <span class="ms-2">${item.value}</span>
                     </div>
                 </div>
             </div>
@@ -68,15 +61,7 @@ function showItemDetails(itemId, items) {
             <span class="badge ${statusClass} fs-6">${item.status}</span>
         </div>
         <div class="mb-3">
-            <strong>Value:</strong> ${
-              item.type === "health"
-                ? typeof item.value === "number"
-                  ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
-                  : item.value
-                : (item.unit === "%" && !isNaN(parseFloat(item.value))
-                    ? parseFloat(item.value).toFixed(2)
-                    : item.value) + (item.unit || "")
-            }
+            <strong>Value:</strong> ${item.value}
         </div>
         <div class="mb-3">
             <strong>Threshold:</strong> ${

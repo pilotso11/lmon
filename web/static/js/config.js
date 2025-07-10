@@ -40,7 +40,6 @@ const iconChoices = [
   { name: "lamp", icon: "lamp" },
   { name: "at", icon: "at" },
   { name: "battery", icon: "battery" },
-  // User-added custom icons:
   { name: "globe", icon: "globe" },
   { name: "printer", icon: "printer" },
   { name: "folder", icon: "folder" },
@@ -149,7 +148,7 @@ function renderDiskConfig(diskItems) {
       <div class="config-item">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            ${getIcon(item, window.default_disk_icon)}
+            ${getIcon(item)}
             <strong>${item.name} (${item.Path || "(no path)"})</strong>
           </div>
           <div>
@@ -199,7 +198,7 @@ function renderSystemConfig(systemConfig, webConfig) {
       <div class="config-item">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            ${getIcon({ icon: cpuConfig.Icon || "cpu" })}
+            ${getIcon({ icon: cpuConfig.Icon, type: "cpu"})}
             <strong>CPU Monitoring</strong>
           </div>
           <div>
@@ -220,7 +219,7 @@ function renderSystemConfig(systemConfig, webConfig) {
       <div class="config-item">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            ${getIcon({ icon: memoryConfig.Icon || "speedometer" })}
+            ${getIcon({ icon: memoryConfig.Icon, type: "memory"})}
             <strong>Memory Monitoring</strong>
           </div>
           <div>
@@ -361,7 +360,7 @@ function renderHealthConfig(healthItems) {
       <div class="config-item">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            ${getIcon({ icon: item.icon || window.default_health_icon })}
+            ${getIcon({ icon: item.icon, type: "health" })}
             <strong>${item.name}</strong>
           </div>
           <div>
