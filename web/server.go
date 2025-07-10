@@ -327,6 +327,7 @@ type UIResult struct {
 	Value2      string       // Optional second value for additional context
 	Group       string       // Group/category of the monitor
 	DisplayName string       // Display name for UI
+	Threshold   int          // Threshold for the monitor, if applicable
 }
 
 // handleGetItems responds with a JSON object containing all monitored items and their statuses.
@@ -342,21 +343,22 @@ func (s *Server) handleGetItems(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) joinConfigToResults(items map[string]monitors.Result) map[string]UIResult {
 	results := make(map[string]UIResult)
 	for id, item := range items {
-		results[id] = nweUIResult(id, item, s.config)
+		results[id] = newUIResult(id, item, s.config)
 	}
 	return results
 }
 
 // Find icon and add it to the result.
-func nweUIResult(id string, item monitors.Result, c *config.Config) UIResult {
+func newUIResult(id string, item monitors.Result, c *config.Config) UIResult {
 	icon := "folder" // default icon if no specific icon is found
-
+	threshold := 0   // default threshold if not set
 	switch item.Group {
 	case disk.Group:
 		icon = disk.Icon // fallback to the default disk icon
 		for k, d := range c.Monitoring.Disk {
 			if item.Group+"_"+k == id {
 				icon = d.Icon
+				threshold = d.Threshold
 				break
 			}
 		}
@@ -372,8 +374,10 @@ func nweUIResult(id string, item monitors.Result, c *config.Config) UIResult {
 		switch item.DisplayName {
 		case system.CPUDisplayName:
 			icon = c.Monitoring.System.CPU.Icon
+			threshold = c.Monitoring.System.CPU.Threshold
 		case system.MemDisplayName:
 			icon = c.Monitoring.System.Memory.Icon
+			threshold = c.Monitoring.System.Memory.Threshold
 		}
 	default:
 		// fallback to a generic icon if no specific icon is found
@@ -386,6 +390,7 @@ func nweUIResult(id string, item monitors.Result, c *config.Config) UIResult {
 		Value2:      item.Value2,
 		Group:       item.Group,
 		DisplayName: item.DisplayName,
+		Threshold:   threshold,
 	}
 }
 
@@ -406,7 +411,7 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		log.Printf("handleGetItem: item not found: %s", id)
 		return
 	}
-	s.writeJson(w, nweUIResult(name, item, s.config))
+	s.writeJson(w, newUIResult(name, item, s.config))
 }
 
 // handleGetConfig responds with the current server configuration as JSON.

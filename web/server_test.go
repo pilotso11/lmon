@@ -503,7 +503,7 @@ func TestDeleteBadType(t *testing.T) {
 
 }
 
-func Test_nweUIResult(t *testing.T) {
+func Test_newUIResult(t *testing.T) {
 	c := config.Config{
 		Monitoring: config.MonitoringConfig{
 			System: config.SystemConfig{
@@ -543,17 +543,17 @@ func Test_nweUIResult(t *testing.T) {
 		args args
 		want UIResult
 	}{
-		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: "disk-icon", Group: disk.Group}},
+		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: "disk-icon", Group: disk.Group, Threshold: 90}},
 		{"health", args{"health_test_h", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "health-icon", Group: healthcheck.Group}},
-		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "cpu-icon", Group: system.Group, DisplayName: "cpu"}},
-		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{Status: monitors.RAGAmber, Icon: "mem-icon", Group: system.Group, DisplayName: "mem"}},
+		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "cpu-icon", Group: system.Group, DisplayName: "cpu", Threshold: 90}},
+		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{Status: monitors.RAGAmber, Icon: "mem-icon", Group: system.Group, DisplayName: "mem", Threshold: 90}},
 		{"disk-fallback", args{"disk_test_not-found", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: disk.Icon, Group: disk.Group}},
 		{"health-fallback", args{"health_test_not-found", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: healthcheck.Icon, Group: healthcheck.Group}},
 		{"fallback", args{"unknown_unknown", monitors.Result{Group: "unknown", Status: monitors.RAGError}}, UIResult{Status: monitors.RAGError, Icon: "folder", Group: "unknown"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, nweUIResult(tt.args.id, tt.args.item, &c), "nweUIResult(%v, %v, %v)", tt.args.id, tt.args.item, c)
+			assert.Equalf(t, tt.want, newUIResult(tt.args.id, tt.args.item, &c), "newUIResult(%v, %v, %v)", tt.args.id, tt.args.item, c)
 		})
 	}
 }

@@ -95,8 +95,9 @@ func (d *defaultCpuProvider) Usage() (CpuStat, error) {
 	if len(times) == 0 {
 		return CpuStat{}, fmt.Errorf("no CPU times available")
 	}
-	d.cpuCount = len(times) - 1 // Ignore the first entry which is the total CPU time
 	usage := calculateCPUPercentage(times[0], d.prevCPUTimes)
+
+	d.cpuCount, _ = cpu.Counts(true) // take what's available, even if it fails
 
 	d.prevCPUTimes = times[0]
 	d.lastCPUCheck = time.Now()
@@ -208,7 +209,7 @@ func (c Cpu) Check(_ context.Context) monitors.Result {
 		}
 	}
 	val := fmt.Sprintf("%.1f%% (%d CPUs)", stat.Usage, stat.Count)
-	Val2 := fmt.Sprintf("Load Avg (1m/5m/15m)  %.1f %.1f %.1f", stat.Load1m, stat.Load5m, stat.Load15m)
+	val2 := fmt.Sprintf("Load Avg (1m/5m/15m)  %.1f %.1f %.1f", stat.Load1m, stat.Load5m, stat.Load15m)
 	status := monitors.RAGGreen
 	switch {
 	case stat.Usage >= float64(c.threshold):
@@ -219,6 +220,6 @@ func (c Cpu) Check(_ context.Context) monitors.Result {
 	return monitors.Result{
 		Status: status,
 		Value:  val,
-		Value2: Val2,
+		Value2: val2,
 	}
 }

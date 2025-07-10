@@ -147,7 +147,7 @@ func (d Disk) Check(_ context.Context) monitors.Result {
 		}
 	}
 
-	total := float64(usage.Total) / common.Gigabyte
+	total := float64(usage.Total) / common.Gigibyte
 	used := total * usage.UsedPercent / 100.0
 	res := fmt.Sprintf("%.1f%% used", usage.UsedPercent)
 	res2 := fmt.Sprintf("Total: %.1f GB, Used: %.1f GB, Free: %.1f GB", total, used, total-used)

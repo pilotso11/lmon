@@ -60,5 +60,5 @@ func (m MockMemProvider) Usage() (*mem.VirtualMemoryStat, error) {
 
 // NewMockMemProvider creates a new MockMemProvider with the given initial usage percentage.
 func NewMockMemProvider(initial float64) *MockMemProvider {
-	return &MockMemProvider{Current: atomic.NewFloat64(initial), total: 100 * common.Gigabyte}
+	return &MockMemProvider{Current: atomic.NewFloat64(initial), total: 100 * common.Gigibyte}
 }

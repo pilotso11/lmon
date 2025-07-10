@@ -28,8 +28,8 @@ func TestNewMockMemProvider(t *testing.T) {
 	u, err := m.Usage()
 	assert.NoError(t, err, "should not error")
 	assert.Equal(t, 40.0, u.UsedPercent, "UsedPercent should match initial value")
-	assert.Equal(t, uint64(common.Gigabyte*100), u.Total, "Total should match initial value")
-	assert.Equal(t, uint64(common.Gigabyte*40), u.Used, "Used should match 50% of total")
-	assert.Equal(t, uint64(common.Gigabyte*60), u.Available, "Available should match 50% of total")
+	assert.Equal(t, uint64(common.Gigibyte*100), u.Total, "Total should match initial value")
+	assert.Equal(t, uint64(common.Gigibyte*40), u.Used, "Used should match 40% of total")
+	assert.Equal(t, uint64(common.Gigibyte*60), u.Available, "Available should match 60% of total")
 
 }

@@ -126,8 +126,8 @@ func (c Mem) Check(_ context.Context) monitors.Result {
 			Value:  fmt.Sprintf("error getting mem usage: %v", err),
 		}
 	}
-	val := fmt.Sprintf("%.1f%% (%d GB)", usage.UsedPercent, usage.Total/common.Gigabyte)
-	val2 := fmt.Sprintf("%.1f GB used, %.1f GB free", float64(usage.Used)/common.Gigabyte, float64(usage.Available)/common.Gigabyte)
+	val := fmt.Sprintf("%.1f%% (%.1f GB)", usage.UsedPercent, float64(usage.Total)/common.Gigibyte)
+	val2 := fmt.Sprintf("%.1f GB used, %.1f GB free", float64(usage.Used)/common.Gigibyte, float64(usage.Available)/common.Gigibyte)
 	status := monitors.RAGGreen
 	switch {
 	case usage.UsedPercent >= float64(c.threshold):

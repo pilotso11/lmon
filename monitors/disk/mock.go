@@ -36,6 +36,6 @@ func (m MockDiskProvider) Usage(_ string) (*disk.UsageStat, error) {
 func NewMockDiskProvider(initial float64) *MockDiskProvider {
 	return &MockDiskProvider{
 		Current: atomic.NewFloat64(initial),
-		total:   100 * common.Gigabyte,
+		total:   100 * common.Gigibyte,
 	}
 }
