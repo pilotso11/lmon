@@ -55,6 +55,7 @@ func (r RAG) String() string {
 type Result struct {
 	Status      RAG    // The RAG status of the check
 	Value       string // Human-readable value or message
+	Value2      string // Optional second value for additional context
 	Group       string // Group/category of the monitor
 	DisplayName string // Display name for UI
 }
