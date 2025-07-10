@@ -371,9 +371,9 @@ func nweUIResult(id string, item monitors.Result, c *config.Config) UIResult {
 	case system.Group:
 		switch item.DisplayName {
 		case system.CPUDisplayName:
-			icon = system.CpuIcon
+			icon = c.Monitoring.System.CPU.Icon
 		case system.MemDisplayName:
-			icon = system.MemIcon
+			icon = c.Monitoring.System.Memory.Icon
 		}
 	default:
 		// fallback to a generic icon if no specific icon is found

@@ -18,6 +18,9 @@ import (
 
 	"lmon/config"
 	"lmon/monitors"
+	"lmon/monitors/disk"
+	"lmon/monitors/healthcheck"
+	"lmon/monitors/system"
 )
 
 // TestNewServerWithContext_Smoke verifies that the server can be created, started, and stopped without panicking.
@@ -498,4 +501,59 @@ func TestDeleteBadType(t *testing.T) {
 	resp, _ := DeleteTestRequest(ctx, t, s, "/api/config/bad/123")
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
 
+}
+
+func Test_nweUIResult(t *testing.T) {
+	c := config.Config{
+		Monitoring: config.MonitoringConfig{
+			System: config.SystemConfig{
+				CPU: config.SystemItem{
+					Threshold: 90,
+					Icon:      "cpu-icon",
+				},
+				Memory: config.SystemItem{
+					Threshold: 90,
+					Icon:      "mem-icon",
+				},
+			},
+			Disk: map[string]config.DiskConfig{
+				"test_d": {
+					Threshold: 90,
+					Icon:      "disk-icon",
+				},
+			},
+			Healthcheck: map[string]config.HealthcheckConfig{
+				"test_h": {
+					URL:     "http://localhost:8080/healtz",
+					Timeout: 1,
+					Icon:    "health-icon",
+				},
+			},
+		},
+		Webhook: config.WebhookConfig{
+			Enabled: true,
+		},
+	}
+	type args struct {
+		id   string
+		item monitors.Result
+	}
+	tests := []struct {
+		name string
+		args args
+		want UIResult
+	}{
+		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: "disk-icon", Group: disk.Group}},
+		{"health", args{"health_test_h", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "health-icon", Group: healthcheck.Group}},
+		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "cpu-icon", Group: system.Group, DisplayName: "cpu"}},
+		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{Status: monitors.RAGAmber, Icon: "mem-icon", Group: system.Group, DisplayName: "mem"}},
+		{"disk-fallback", args{"disk_test_not-found", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: disk.Icon, Group: disk.Group}},
+		{"health-fallback", args{"health_test_not-found", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: healthcheck.Icon, Group: healthcheck.Group}},
+		{"fallback", args{"unknown_unknown", monitors.Result{Group: "unknown", Status: monitors.RAGError}}, UIResult{Status: monitors.RAGError, Icon: "folder", Group: "unknown"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, nweUIResult(tt.args.id, tt.args.item, &c), "nweUIResult(%v, %v, %v)", tt.args.id, tt.args.item, c)
+		})
+	}
 }
