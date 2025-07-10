@@ -9,6 +9,57 @@ import { getIcon, showToast, fetchJson, handleFetchError } from "./utils.js";
 // Example: const default_health_icon = "heart-pulse"
 // Example: const default_disk_icon = "hdd"
 
+// --- SSR System Monitoring Form Submission ---
+document.addEventListener("DOMContentLoaded", function () {
+  const systemForm = document.getElementById("inline-system-form");
+  if (systemForm) {
+    systemForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const cpuThreshold = document.getElementById("cpu-threshold").value;
+      const memoryThreshold = document.getElementById("memory-threshold").value;
+      const intervalSeconds = document.getElementById("interval-seconds").value;
+      const dashboardTitle = document.getElementById(
+        "dashboard-title-inline",
+      ).value;
+
+      // 1. Update system config
+      const systemPayload = {
+        CPU: { Threshold: Number(cpuThreshold) },
+        Memory: { Threshold: Number(memoryThreshold) },
+        Title: dashboardTitle,
+      };
+
+      // 2. Update interval config
+      const intervalPayload = { Interval: Number(intervalSeconds) };
+
+      try {
+        const [systemResp, intervalResp] = await Promise.all([
+          fetch("/api/config/system", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(systemPayload),
+          }),
+          fetch("/api/config/interval", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(intervalPayload),
+          }),
+        ]);
+        if (!systemResp.ok || !intervalResp.ok) {
+          throw new Error("Failed to save system monitoring settings");
+        }
+        showToast("Success", "System monitoring settings saved.", false);
+      } catch (err) {
+        showToast(
+          "Error",
+          err.message || "Failed to save system monitoring settings",
+          "danger",
+        );
+      }
+    });
+  }
+});
+
 // Function to load configuration
 
 /**
@@ -115,7 +166,6 @@ async function loadConfig() {
 
     // Render system config (passing web config for dashboard title)
     window.lastLoadedInterval = config.Monitoring.Interval || 60;
-    renderSystemConfig(config.Monitoring.System, config.Web);
 
     // Render health check config items
     window.healthArray = Object.entries(
@@ -146,8 +196,8 @@ function renderDiskConfig(diskItems) {
     html += `
       <div class="config-item">
         <div class="d-flex justify-content-between align-items-center">
-          <div>        
-            ${getIcon({ icon: item.Icon, type: "disk"})}
+          <div>
+            ${getIcon({ icon: item.Icon, type: "disk" })}
             <strong>${item.name} (${item.Path || "(no path)"})</strong>
           </div>
           <div>
@@ -179,169 +229,6 @@ function renderDiskConfig(diskItems) {
       deleteMonitor("disk", id, detail);
     });
   });
-}
-
-// Function to render system config
-function renderSystemConfig(systemConfig, webConfig) {
-  if (!systemConfig) {
-    document.getElementById("system-config-items").innerHTML =
-      '<div class="text-center">No system monitoring configured</div>';
-    return;
-  }
-
-  const cpuConfig = systemConfig.CPU || {};
-  const memoryConfig = systemConfig.Memory || {};
-
-  document.getElementById("system-config-items").innerHTML = `
-    <form id="inline-system-form">
-      <div class="config-item">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            ${getIcon({ icon: cpuConfig.Icon, type: "cpu"})}
-            <strong>CPU Monitoring</strong>
-          </div>
-          <div>
-            <input
-              type="number"
-              class="form-control"
-              id="cpu-threshold-inline"
-              min="1"
-              max="100"
-              style="width: 100px; display: inline-block;"
-              value="${cpuConfig.Threshold !== undefined && cpuConfig.Threshold !== null ? cpuConfig.Threshold : ""}"
-              required
-            />
-            <span class="ms-2">%</span>
-          </div>
-        </div>
-      </div>
-      <div class="config-item">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            ${getIcon({ icon: memoryConfig.Icon, type: "memory"})}
-            <strong>Memory Monitoring</strong>
-          </div>
-          <div>
-            <input
-              type="number"
-              class="form-control"
-              id="memory-threshold-inline"
-              min="1"
-              max="100"
-              style="width: 100px; display: inline-block;"
-              value="${memoryConfig.Threshold !== undefined && memoryConfig.Threshold !== null ? memoryConfig.Threshold : ""}"
-              required
-            />
-            <span class="ms-2">%</span>
-          </div>
-        </div>
-      </div>
-      <div class="config-item">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <i class="bi bi-clock-history item-icon"></i>
-            <strong>Refresh Interval</strong>
-          </div>
-          <div>
-            <input
-              type="number"
-              class="form-control"
-              id="refresh-interval-inline"
-              min="1"
-              style="width: 100px; display: inline-block;"
-              value="${window.lastLoadedInterval !== undefined ? window.lastLoadedInterval : ""}"
-              required
-            />
-            <span class="ms-2">seconds</span>
-          </div>
-        </div>
-      </div>
-      <div class="config-item">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <i class="bi bi-gear item-icon"></i>
-            <strong>Dashboard Title</strong>
-          </div>
-          <div>
-            <input
-              type="text"
-              class="form-control"
-              id="dashboard-title-inline"
-              style="width: 250px; display: inline-block;"
-              value="${systemConfig.Title || "Monitoring Dashboard"}"
-              required
-            />
-          </div>
-        </div>
-      </div>
-      <div class="text-end mt-2">
-        <button id="save-system-inline-btn" class="btn btn-primary">Save</button>
-      </div>
-    </form>
-  `;
-
-  // Add submit handler for inline system form
-  const inlineForm = document.getElementById("inline-system-form");
-  if (inlineForm) {
-    inlineForm.addEventListener("submit", async function (e) {
-      e.preventDefault();
-      const cpuThreshold = parseInt(
-        document.getElementById("cpu-threshold-inline").value,
-        10,
-      );
-      const memThreshold = parseInt(
-        document.getElementById("memory-threshold-inline").value,
-        10,
-      );
-      const interval = parseInt(
-        document.getElementById("refresh-interval-inline").value,
-        10,
-      );
-      const dashboardTitle = document.getElementById(
-        "dashboard-title-inline",
-      ).value;
-
-      if (
-        isNaN(cpuThreshold) ||
-        isNaN(memThreshold) ||
-        isNaN(interval) ||
-        !dashboardTitle
-      ) {
-        showToast("Error", "Please fill out all system settings.", true);
-        return;
-      }
-
-      try {
-        // Save system thresholds and title
-        await fetchJson("/api/config/system", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            CPU: { Threshold: cpuThreshold, Icon: cpuConfig.Icon || "cpu" },
-            Memory: {
-              Threshold: memThreshold,
-              Icon: memoryConfig.Icon || "speedometer",
-            },
-            Title: dashboardTitle,
-          }),
-        });
-        // Save interval separately
-        await fetchJson("/api/config/interval", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ Interval: interval }),
-        });
-        showToast("Success", "System settings updated");
-        loadConfig();
-      } catch (error) {
-        handleFetchError(error, "Failed to update system settings");
-      }
-    });
-  }
 }
 
 // Function to render health check config items

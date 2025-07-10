@@ -70,9 +70,12 @@ export function showToast(title, message, isError = false) {
   toastMessage.textContent = message;
 
   if (isError) {
+    toastEl.classList.remove("bg-success", );
     toastEl.classList.add("bg-danger", "text-white");
   } else {
-    toastEl.classList.remove("bg-danger", "text-white");
+    toastEl.classList.remove("bg-danger", );
+    toastEl.classList.add("bg-success", "text-white");
+
   }
 
   const toast = new bootstrap.Toast(toastEl);
