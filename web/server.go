@@ -146,6 +146,9 @@ func (s *Server) Stop() error {
 // setupRoutes registers all HTTP endpoints and their handlers for the web server.
 // This includes static assets, health checks, dashboard pages, and API endpoints for monitoring and configuration.
 func (s *Server) setupRoutes(ctx context.Context) {
+
+	templateHandler := s.handleTemplate()
+
 	// Serve static files (e.g., favicon)
 	s.router.HandleFunc("GET /static/", s.handleStatic)
 
@@ -156,10 +159,10 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("POST /testhook", s.handleTestWebhook(ctx))
 
 	// Main dashboard and configuration pages
-	s.router.HandleFunc("GET /", s.handleTemplate())
-	s.router.HandleFunc("GET /index.html", s.handleTemplate())
-	s.router.HandleFunc("GET /config", s.handleTemplate())
-	s.router.HandleFunc("GET /mobile", s.handleTemplate())
+	s.router.HandleFunc("GET /", templateHandler)
+	s.router.HandleFunc("GET /index.html", templateHandler)
+	s.router.HandleFunc("GET /config", templateHandler)
+	s.router.HandleFunc("GET /mobile", templateHandler)
 
 	// API endpoints for monitoring data and configuration management
 	s.router.HandleFunc("GET /api/items", s.handleGetItems)
@@ -322,6 +325,7 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			"HealthItems":         healthItems,
 			"MobileItems":         mobileItems,
 			"ActivePage":          activeTemplate,
+			"UpdateAt":            time.Now().Format("2006-01-02 15:04:05Z"),
 		}
 
 		// Execute the template
