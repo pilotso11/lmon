@@ -6,7 +6,6 @@
 import {
   getStatusClass,
   getIcon,
-  getHttpStatusText,
   normalizeItems,
   fetchJson,
   handleFetchError,
@@ -59,15 +58,7 @@ function renderMobileItems(items) {
     const icon = getIcon(item);
     const typeLabel = getTypeLabel(item.type);
     const bgClass = idx % 2 === 0 ? "even" : "odd";
-    let detail;
-    if (item.type === "health") {
-      detail =
-        typeof item.value === "number"
-          ? `(${item.value.toFixed(0)}) ${getHttpStatusText(item.value)}`
-          : item.value;
-    } else {
-      detail = `${item.unit === "%" ? parseFloat(item.value).toFixed(2) : item.value}${item.unit}`;
-    }
+    const detail = item.value;
     html += `
       <div class="mobile-list-item ${bgClass}" data-id="${item.id}">
         <div class="mobile-line1">

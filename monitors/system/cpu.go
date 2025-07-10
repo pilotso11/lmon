@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/load"
 
 	"lmon/common"
 	"lmon/config"
@@ -41,14 +42,23 @@ import (
 
 const CpuIcon = "cpu"  // Default icon for CPU monitors
 const Group = "system" // Group name for system monitors
+const CPUDisplayName = "cpu"
 
 // CpuProvider is an interface for obtaining CPU usage statistics.
 // It allows for production and mock implementations.
+
+type CpuStat struct {
+	Usage   float64 // CPU usage percentage
+	Count   int     // Number of CPU cores
+	Load1m  float64 // 1 minute load average
+	Load5m  float64 // 5 minute load average
+	Load15m float64 // 15 minute load average
+}
 
 // CpuProvider is an interface for obtaining CPU usage statistics.
 // It allows for production and mock implementations.
 type CpuProvider interface {
-	Usage() (float64, error)
+	Usage() (CpuStat, error)
 }
 
 // defaultCpuProvider is the default implementation of CpuProvider using gopsutil.
@@ -58,6 +68,7 @@ type defaultCpuProvider struct {
 	mu           sync.Mutex // Mutex to protect access to CPU times
 	prevCPUTimes cpu.TimesStat
 	lastCPUCheck time.Time
+	cpuCount     int
 }
 
 // newDefaultCpuProvider creates a new defaultCpuProvider and initializes its state.
@@ -68,19 +79,34 @@ func newDefaultCpuProvider() *defaultCpuProvider {
 }
 
 // Usage returns the current CPU usage percentage.
-func (d *defaultCpuProvider) Usage() (float64, error) {
+func (d *defaultCpuProvider) Usage() (CpuStat, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	times, err := cpu.Times(false)
 	if err != nil {
-		return 0, err
+		return CpuStat{}, err
 	}
 
+	ld, err := load.Avg()
+	if err != nil {
+		return CpuStat{}, err
+	}
+
+	if len(times) == 0 {
+		return CpuStat{}, fmt.Errorf("no CPU times available")
+	}
+	d.cpuCount = len(times) - 1 // Ignore the first entry which is the total CPU time
 	usage := calculateCPUPercentage(times[0], d.prevCPUTimes)
 
 	d.prevCPUTimes = times[0]
 	d.lastCPUCheck = time.Now()
-	return usage, nil
+	return CpuStat{
+		Usage:   usage,
+		Count:   d.cpuCount,
+		Load1m:  ld.Load1,
+		Load5m:  ld.Load5,
+		Load15m: ld.Load15,
+	}, nil
 }
 
 // calculateCPUPercentage calculates the CPU usage percentage based on the difference
@@ -145,7 +171,7 @@ func (c Cpu) String() string {
 
 // DisplayName returns a human-readable name for the CPU monitor.
 func (c Cpu) DisplayName() string {
-	return "cpu"
+	return CPUDisplayName
 }
 
 // Group returns the group/category for the CPU monitor.
@@ -174,23 +200,25 @@ func (c Cpu) Save(cfg *config.Config) {
 //   - Amber: usage >= 90% of threshold but < threshold
 //   - Red: usage >= threshold
 func (c Cpu) Check(_ context.Context) monitors.Result {
-	usage, err := c.impl.Usage()
+	stat, err := c.impl.Usage()
 	if err != nil {
 		return monitors.Result{
 			Status: monitors.RAGError,
 			Value:  fmt.Sprintf("error getting CPU Current: %v", err),
 		}
 	}
-	val := fmt.Sprintf("%.1f%%", usage)
+	val := fmt.Sprintf("%.1f%% (%d CPUs)", stat.Usage, stat.Count)
+	Val2 := fmt.Sprintf("Load Avg (1m/5m/15m)  %.1f %.1f %.1f", stat.Load1m, stat.Load5m, stat.Load15m)
 	status := monitors.RAGGreen
 	switch {
-	case usage >= float64(c.threshold):
+	case stat.Usage >= float64(c.threshold):
 		status = monitors.RAGRed
-	case usage >= float64(c.threshold)*.9:
+	case stat.Usage >= float64(c.threshold)*.9:
 		status = monitors.RAGAmber
 	}
 	return monitors.Result{
 		Status: status,
 		Value:  val,
+		Value2: Val2,
 	}
 }

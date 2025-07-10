@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
+	"lmon/common"
 	"lmon/config"
 	"lmon/monitors"
 )
@@ -125,12 +126,12 @@ func TestDisk_Check_Mock(t *testing.T) {
 		threshold int
 		want      monitors.Result
 	}{
-		{"green 50", 50, 100 * gigabyte, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "50.0% used (50.0 GB / 100.0 GB)"}},
-		{"green 90", 80, 100 * gigabyte, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "80.0% used (80.0 GB / 100.0 GB)"}},
-		{"amber 81", 81, 100 * gigabyte, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "81.0% used (81.0 GB / 100.0 GB)"}},
-		{"amber 89", 89, 100 * gigabyte, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "89.0% used (89.0 GB / 100.0 GB)"}},
-		{"red 90", 90, 100 * gigabyte, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "90.0% used (90.0 GB / 100.0 GB)"}},
-		{"red 100", 100, 100 * gigabyte, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "100.0% used (100.0 GB / 100.0 GB)"}},
+		{"green 50", 50, 100 * common.Gigabyte, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "50.0% used", Value2: "Total: 100.0 GB, Used: 50.0 GB, Free: 50.0 GB"}},
+		{"green 90", 80, 100 * common.Gigabyte, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "80.0% used", Value2: "Total: 100.0 GB, Used: 80.0 GB, Free: 20.0 GB"}},
+		{"amber 81", 81, 100 * common.Gigabyte, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "81.0% used", Value2: "Total: 100.0 GB, Used: 81.0 GB, Free: 19.0 GB"}},
+		{"amber 89", 89, 100 * common.Gigabyte, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "89.0% used", Value2: "Total: 100.0 GB, Used: 89.0 GB, Free: 11.0 GB"}},
+		{"red   90", 90, 100 * common.Gigabyte, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "90.0% used", Value2: "Total: 100.0 GB, Used: 90.0 GB, Free: 10.0 GB"}},
+		{"red  100", 100, 100 * common.Gigabyte, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "100.0% used", Value2: "Total: 100.0 GB, Used: 100.0 GB, Free: 0.0 GB"}},
 	}
 
 	for _, tt := range tests {
@@ -139,6 +140,7 @@ func TestDisk_Check_Mock(t *testing.T) {
 			r := d.Check(t.Context())
 			assert.Equal(t, tt.want.Status, r.Status, "status")
 			assert.Equal(t, tt.want.Value, r.Value, "value")
+			assert.Equal(t, tt.want.Value2, r.Value2, "value")
 		})
 
 	}
@@ -149,7 +151,7 @@ func Test_Check_PushOnAddWithBreach(t *testing.T) {
 	push := monitors.NewMockPush()
 
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
-	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(90), total: 100 * gigabyte, err: nil, path: "/test"})
+	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(90), total: 100 * common.Gigabyte, err: nil, path: "/test"})
 	svc.Add(t.Context(), d)
 
 	assert.Eventually(t, func() bool {
@@ -166,7 +168,7 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 	push := monitors.NewMockPush()
 
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
-	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(0), total: 100 * gigabyte, err: os.ErrNotExist, path: "/test"})
+	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(0), total: 100 * common.Gigabyte, err: os.ErrNotExist, path: "/test"})
 
 	svc.Add(t.Context(), d)
 
@@ -205,7 +207,7 @@ func Test_Check_PushOnChange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			push := monitors.NewMockPush()
 			svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
-			impl := MockDiskProvider{Current: atomic.NewFloat64(tt.initial), total: 100 * gigabyte, path: "/test"}
+			impl := MockDiskProvider{Current: atomic.NewFloat64(tt.initial), total: 100 * common.Gigabyte, path: "/test"}
 			d := NewDisk("test", "/test", 90, "", &impl)
 			svc.Add(t.Context(), d)
 

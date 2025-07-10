@@ -38,6 +38,7 @@ import (
 )
 
 const MemIcon = "speedometer" // Default icon for memory monitors
+const MemDisplayName = "mem"  // Display name for memory monitors
 
 // MemProvider is an interface for obtaining memory usage statistics.
 // It allows for production and mock implementations.
@@ -90,7 +91,7 @@ func (c Mem) String() string {
 
 // DisplayName returns a human-readable name for the memory monitor.
 func (c Mem) DisplayName() string {
-	return "mem"
+	return MemDisplayName
 }
 
 // Group returns the group/category for the memory monitor.
@@ -125,7 +126,8 @@ func (c Mem) Check(_ context.Context) monitors.Result {
 			Value:  fmt.Sprintf("error getting mem usage: %v", err),
 		}
 	}
-	val := fmt.Sprintf("%.1f%%", usage.UsedPercent)
+	val := fmt.Sprintf("%.1f%% (%d GB)", usage.UsedPercent, usage.Total/common.Gigabyte)
+	val2 := fmt.Sprintf("%.1f GB used, %.1f GB free", float64(usage.Used)/common.Gigabyte, float64(usage.Available)/common.Gigabyte)
 	status := monitors.RAGGreen
 	switch {
 	case usage.UsedPercent >= float64(c.threshold):
@@ -136,5 +138,6 @@ func (c Mem) Check(_ context.Context) monitors.Result {
 	return monitors.Result{
 		Status: status,
 		Value:  val,
+		Value2: val2,
 	}
 }

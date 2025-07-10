@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 
+	"lmon/common"
 	"lmon/config"
 	"lmon/monitors"
 )
@@ -79,22 +80,24 @@ func TestMem_Check_Mock(t *testing.T) {
 		threshold int
 		want      monitors.Result
 	}{
-		{"green 50", 50, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "50.0%"}},
-		{"green 90", 80, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "80.0%"}},
-		{"amber 81", 81, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "81.0%"}},
-		{"amber 89", 89, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "89.0%"}},
-		{"red 90", 90, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "90.0%"}},
-		{"red 100", 100, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "100.0%"}},
+		{"green 50", 50, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "50.0% (100 GB)", Value2: "50.0 GB used, 50.0 GB free"}},
+		{"green 90", 80, nil, 90, monitors.Result{Status: monitors.RAGGreen, Value: "80.0% (100 GB)", Value2: "80.0 GB used, 20.0 GB free"}},
+		{"amber 81", 81, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "81.0% (100 GB)", Value2: "81.0 GB used, 19.0 GB free"}},
+		{"amber 89", 89, nil, 90, monitors.Result{Status: monitors.RAGAmber, Value: "89.0% (100 GB)", Value2: "89.0 GB used, 11.0 GB free"}},
+		{"red 90", 90, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "90.0% (100 GB)", Value2: "90.0 GB used, 10.0 GB free"}},
+		{"red 100", 100, nil, 90, monitors.Result{Status: monitors.RAGRed, Value: "100.0% (100 GB)", Value2: "100.0 GB used, 0.0 GB free"}},
 		{"err", 100, os.ErrPermission, 90, monitors.Result{Status: monitors.RAGError, Value: "error getting mem usage: permission denied"}},
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewMem(tt.threshold, "", MockMemProvider{Current: atomic.NewFloat64(tt.usage), err: tt.err})
+			c := NewMem(tt.threshold, "", MockMemProvider{Current: atomic.NewFloat64(tt.usage),
+				total: 100 * common.Gigabyte, err: tt.err})
 			r := c.Check(t.Context())
 			assert.Equal(t, tt.want.Status, r.Status, "status")
 			assert.Equal(t, tt.want.Value, r.Value, "value")
+			assert.Equal(t, tt.want.Value2, r.Value2, "value2")
 		})
 
 	}

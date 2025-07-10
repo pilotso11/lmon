@@ -24,6 +24,7 @@ import (
 	"lmon/monitors/disk"
 	"lmon/monitors/healthcheck"
 	"lmon/monitors/mapper"
+	"lmon/monitors/system"
 	"lmon/webhook"
 )
 
@@ -319,26 +320,93 @@ func (s *Server) writeJson(w http.ResponseWriter, data any) {
 	}
 }
 
+type UIResult struct {
+	Icon        string
+	Status      monitors.RAG // The RAG status of the check
+	Value       string       // Human-readable value or message
+	Value2      string       // Optional second value for additional context
+	Group       string       // Group/category of the monitor
+	DisplayName string       // Display name for UI
+}
+
 // handleGetItems responds with a JSON object containing all monitored items and their statuses.
 // Route: GET /api/items
 func (s *Server) handleGetItems(w http.ResponseWriter, _ *http.Request) {
-	s.writeJson(w, s.monitor.Results())
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	results := s.joinConfigToResults(s.monitor.Results())
+	s.writeJson(w, results)
+}
+
+func (s *Server) joinConfigToResults(items map[string]monitors.Result) map[string]UIResult {
+	results := make(map[string]UIResult)
+	for id, item := range items {
+		results[id] = nweUIResult(id, item, s.config)
+	}
+	return results
+}
+
+// Find icon and add it to the result.
+func nweUIResult(id string, item monitors.Result, c *config.Config) UIResult {
+	icon := "folder" // default icon if no specific icon is found
+
+	switch item.Group {
+	case disk.Group:
+		icon = disk.Icon // fallback to the default disk icon
+		for k, d := range c.Monitoring.Disk {
+			if item.Group+"_"+k == id {
+				icon = d.Icon
+				break
+			}
+		}
+	case healthcheck.Group:
+		icon = healthcheck.Icon // fallback to the default health icon
+		for k, h := range c.Monitoring.Healthcheck {
+			if item.Group+"_"+k == id {
+				icon = h.Icon
+				break
+			}
+		}
+	case system.Group:
+		switch item.DisplayName {
+		case system.CPUDisplayName:
+			icon = c.Monitoring.System.CPU.Icon
+		case system.MemDisplayName:
+			icon = c.Monitoring.System.Memory.Icon
+		}
+	default:
+		// fallback to a generic icon if no specific icon is found
+	}
+
+	return UIResult{
+		Icon:        icon,
+		Status:      item.Status,
+		Value:       item.Value,
+		Value2:      item.Value2,
+		Group:       item.Group,
+		DisplayName: item.DisplayName,
+	}
 }
 
 // handleGetItem responds with a JSON object for a specific monitored item, identified by its group and ID.
 // Returns 404 if the item is not found.
 // Route: GET /api/items/{group}/{id}
 func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	id := r.PathValue("id")
 	group := r.PathValue("group")
 	items := s.monitor.Results()
-	item, ok := items[group+"_"+id]
+	name := group + "_" + id
+	item, ok := items[name]
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		log.Printf("handleGetItem: item not found: %s", id)
 		return
 	}
-	s.writeJson(w, item)
+	s.writeJson(w, nweUIResult(name, item, s.config))
 }
 
 // handleGetConfig responds with the current server configuration as JSON.
