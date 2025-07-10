@@ -3,7 +3,7 @@
 /* --- Mobile-specific styles for striped rows and layout --- */
 .mobile-list-item {
     padding: 12px 16px;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid #e9ecef;;
 }
 .mobile-list-item.even {
     background: #fff;
@@ -13,10 +13,22 @@
 }
 .mobile-line1 {
     display: flex;
-    align-items: center;
+    justify-content: space-between;
+    align-items: start;
     gap: 0.5em;
 }
+.mobile-line1-detail {
+
+}
+.mobile-line1-type {
+
+}
 .mobile-line2 {
+    display: flex;
+    align-items: flex-start;
+    margin-top: 2px;
+}
+.mobile-line3 {
     display: flex;
     align-items: flex-start;
     margin-top: 2px;
@@ -31,6 +43,13 @@
     font-size: 0.97em;
     word-break: break-all;
 }
+.mobile-detail2 {
+    margin-left: 12px;
+    margin-right: 12px;
+    color: #555;
+    font-size: 0.80em;
+    word-break: break-all;
+}
 .type-label {
     font-size: 0.85em;
     font-weight: 500;
@@ -39,12 +58,44 @@
     border-radius: 8px;
     background: #f1f3f4;
     color: #333;
+    align-items: center;
 }
 .mobile-toggle-link {
     font-size: 1em;
     margin-left: 1em;
 }
+.item-stack {
+    flex-direction: column;
+}
 
+.item-container {
+    display: flex;
+    align-content: flex-start;
+}
+.item-detail2 {
+    margin-left: 12px;
+    margin-right: 12px;
+    margin-top: 6px;
+    color: #555;
+    font-size: 0.85em;
+    word-break: break-all;
+    justify-content: space-between;
+    align-items: start;
+}
+.item-detail1 {
+    margin-left: 12px;
+    margin-right: 12px;
+    color: #555;
+    font-size: 1em;
+    word-break: break-all;
+    justify-content: space-between;
+    align-items: start;
+}
+.item-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+}
 /* Status styles */
 .status-ok {
     background-color: #28a745;
