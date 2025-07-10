@@ -121,6 +121,7 @@ export function normalizeItems(itemsMap) {
       name: result.DisplayName || id,
       status,
       value: result.Value || "",
+      value2: result.Value2 || "",
       unit: result.Unit || "",
       threshold: result.Threshold || null,
       last_check: result.LastCheck || "",

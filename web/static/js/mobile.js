@@ -59,19 +59,23 @@ function renderMobileItems(items) {
     const typeLabel = getTypeLabel(item.type);
     const bgClass = idx % 2 === 0 ? "even" : "odd";
     const detail = item.value;
+    const detail2 = item.value2;
     html += `
       <div class="mobile-list-item ${bgClass}" data-id="${item.id}">
         <div class="mobile-line1">
-          ${icon}
-          <span class="status-indicator ${statusClass}"></span>
-          <span>${item.name}</span>
-          <span class="type-label">${typeLabel}</span>
+          <div>${icon}</div>
+          <div class="status-indicator ${statusClass}"></div>
+          <div>${item.name}</div>
+          <div class="type-label ms-auto">${typeLabel}</div>
         </div>
         <div class="mobile-line2">
           <span class="mobile-status-badge">
             <span class="badge ${statusClass}">${item.status}</span>
           </span>
-          <span class="mobile-detail">${detail}</span>
+          <span class="mobile-detail">${detail}
+        </div>
+        <div class="mobile-line3">
+          <span class="mobile-detail2">${detail2}</span>
         </div>
       </div>
     `;

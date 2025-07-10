@@ -24,16 +24,21 @@ function renderItems(items) {
     const icon = getIcon(item);
 
     html += `
-            <div class="list-group-item item-row" data-id="${item.id}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
+            <div class="list-group-item item-row item-container" data-id="${item.id}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="item-status">
                         <span style="display: inline-block;">${icon}</span>
                         <span class="status-indicator ${statusClass}"></span>
-                        ${item.name}
                     </div>
-                    <div>
-                        <span class="badge ${statusClass}">${item.status}</span>
-                        <span class="ms-2">${item.value}</span>
+                    <div class="item-stack">
+                      <div class="item-detail1">
+                          <span>${item.name}</span>
+                          <span class="badge ${statusClass}">${item.status}</span>
+                          <span class="ms-2">${item.value}</span>
+                      </div>
+                      <div class="item-detail2">
+                          <span class="ms-2">${item.value2}</span>
+                      </div>
                     </div>
                 </div>
             </div>

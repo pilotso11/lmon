@@ -142,7 +142,6 @@ function renderDiskConfig(diskItems) {
   }
 
   let html = "";
-  console.log(diskItems);
   diskItems.forEach((item) => {
     html += `
       <div class="config-item">
@@ -354,7 +353,6 @@ function renderHealthConfig(healthItems) {
   }
 
   let html = "";
-  console.log(healthItems);
   healthItems.forEach((item) => {
     html += `
       <div class="config-item">
