@@ -18,6 +18,7 @@ func Test_GenerateScreenshots(t *testing.T) {
 	defer cancel()
 
 	s, _ := web.StartTestServer(ctx, t, "./screenshots.yaml")
+
 	s.Start(ctx)
 
 	browser := getBrowser(t)

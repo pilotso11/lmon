@@ -4,6 +4,8 @@ package system
 import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"go.uber.org/atomic"
+
+	"lmon/common"
 )
 
 var _ CpuProvider = (*MockCpuProvider)(nil)
@@ -17,11 +19,17 @@ type MockCpuProvider struct {
 }
 
 // Usage returns the mocked CPU usage or an error if set.
-func (m MockCpuProvider) Usage() (float64, error) {
+func (m MockCpuProvider) Usage() (CpuStat, error) {
 	if m.err != nil {
-		return 0, m.err
+		return CpuStat{}, m.err
 	}
-	return m.Current.Load(), nil
+	return CpuStat{
+		Usage:   m.Current.Load(),
+		Count:   8,
+		Load1m:  m.Current.Load(),
+		Load5m:  m.Current.Load() * .75,
+		Load15m: m.Current.Load() * .5,
+	}, nil
 }
 
 // NewMockCpuProvider creates a new MockCpuProvider with the given initial usage percentage.
@@ -44,13 +52,13 @@ func (m MockMemProvider) Usage() (*mem.VirtualMemoryStat, error) {
 	}
 	return &mem.VirtualMemoryStat{
 		Total:       uint64(m.total),
-		Available:   uint64(m.total - m.Current.Load()*m.total),
-		Used:        uint64(m.Current.Load() * m.total),
+		Available:   uint64(m.total * (1 - m.Current.Load()/100)),
+		Used:        uint64(m.Current.Load() / 100.0 * m.total),
 		UsedPercent: m.Current.Load(),
 	}, nil
 }
 
 // NewMockMemProvider creates a new MockMemProvider with the given initial usage percentage.
 func NewMockMemProvider(initial float64) *MockMemProvider {
-	return &MockMemProvider{Current: atomic.NewFloat64(initial)}
+	return &MockMemProvider{Current: atomic.NewFloat64(initial), total: 100 * common.Gigibyte}
 }

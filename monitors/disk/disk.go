@@ -42,7 +42,6 @@ import (
 
 const Icon = "hdd"   // Default icon for disk monitors
 const Group = "disk" // Group name for disk monitors
-const gigabyte = 1024 * 1024 * 1024
 
 // UsageProvider is an interface for obtaining disk usage statistics.
 // It allows for production and mock implementations.
@@ -148,9 +147,10 @@ func (d Disk) Check(_ context.Context) monitors.Result {
 		}
 	}
 
-	total := float64(usage.Total) / gigabyte
+	total := float64(usage.Total) / common.Gigibyte
 	used := total * usage.UsedPercent / 100.0
-	res := fmt.Sprintf("%.1f%% used (%.1f GB / %.1f GB)", usage.UsedPercent, used, total)
+	res := fmt.Sprintf("%.1f%% used", usage.UsedPercent)
+	res2 := fmt.Sprintf("Total: %.1f GB, Used: %.1f GB, Free: %.1f GB", total, used, total-used)
 	status := monitors.RAGGreen
 	switch {
 	case usage.UsedPercent >= float64(d.threshold):
@@ -162,5 +162,6 @@ func (d Disk) Check(_ context.Context) monitors.Result {
 	return monitors.Result{
 		Status: status,
 		Value:  res,
+		Value2: res2,
 	}
 }
