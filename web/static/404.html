@@ -65,11 +65,11 @@
                     "QuentinCaps", "Palatino Linotype", "Book Antiqua",
                     Palatino, serif;
                 font-weight: normal;
-                letter-spacing: 0.1em;
             }
 
             .sorry {
                 font-size: 1.8rem;
+                letter-spacing: 0.00em;
                 color: #3a2e21;
                 text-shadow: 1px 1px 2px rgba(150, 124, 94, 0.4);
                 margin-top: 0.5rem;
@@ -123,7 +123,7 @@
                 background-color: rgba(35, 28, 20, 0.8); /* Darker background */
                 padding: 10px;
                 font-style: normal;
-                font-size: 400;
+                font-weight: 400;
                 font-family: "Tangerine", cursive;
                 z-index: 3;
             }
@@ -162,7 +162,7 @@
 
             <div class="content">
                 <h1>404</h1>
-                <div class="sorry">Sorry we can't find that page</div>
+                <div class="sorry">We Searched, But it's NoWhere to be Found.</div>
             </div>
 
             <div class="magnifier-container">
@@ -172,6 +172,22 @@
             </div>
 
             <div class="instructions">Even Mr. Holmes could not find it.</div>
+            <img
+                src="images/sherlock.png"
+                alt="Sherlock Holmes"
+                style="
+                    position: fixed;
+                    left: 5px;
+                    bottom: 5px;
+                    width: 160px;
+                    max-width: 25vw;
+                    height: auto;
+                    z-index: 2;
+                    pointer-events: none;
+                    user-select: none;
+                    opacity: 1.0;
+                "
+            />
         </div>
 
         <script>
@@ -201,8 +217,8 @@
 
                 // Load the map image
                 const mapImage = new Image();
-                mapImage.src =
-                    "http://localhost:8080/static/images/london-1890.jpg";
+                mapImage.src = "images/london-1890-placeholder.jpg";
+                mapImage.srcset = "images/london-1890-min.jpg";
 
                 // Variables for animation
                 const animationDuration = 90000; // 90 seconds for one complete cycle

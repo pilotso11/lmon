@@ -77,6 +77,31 @@ func defaultIconList() []IconItem {
 	}
 }
 
+type customResponseWriter struct {
+	writer http.ResponseWriter // Pointer to the HTTP response writer for writing responses.
+	code   int
+}
+
+func (w *customResponseWriter) Write(data []byte) (int, error) {
+	if w.code != http.StatusNotFound {
+		return w.writer.Write(data)
+	}
+	// fake it if we're returning an error
+	return len(data), nil
+}
+
+func (w *customResponseWriter) WriteHeader(status int) {
+	w.code = status
+	if w.code != http.StatusNotFound {
+		w.writer.WriteHeader(status)
+		return
+	}
+}
+
+func (w *customResponseWriter) Header() http.Header {
+	return w.writer.Header()
+}
+
 // Server encapsulates the HTTP server, configuration, and monitoring services.
 // It manages the lifecycle of the web server, routes, and provides thread-safe access to configuration.
 type Server struct {
@@ -150,11 +175,16 @@ func LoggingHandler(router *http.ServeMux) http.Handler {
 		start := time.Now()
 		// Log the request
 
+		cw := customResponseWriter{writer: w}
 		// Call the actual handler
-		router.ServeHTTP(w, r)
+		router.ServeHTTP(&cw, r)
+
+		if cw.code == http.StatusNotFound {
+			http.Redirect(w, r, "/static/404.html", http.StatusFound)
+		}
 
 		elapsedTime := time.Since(start)
-		log.Printf("[%v] %s %s %s %v", start.Format("2006-01-02 15:04:05.000"), r.Method, r.URL.Path, r.RemoteAddr, elapsedTime)
+		log.Printf("[%v] (%d) %s %s %s %v", start.Format("2006-01-02 15:04:05.000"), cw.code, r.Method, r.URL.Path, r.RemoteAddr, elapsedTime)
 	})
 }
 
@@ -379,8 +409,13 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Execute the template
+		t := templ.Lookup(page)
+		if t == nil {
+			log.Printf("handleTemplate %v: template not found", page)
+			http.Error(w, http.StatusText(http.StatusOK), http.StatusNotFound)
+			return
+		}
 		err = templ.ExecuteTemplate(w, page, data)
-
 		if err != nil {
 			log.Printf("handleTemplate %v: %v", r.URL, err)
 			http.Error(w, "Template error - check logs", http.StatusInternalServerError)
