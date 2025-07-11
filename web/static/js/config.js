@@ -58,6 +58,60 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
   }
+
+  // Webhook disable button
+  const webhookDisableBtn = document.getElementById("webhook-disable-btn");
+  const webhookEnableBtn = document.getElementById("webhook-enable-btn");
+  const webhookUpdateBtn = document.getElementById("webhook-update-btn");
+
+  // webhook disable button
+  if (webhookDisableBtn) {
+    webhookDisableBtn.addEventListener("click", async function () {
+      const urlInput = document.getElementById("webhook-url-inline");
+      const urlValue = urlInput ? urlInput.value : "";
+      try {
+        const resp = await fetch("/api/config/webhook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ Enabled: false, URL: urlValue }),
+        });
+        if (!resp.ok) {
+          throw new Error("Failed to disable webhook");
+        }
+        showToast("Success", "Webhook disabled.", "success");
+        // Optionally, reload the page or update the UI
+        window.location.reload();
+      } catch (err) {
+        showToast(
+          "Error",
+          err.message || "Failed to disable webhook",
+          "danger",
+        );
+      }
+    });
+  }
+  // webhook update (and enable) button
+  if (webhookUpdateBtn) {
+    webhookUpdateBtn.addEventListener("click", async function () {
+      const urlInput = document.getElementById("webhook-url-inline");
+      const urlValue = urlInput ? urlInput.value : "";
+      try {
+        const resp = await fetch("/api/config/webhook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ Enabled: true, URL: urlValue }),
+        });
+        if (!resp.ok) {
+          throw new Error("Failed to update webhook");
+        }
+        showToast("Success", "Webhook updated.", "success");
+        // Optionally, reload the page or update the UI
+        window.location.reload();
+      } catch (err) {
+        showToast("Error", err.message || "Failed to update webhook", "danger");
+      }
+    });
+  }
 });
 
 // Function to load configuration
@@ -175,9 +229,6 @@ async function loadConfig() {
       ...props,
     }));
     renderHealthConfig(window.healthArray);
-
-    // Render webhook config
-    renderWebhookConfig(config.Webhook);
   } catch (error) {
     handleFetchError(error, "Failed to load configuration");
   }
@@ -277,126 +328,6 @@ function renderHealthConfig(healthItems) {
         deleteMonitor("health", id, detail);
       });
     });
-}
-
-// Function to render webhook config
-function renderWebhookConfig(webhookConfig) {
-  if (!webhookConfig) {
-    document.getElementById("webhook-config").innerHTML =
-      '<div class="text-center">No webhook configured</div>';
-    return;
-  }
-
-  document.getElementById("webhook-config").innerHTML = `
-    <form id="webhook-inline-form">
-      <div class="config-item">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <i class="bi bi-bell item-icon"></i>
-            <strong>Webhook Notifications</strong>
-          </div>
-          <div>
-            <span class="badge ${webhookConfig.Enabled ? "bg-success" : "bg-secondary"}">
-              ${webhookConfig.Enabled ? "Enabled" : "Disabled"}
-            </span>
-          </div>
-        </div>
-        <div class="mt-2">
-          <input
-            type="text"
-            class="form-control"
-            id="webhook-url-inline"
-            placeholder="Webhook URL"
-            value="${webhookConfig.URL || ""}"
-            style="width: 350px; display: inline-block;"
-            required
-          />
-        </div>
-        <div class="mt-2 text-end">
-          ${
-            webhookConfig.Enabled
-              ? `<button id="webhook-update-btn" class="btn btn-primary me-2" type="submit">Update Webhook</button>
-                 <button id="webhook-disable-btn" class="btn btn-secondary" type="button">Disable Webhook</button>`
-              : `<button id="webhook-enable-btn" class="btn btn-primary" type="submit">Enable Webhook</button>`
-          }
-        </div>
-      </div>
-    </form>
-  `;
-
-  const webhookForm = document.getElementById("webhook-inline-form");
-  const webhookUrlInput = document.getElementById("webhook-url-inline");
-  const updateBtn =
-    document.getElementById("webhook-update-btn") ||
-    document.getElementById("webhook-enable-btn");
-  const disableBtn = document.getElementById("webhook-disable-btn");
-
-  function setWebhookLoading(isLoading) {
-    if (updateBtn) updateBtn.disabled = isLoading;
-    if (disableBtn) disableBtn.disabled = isLoading;
-    if (webhookUrlInput) webhookUrlInput.disabled = isLoading;
-  }
-
-  if (webhookForm) {
-    webhookForm.addEventListener("submit", async function (e) {
-      e.preventDefault();
-      const url = webhookUrlInput.value.trim();
-      if (!url) {
-        showToast("Error", "Webhook URL is required", true);
-        return;
-      }
-      setWebhookLoading(true);
-      try {
-        await fetchJson("/api/config/webhook", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            enabled: true,
-            url: url,
-          }),
-        });
-        showToast(
-          "Success",
-          webhookConfig.enabled ? "Webhook updated" : "Webhook enabled",
-        );
-        setTimeout(() => {
-          loadConfig();
-          setWebhookLoading(false);
-        }, 300);
-      } catch (error) {
-        setWebhookLoading(false);
-        handleFetchError(error, "Failed to update webhook");
-      }
-    });
-  }
-  if (disableBtn) {
-    disableBtn.addEventListener("click", async function () {
-      const url = webhookUrlInput.value.trim();
-      setWebhookLoading(true);
-      try {
-        await fetchJson("/api/config/webhook", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            enabled: false,
-            url: url,
-          }),
-        });
-        showToast("Success", "Webhook disabled");
-        setTimeout(() => {
-          loadConfig();
-          setWebhookLoading(false);
-        }, 300);
-      } catch (error) {
-        setWebhookLoading(false);
-        handleFetchError(error, "Failed to disable webhook");
-      }
-    });
-  }
 }
 
 // Function to delete a monitor

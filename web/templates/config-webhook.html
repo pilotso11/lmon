@@ -1,0 +1,54 @@
+{{ define "config-webhook" }}
+<div class="card-header">Webhook</div>
+<div class="card-body">
+    <form id="webhook-inline-form">
+        <div class="config-item mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-bell item-icon"></i>
+                    <strong>Webhook Notifications</strong>
+                </div>
+                <div>
+                    <span
+                        class="badge {{ if .Config.Webhook.Enabled }}bg-success{{ else }}bg-secondary{{ end }}"
+                    >
+                        {{ if .Config.Webhook.Enabled }}Enabled{{ else
+                        }}Disabled{{ end }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="mb-3">
+            <input
+                type="text"
+                class="form-control"
+                id="webhook-url-inline"
+                name="webhook-url"
+                placeholder="Webhook URL"
+                value="{{ .Config.Webhook.URL }}"
+                style="width: 350px; display: inline-block"
+                required
+            />
+        </div>
+        <div class="text-end">
+            <button
+                id="webhook-update-btn"
+                class="btn btn-primary me-2"
+                type="submit"
+            >
+                {{ if .Config.Webhook.Enabled }} Update Webhook {{ else }}
+                Enable Webhook {{ end }}
+            </button>
+            {{ if .Config.Webhook.Enabled }}
+            <button
+                id="webhook-disable-btn"
+                class="btn btn-secondary"
+                type="button"
+            >
+                Disable Webhook
+            </button>
+            {{ end }}
+        </div>
+    </form>
+</div>
+{{ end }}
