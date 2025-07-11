@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>404 - Page Not Found</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Tangerine:wght@400&display=swap"
+            rel="stylesheet"
+        />
+
+        <style>
+            @font-face {
+                font-family: "QuentinCaps";
+                src: url("fonts/QuentinCaps.woff2") format("woff2");
+                font-weight: normal;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: "Gastronomy Regular";
+                src: url("fonts/Gastronomy-Regular.woff2") format("woff2");
+                font-weight: normal;
+                font-style: normal;
+            }
+            body,
+            html {
+                margin: 0;
+                padding: 0;
+                height: 100%;
+                overflow: hidden;
+                font-family: "Georgia", "Times New Roman", serif;
+                background-color: #231c14; /* Darker brown that coordinates with Victorian map */
+            }
+
+            .container {
+                position: relative;
+                width: 100vw;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            .content {
+                position: absolute;
+                top: 10%;
+                left: 50%;
+                transform: translateX(-50%);
+                text-align: center;
+                z-index: 10;
+                background-color: rgba(245, 239, 226, 0.9);
+                padding: 2rem 3rem;
+                border-radius: 1rem;
+                backdrop-filter: blur(5px);
+                border: 2px solid #8b6b4a;
+                box-shadow: 0 8px 32px rgba(31, 38, 135, 0.25);
+            }
+
+            h1 {
+                font-size: 8.5rem;
+                margin: 0;
+                color: #3a2e21;
+                text-shadow: 2px 2px 4px rgba(150, 124, 94, 0.7);
+                font-family:
+                    "QuentinCaps", "Palatino Linotype", "Book Antiqua",
+                    Palatino, serif;
+                font-weight: normal;
+                letter-spacing: 0.1em;
+            }
+
+            .sorry {
+                font-size: 1.8rem;
+                color: #3a2e21;
+                text-shadow: 1px 1px 2px rgba(150, 124, 94, 0.4);
+                margin-top: 0.5rem;
+                font-family:
+                    "Gastronomy Regular", "Palatino Linotype", "Book Antiqua",
+                    Palatino, serif;
+            }
+
+            #map-canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: #231c14; /* Match body background color */
+            }
+
+            .magnifier-container {
+                position: fixed;
+                bottom: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+
+            .magnifier-circle {
+                position: relative;
+                width: 40vh;
+                height: 40vh;
+                border-radius: 50%;
+                border: 3px solid #a17f52;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.7);
+                z-index: 5;
+                overflow: hidden;
+            }
+
+            #magnifier-canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                border-radius: 50%;
+            }
+
+            .instructions {
+                font-size: 2rem;
+                position: absolute;
+                bottom: 20px;
+                left: 0;
+                width: 100%;
+                text-align: center;
+                color: #e9dfc7; /* Lighter color for contrast against dark background */
+                background-color: rgba(35, 28, 20, 0.8); /* Darker background */
+                padding: 10px;
+                font-style: normal;
+                font-size: 400;
+                font-family: "Tangerine", cursive;
+                z-index: 3;
+            }
+
+            @media (max-width: 600px) {
+                h1 {
+                    font-size: 4.5rem;
+                    letter-spacing: 0.08em;
+                }
+                .sorry {
+                    font-size: 1.2rem;
+                }
+                .magnifier-circle {
+                    width: 35vh;
+                    height: 35vh;
+                    bottom: 80px;
+                }
+            }
+            @media (max-height: 400px) {
+                .magnifier-circle {
+                    visibility: hidden;
+                }
+                h1 {
+                    font-size: 4.5rem;
+                    letter-spacing: 0.08em;
+                }
+                .sorry {
+                    font-size: 1.2rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <canvas id="map-canvas"></canvas>
+
+            <div class="content">
+                <h1>404</h1>
+                <div class="sorry">Sorry we can't find that page</div>
+            </div>
+
+            <div class="magnifier-container">
+                <div class="magnifier-circle">
+                    <canvas id="magnifier-canvas"></canvas>
+                </div>
+            </div>
+
+            <div class="instructions">Even Mr. Holmes could not find it.</div>
+        </div>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const mapCanvas = document.getElementById("map-canvas");
+                const magnifierCanvas =
+                    document.getElementById("magnifier-canvas");
+                const mapCtx = mapCanvas.getContext("2d");
+                const magnifierCtx = magnifierCanvas.getContext("2d");
+                const magnifierCircle =
+                    document.querySelector(".magnifier-circle");
+
+                // Set canvas sizes
+                function resizeCanvas() {
+                    // Map canvas
+                    mapCanvas.width = window.innerWidth;
+                    mapCanvas.height = window.innerHeight;
+
+                    // Magnifier canvas
+                    magnifierCanvas.width = magnifierCircle.offsetWidth;
+                    magnifierCanvas.height = magnifierCircle.offsetHeight;
+                }
+
+                // Call resize initially and on window resize
+                resizeCanvas();
+                window.addEventListener("resize", resizeCanvas);
+
+                // Load the map image
+                const mapImage = new Image();
+                mapImage.src =
+                    "http://localhost:8080/static/images/london-1890.jpg";
+
+                // Variables for animation
+                const animationDuration = 90000; // 90 seconds for one complete cycle
+                let startTime = null;
+
+                // Parameters for figure-8 curve using parametric sine functions
+                // x = A * sin(t), y = B * sin(2t)
+                const amplitudeX = 0.4; // A value (controls width)
+                const amplitudeY = 0.4; // B value (controls height)
+                const centerX = 0.5; // Center point X
+                const centerY = 0.5; // Center point Y
+
+                // Function to get position along the figure-8 path at time t
+                function getPositionAtTime(t) {
+                    // t ranges from 0 to 1, but we need 0 to 2π for a complete sine cycle
+                    const angle = t * Math.PI * 2;
+
+                    // Calculate x and y using parametric equations
+                    // x = centerX + A * sin(t)
+                    // y = centerY + B * sin(2t)
+                    return {
+                        x: centerX + amplitudeX * Math.sin(angle),
+                        y: centerY + amplitudeY * Math.sin(2 * angle),
+                    };
+                }
+
+                // Function to draw the map
+                function drawMap(timestamp) {
+                    if (!startTime) startTime = timestamp;
+                    const elapsed = timestamp - startTime;
+                    const progress =
+                        (elapsed % animationDuration) / animationDuration;
+
+                    // Get current position in the figure-8 animation
+                    const position = getPositionAtTime(progress);
+
+                    // Clear the canvas
+                    mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+
+                    // Calculate map dimensions while preserving aspect ratio
+                    let mapWidth, mapHeight;
+                    const imageAspectRatio = mapImage.width / mapImage.height;
+                    const canvasAspectRatio =
+                        mapCanvas.width / mapCanvas.height;
+
+                    if (imageAspectRatio > canvasAspectRatio) {
+                        // Image is wider than canvas (relative to height)
+                        mapHeight = mapCanvas.height * 2;
+                        mapWidth = mapHeight * imageAspectRatio;
+                    } else {
+                        // Image is taller than canvas (relative to width)
+                        mapWidth = mapCanvas.width * 2;
+                        mapHeight = mapWidth / imageAspectRatio;
+                    }
+
+                    // Calculate position offset (translate position from [0,1] to pixel offset)
+                    const offsetX = -(
+                        position.x * mapWidth -
+                        mapCanvas.width / 2
+                    );
+                    const offsetY = -(
+                        position.y * mapHeight -
+                        mapCanvas.height / 2
+                    );
+
+                    // Draw the map at the calculated position
+                    mapCtx.drawImage(
+                        mapImage,
+                        offsetX,
+                        offsetY,
+                        mapWidth,
+                        mapHeight,
+                    );
+
+                    // Draw the magnified view
+                    drawMagnifier(offsetX, offsetY, mapWidth, mapHeight);
+
+                    // Continue animation
+                    requestAnimationFrame(drawMap);
+                }
+
+                // Function to draw the magnified view
+                function drawMagnifier(offsetX, offsetY, mapWidth, mapHeight) {
+                    // Get the position of the magnifier relative to the map
+                    const magnifierRect =
+                        magnifierCircle.getBoundingClientRect();
+                    const magnifierCenterX =
+                        magnifierRect.left + magnifierRect.width / 2;
+                    const magnifierCenterY =
+                        magnifierRect.top + magnifierRect.height / 2;
+
+                    // Clear the magnifier canvas
+                    magnifierCtx.clearRect(
+                        0,
+                        0,
+                        magnifierCanvas.width,
+                        magnifierCanvas.height,
+                    );
+
+                    // Calculate the source position on the map
+                    const zoomFactor = 3;
+                    const sourceX =
+                        magnifierCenterX -
+                        offsetX -
+                        magnifierCanvas.width / (zoomFactor * 2); // Adjust for zoom
+                    const sourceY =
+                        magnifierCenterY -
+                        offsetY -
+                        magnifierCanvas.height / (zoomFactor * 2);
+                    const sourceWidth = magnifierCanvas.width / zoomFactor; // Source is 1/zoomFactor of the size for magnification
+                    const sourceHeight = magnifierCanvas.height / zoomFactor;
+
+                    // Calculate scaling factors to account for aspect ratio preservation
+                    const scaleX = mapImage.width / mapWidth;
+                    const scaleY = mapImage.height / mapHeight;
+
+                    // Draw the magnified portion
+                    magnifierCtx.drawImage(
+                        mapImage,
+                        // Source rectangle (portion of the original image)
+                        sourceX * scaleX,
+                        sourceY * scaleY,
+                        sourceWidth * scaleX,
+                        sourceHeight * scaleY,
+                        // Destination rectangle (the magnifier canvas)
+                        0,
+                        0,
+                        magnifierCanvas.width,
+                        magnifierCanvas.height,
+                    );
+
+                    // Apply circular clip path
+                    magnifierCtx.globalCompositeOperation = "destination-in";
+                    magnifierCtx.beginPath();
+                    magnifierCtx.arc(
+                        magnifierCanvas.width / 2,
+                        magnifierCanvas.height / 2,
+                        magnifierCanvas.width / 2,
+                        0,
+                        Math.PI * 2,
+                    );
+                    magnifierCtx.fill();
+                    magnifierCtx.globalCompositeOperation = "source-over";
+                }
+
+                // Start the animation once the image is loaded
+                mapImage.onload = function () {
+                    requestAnimationFrame(drawMap);
+                };
+            });
+        </script>
+    </body>
+</html>
