@@ -11,6 +11,14 @@ import { getIcon, showToast, fetchJson, handleFetchError } from "./utils.js";
 
 // --- SSR System Monitoring Form Submission ---
 document.addEventListener("DOMContentLoaded", function () {
+  // Show pending toast if present
+  const pendingToast = localStorage.getItem("pendingToast");
+  if (pendingToast) {
+    const { title, message, type } = JSON.parse(pendingToast);
+    showToast(title, message, type);
+    localStorage.removeItem("pendingToast");
+  }
+
   const systemForm = document.getElementById("inline-system-form");
   if (systemForm) {
     systemForm.addEventListener("submit", async function (e) {
@@ -242,8 +250,16 @@ async function deleteMonitor(type, id, detail) {
     const data = await fetchJson(`/api/config/${type}/${id}`, {
       method: "DELETE",
     });
+    // Persist toast info before reload
+    localStorage.setItem(
+      "pendingToast",
+      JSON.stringify({
+        title: "Success",
+        message: data.message || "Deleted",
+        type: "success",
+      }),
+    );
     window.location.reload();
-    showToast("Success", data.message || "Deleted");
   } catch (error) {
     handleFetchError(error, `Failed to delete ${type} monitor`);
   }
@@ -285,9 +301,16 @@ document.addEventListener("DOMContentLoaded", function () {
           },
           body: JSON.stringify(diskConfig),
         });
-        showToast("Success", "Disk monitor added");
+        // Persist toast info before reload
+        localStorage.setItem(
+          "pendingToast",
+          JSON.stringify({
+            title: "Success",
+            message: "Disk monitor added",
+            type: "success",
+          }),
+        );
         window.location.reload();
-        addDiskForm.reset();
       } catch (error) {
         handleFetchError(error, "Failed to add disk monitor");
       }
@@ -336,9 +359,16 @@ document.addEventListener("DOMContentLoaded", function () {
             }),
           },
         );
-        showToast("Success", "Health check added");
+        // Persist toast info before reload
+        localStorage.setItem(
+          "pendingToast",
+          JSON.stringify({
+            title: "Success",
+            message: "Health check added",
+            type: "success",
+          }),
+        );
         window.location.reload();
-        addHealthForm.reset();
       } catch (error) {
         handleFetchError(error, "Failed to add health check");
       }
