@@ -203,6 +203,9 @@ Podman is supported as a drop-in replacement for Docker. Use similar flags as ab
 - **Configuration:** Add/remove disk and healthcheck monitors, update thresholds, and configure webhook notifications.
 - **Mobile View:** Optimized for small screens.
 
+![Dashboard](screenshots/dashboard.png)
+![Configuration](screenshots/config.png)
+
 ---
 
 ## Webhook Notifications
