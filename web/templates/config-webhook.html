@@ -1,7 +1,7 @@
 {{ define "config-webhook" }}
 <div class="card-header">Webhook</div>
 <div class="card-body">
-    <form id="webhook-inline-form">
+    <form id="webhook-inline-form" aria-label="Webhook configuration form">
         <div class="config-item mb-3">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -35,6 +35,7 @@
                 id="webhook-update-btn"
                 class="btn btn-primary me-2"
                 type="submit"
+                aria-label="{{ if .Config.Webhook.Enabled }}Update Webhook{{ else }}Enable Webhook{{ end }}"
             >
                 {{ if .Config.Webhook.Enabled }} Update Webhook {{ else }}
                 Enable Webhook {{ end }}
@@ -44,6 +45,7 @@
                 id="webhook-disable-btn"
                 class="btn btn-secondary"
                 type="button"
+                aria-label="Disable Webhook"
             >
                 Disable Webhook
             </button>

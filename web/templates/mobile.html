@@ -12,18 +12,22 @@
                     id="refresh-btn"
                     class="btn btn-primary"
                     data-refresh-interval="{{ .refresh_interval }}"
+                    aria-label="Refresh dashboard"
                 >
-                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    Refresh
                     <span id="refresh-countdown"></span>
                 </button>
             </div>
 
-            <div id="mobile-items-list">
+            <div
+                id="mobile-items-list"
+                aria-label="Mobile dashboard items list"
+            >
                 {{ template "mobileItemList" .MobileItems }}
             </div>
         </div>
 
         {{ template "footer" . }}
-
     </body>
 </html>

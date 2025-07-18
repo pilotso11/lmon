@@ -1,7 +1,6 @@
 {{ define "config-disk-list" }}
 <div class="card-header">Disk Monitoring</div>
 <div class="card-body">
-    <!-- TODO: Verify aria tags for accessibility on delete buttons -->
     <div id="disk-config-items">
         {{ if .Config.Monitoring.Disk }} {{ range $id, $disk :=
         .Config.Monitoring.Disk }}
@@ -21,8 +20,9 @@
                     data-group="disk"
                     data-detail="{{ $id }} ({{ $disk.Path }})"
                     title="Delete"
+                    aria-label="Delete disk monitor {{ $id }} at path {{ $disk.Path }}"
                 >
-                    <i class="bi bi-trash"></i>
+                    <i class="bi bi-trash" aria-hidden="true"></i>
                 </button>
             </div>
         </div>
@@ -32,7 +32,7 @@
     </div>
     <hr />
     <h5>Add Disk Monitor</h5>
-    <form id="add-disk-form">
+    <form id="add-disk-form" aria-label="Add Disk Monitor">
         <div class="row align-items-center mb-2">
             <label for="disk-name" class="col-sm-4 col-form-label"
                 >Name (ID)</label
@@ -43,6 +43,8 @@
                     class="form-control"
                     id="disk-name"
                     required
+                    aria-required="true"
+                    aria-label="Disk monitor name or ID"
                 />
             </div>
         </div>
@@ -54,6 +56,8 @@
                     class="form-control"
                     id="disk-path"
                     required
+                    aria-required="true"
+                    aria-label="Disk path"
                 />
             </div>
         </div>
@@ -70,6 +74,8 @@
                     max="100"
                     value="80"
                     required
+                    aria-required="true"
+                    aria-label="Disk usage threshold percentage"
                 />
             </div>
         </div>
@@ -78,11 +84,18 @@
                 >Icon</label
             >
             <div class="col-sm-8">
-                <div id="disk-icon-dropdown"></div>
+                <div
+                    id="disk-icon-dropdown"
+                    aria-label="Disk icon selector"
+                ></div>
             </div>
         </div>
         <div class="text-end mt-2">
-            <button type="submit" class="btn btn-primary">
+            <button
+                type="submit"
+                class="btn btn-primary"
+                aria-label="Add Disk Monitor"
+            >
                 Add Disk Monitor
             </button>
         </div>

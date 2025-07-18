@@ -103,7 +103,7 @@ func TestStatic(t *testing.T) {
 	s, _ := StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	r, body := GetTestRequest(ctx, t, s, "/static/icons/Icon.svg")
+	r, body := GetTestRequest(ctx, t, s, "/static/icons/icon.svg")
 	assert.Equal(t, http.StatusOK, r.StatusCode, "status code")
 	assert.Equal(t, icon, body)
 }

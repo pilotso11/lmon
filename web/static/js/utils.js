@@ -58,7 +58,7 @@ export function getIcon(item) {
  * Show a toast notification (Bootstrap 5).
  * @param {string} title
  * @param {string} message
- * @param {boolean} [isError=false]
+ * @param type toast type: "success", "danger", "warning", "info"
  */
 export function showToast(title, message, type = "success") {
   const toastEl = document.getElementById("toast");

@@ -3,7 +3,7 @@
  * Configuration page logic refactored to use shared utilities from utils.js.
  */
 
-import { getIcon, showToast, fetchJson, handleFetchError } from "./utils.js";
+import { showToast, fetchJson, handleFetchError } from "./utils.js";
 
 // These will be set by the template engine as global variables
 // Example: const default_health_icon = "heart-pulse"

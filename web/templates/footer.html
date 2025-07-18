@@ -1,6 +1,10 @@
 {{ define "footer" }}
 
-<div class="update-timestamp text-center">
+<div
+    class="update-timestamp text-center"
+    aria-label="Last updated timestamp"
+    aria-live="polite"
+>
     <span class="badge bg-secondary">Last Updated:</span>
     {{ .UpdateAt }}
 </div>

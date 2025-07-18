@@ -1,24 +1,34 @@
 {{ define "config-system-monitoring" }}
 
-<div class="card-header" xmlns="http://www.w3.org/1999/html">System Monitoring</div>
+<div class="card-header" xmlns="http://www.w3.org/1999/html">
+    System Monitoring
+</div>
 <div class="card-body">
-    <form id="inline-system-form">
+    <form
+        id="inline-system-form"
+        aria-label="System Monitoring Settings"
+        role="form"
+    >
         <div class="config-item mb-3">
             <div class="d-flex align-items-center">
-                <i class="bi bi-{{ .Config.Monitoring.System.CPU.Icon }} item-icon me-2"></i>
-                <label for="cpu-threshold" class="mb-0"><strong>CPU Threshold</strong></label>
+                <i
+                    class="bi bi-{{ .Config.Monitoring.System.CPU.Icon }} item-icon me-2"
+                ></i>
+                <label for="cpu-threshold" class="mb-0"
+                    ><strong>CPU Threshold</strong></label
+                >
                 <div class="ms-auto" style="width: 120px">
                     <div class="input-group">
                         <input
-                                type="number"
-                                class="form-control"
-                                style="width: 75px"
-                                id="cpu-threshold"
-                                name="cpu-threshold"
-                                min="1"
-                                max="100"
-                                value="{{ .Config.Monitoring.System.CPU.Threshold }}"
-                                required
+                            type="number"
+                            class="form-control"
+                            style="width: 75px"
+                            id="cpu-threshold"
+                            name="cpu-threshold"
+                            min="1"
+                            max="100"
+                            value="{{ .Config.Monitoring.System.CPU.Threshold }}"
+                            required
                         />
                         <span class="input-group-text">%</span>
                     </div>
@@ -28,20 +38,24 @@
 
         <div class="config-item mb-3">
             <div class="d-flex align-items-center">
-                <i class="bi bi-{{ .Config.Monitoring.System.Memory.Icon }} item-icon me-2"></i>
-                <label for="memory-threshold" class="mb-0"><strong>Memory Threshold</strong></label>
+                <i
+                    class="bi bi-{{ .Config.Monitoring.System.Memory.Icon }} item-icon me-2"
+                ></i>
+                <label for="memory-threshold" class="mb-0"
+                    ><strong>Memory Threshold</strong></label
+                >
                 <div class="ms-auto" style="width: 120px">
                     <div class="input-group">
                         <input
-                                type="number"
-                                class="form-control"
-                                style="width: 75px"
-                                id="memory-threshold"
-                                name="memory-threshold"
-                                min="1"
-                                max="100"
-                                value="{{ .Config.Monitoring.System.Memory.Threshold }}"
-                                required
+                            type="number"
+                            class="form-control"
+                            style="width: 75px"
+                            id="memory-threshold"
+                            name="memory-threshold"
+                            min="1"
+                            max="100"
+                            value="{{ .Config.Monitoring.System.Memory.Threshold }}"
+                            required
                         />
                         <span class="input-group-text">%</span>
                     </div>
@@ -52,19 +66,21 @@
         <div class="config-item mb-3">
             <div class="d-flex align-items-center">
                 <i class="bi bi-clock item-icon me-2"></i>
-                <label for="interval-seconds" class="mb-0"><strong>Refresh Interval</strong></label>
+                <label for="interval-seconds" class="mb-0"
+                    ><strong>Refresh Interval</strong></label
+                >
                 <div class="ms-auto" style="width: 120px">
                     <div class="input-group">
                         <input
-                                type="number"
-                                class="form-control"
-                                style="width: 75px"
-                                id="interval-seconds"
-                                name="interval-seconds"
-                                min="1"
-                                max="100"
-                                value="{{ .Config.Monitoring.Interval }}"
-                                required
+                            type="number"
+                            class="form-control"
+                            style="width: 75px"
+                            id="interval-seconds"
+                            name="interval-seconds"
+                            min="1"
+                            max="100"
+                            value="{{ .Config.Monitoring.Interval }}"
+                            required
                         />
                         <span class="input-group-text">s</span>
                     </div>
@@ -75,16 +91,18 @@
         <div class="config-item mb-3">
             <div class="d-flex align-items-center">
                 <i class="bi bi-layout-text-sidebar-reverse item-icon me-2"></i>
-                <label for="dashboard-title-inline" class="mb-0"><strong>Title</strong></label>
+                <label for="dashboard-title-inline" class="mb-0"
+                    ><strong>Title</strong></label
+                >
                 <div class="ms-auto" style="width: 250px">
                     <div class="input-group">
                         <input
-                                class="form-control"
-                                style="width: 250px"
-                                id="dashboard-title-inline"
-                                name="dashboard-title-inline"
-                                value="{{ .Config.Monitoring.System.Title }}"
-                                required
+                            class="form-control"
+                            style="width: 250px"
+                            id="dashboard-title-inline"
+                            name="dashboard-title-inline"
+                            value="{{ .Config.Monitoring.System.Title }}"
+                            required
                         />
                     </div>
                 </div>
@@ -92,7 +110,11 @@
         </div>
 
         <div class="text-end">
-            <button type="submit" class="btn btn-primary">
+            <button
+                type="submit"
+                class="btn btn-primary"
+                aria-label="Save System Settings"
+            >
                 Save System Settings
             </button>
         </div>

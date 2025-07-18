@@ -12,8 +12,10 @@
                     id="refresh-btn"
                     class="btn btn-primary"
                     data-refresh-interval="{{ .refresh_interval }}"
+                    aria-label="Refresh dashboard"
                 >
-                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    Refresh
                     <span id="refresh-countdown"></span>
                 </button>
             </div>
@@ -50,6 +52,5 @@
         </div>
 
         {{ template "footer" . }}
-
     </body>
 </html>
