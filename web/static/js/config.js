@@ -114,8 +114,6 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 
-// Function to load configuration
-
 /**
  * Bootstrap Icon choices for selectors.
  */
@@ -209,67 +207,30 @@ async function loadConfig() {
   try {
     const config = await fetchJson("/api/config");
 
-    // Render disk config items
+    // Optionally update any global config state if needed
     window.diskArray = Object.entries(config.Monitoring.Disk || {}).map(
       ([name, props]) => ({
         name,
         ...props,
       }),
     );
-    renderDiskConfig(window.diskArray);
-
-    // Render system config (passing web config for dashboard title)
     window.lastLoadedInterval = config.Monitoring.Interval || 60;
-
-    // Render health check config items
     window.healthArray = Object.entries(
       config.Monitoring.Healthcheck || {},
     ).map(([name, props]) => ({
       name,
       ...props,
     }));
-    renderHealthConfig(window.healthArray);
+    // No client-side rendering of disk/health lists; SSR handles this.
   } catch (error) {
     handleFetchError(error, "Failed to load configuration");
   }
 }
 
-// Function to render disk config items
-function renderDiskConfig(diskItems) {
-  if (!diskItems || diskItems.length === 0) {
-    document.getElementById("disk-config-items").innerHTML =
-      '<div class="text-center">No disk monitors configured</div>';
-    return;
-  }
-
-  let html = "";
-  diskItems.forEach((item) => {
-    html += `
-      <div class="config-item">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            ${getIcon({ icon: item.Icon, type: "disk" })}
-            <strong>${item.name} (${item.Path || "(no path)"})</strong>
-          </div>
-          <div>
-            <span>Threshold: ${
-              item.Threshold !== undefined && item.Threshold !== null
-                ? parseFloat(item.Threshold).toFixed(2)
-                : "N/A"
-            }%</span>
-            <button type="button" class="btn btn-link p-0 delete-btn ms-2" data-type="disk" data-id="${item.name}" aria-label="Delete">
-              <i class="bi bi-trash"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-  });
-
-  document.getElementById("disk-config-items").innerHTML = html;
-
-  // Add delete event listeners
-  document.querySelectorAll('.delete-btn[data-type="disk"]').forEach((btn) => {
+// No longer rendering disk config items client-side; SSR handles this.
+// Only event listeners for delete buttons are needed.
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".delete-disk-btn").forEach((btn) => {
     btn.addEventListener("click", function () {
       const id = this.getAttribute("data-id");
       const disk = (window.diskArray || []).find((d) => d.name === id);
@@ -280,55 +241,23 @@ function renderDiskConfig(diskItems) {
       deleteMonitor("disk", id, detail);
     });
   });
-}
+});
 
-// Function to render health check config items
-function renderHealthConfig(healthItems) {
-  if (!healthItems || healthItems.length === 0) {
-    document.getElementById("health-config-items").innerHTML =
-      '<div class="text-center">No health checks configured</div>';
-    return;
-  }
-
-  let html = "";
-  healthItems.forEach((item) => {
-    html += `
-      <div class="config-item">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            ${getIcon({ icon: item.Icon, type: "health" })}
-            <strong>${item.name}</strong>
-          </div>
-          <div>
-            <button type="button" class="btn btn-link p-0 delete-btn" data-type="health" data-id="${item.name}" aria-label="Delete">
-              <i class="bi bi-trash"></i>
-            </button>
-          </div>
-        </div>
-        <div class="mt-2">
-          <small class="text-muted">${item.URL}</small>
-        </div>
-      </div>
-    `;
-  });
-
-  document.getElementById("health-config-items").innerHTML = html;
-
-  // Add delete event listeners
-  document
-    .querySelectorAll('.delete-btn[data-type="health"]')
-    .forEach((btn) => {
-      btn.addEventListener("click", function () {
-        const id = this.getAttribute("data-id");
-        const health = (window.healthArray || []).find((h) => h.name === id);
-        let detail = id;
-        if (health) {
-          detail = `${health.name} (${health.URL || ""})`;
-        }
-        deleteMonitor("health", id, detail);
-      });
+// No longer rendering health check config items client-side; SSR handles this.
+// Only event listeners for delete buttons are needed.
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".delete-health-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const health = (window.healthArray || []).find((h) => h.name === id);
+      let detail = id;
+      if (health) {
+        detail = `${health.name} (${health.URL || ""})`;
+      }
+      deleteMonitor("health", id, detail);
     });
-}
+  });
+});
 
 // Function to delete a monitor
 async function deleteMonitor(type, id, detail) {
@@ -343,8 +272,8 @@ async function deleteMonitor(type, id, detail) {
     const data = await fetchJson(`/api/config/${type}/${id}`, {
       method: "DELETE",
     });
+    window.location.reload();
     showToast("Success", data.message || "Deleted");
-    loadConfig();
   } catch (error) {
     handleFetchError(error, `Failed to delete ${type} monitor`);
   }
@@ -352,7 +281,7 @@ async function deleteMonitor(type, id, detail) {
 
 // Document ready
 document.addEventListener("DOMContentLoaded", function () {
-  // Load configuration
+  // Load configuration (for global state, not rendering lists)
   loadConfig();
 
   // Add disk form submission
@@ -390,7 +319,7 @@ document.addEventListener("DOMContentLoaded", function () {
           body: JSON.stringify(diskConfig),
         });
         showToast("Success", "Disk monitor added");
-        loadConfig();
+        window.location.reload();
         addDiskForm.reset();
       } catch (error) {
         handleFetchError(error, "Failed to add disk monitor");
@@ -441,7 +370,7 @@ document.addEventListener("DOMContentLoaded", function () {
           },
         );
         showToast("Success", "Health check added");
-        loadConfig();
+        window.location.reload();
         addHealthForm.reset();
       } catch (error) {
         handleFetchError(error, "Failed to add health check");

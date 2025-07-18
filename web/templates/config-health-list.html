@@ -1,0 +1,63 @@
+{{ define "config-health-list" }}
+<div class="card-header">Health Checks</div>
+<div class="card-body">
+    <!-- TODO: Verify aria tags for accessibility on delete buttons -->
+    <div id="health-config-items">
+        {{ if .Config.Monitoring.Healthcheck }}
+            {{ range $id, $health := .Config.Monitoring.Healthcheck }}
+                <div class="config-item mb-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-{{ $health.Icon }} item-icon me-2"></i>
+                        <strong class="me-2">{{ $id }}</strong>
+                        <span class="me-2 text-muted">(<code>{{ $health.URL }}</code>)</span>
+                        <span class="me-2">Timeout: {{ $health.Timeout }}s</span>
+                        <button
+                            type="button"
+                            class="delete-health-btn ms-auto p-0 btn btn-link"
+                            style="color: #dc3545; border: none; background: none"
+                            data-id="{{ $id }}"
+                            data-group="health"
+                            title="Delete"
+                        >
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            {{ end }}
+        {{ else }}
+            <div class="text-center text-muted">No health checks configured.</div>
+        {{ end }}
+    </div>
+    <hr />
+    <h5>Add Health Check</h5>
+    <form id="add-health-form">
+        <div class="row align-items-center mb-2">
+            <label for="health-name" class="col-sm-4 col-form-label">Name (ID)</label>
+            <div class="col-sm-8">
+                <input type="text" class="form-control" id="health-name" required />
+            </div>
+        </div>
+        <div class="row align-items-center mb-2">
+            <label for="health-url" class="col-sm-4 col-form-label">URL</label>
+            <div class="col-sm-8">
+                <input type="url" class="form-control" id="health-url" required />
+            </div>
+        </div>
+        <div class="row align-items-center mb-2">
+            <label for="health-timeout" class="col-sm-4 col-form-label">Timeout (seconds)</label>
+            <div class="col-sm-8">
+                <input type="number" class="form-control" id="health-timeout" min="1" value="10" required />
+            </div>
+        </div>
+        <div class="row align-items-center mb-2">
+            <label for="health-icon-dropdown" class="col-sm-4 col-form-label">Icon</label>
+            <div class="col-sm-8">
+                <div id="health-icon-dropdown"></div>
+            </div>
+        </div>
+        <div class="text-end mt-2">
+            <button type="submit" class="btn btn-primary">Add Health Check</button>
+        </div>
+    </form>
+</div>
+{{ end }}
