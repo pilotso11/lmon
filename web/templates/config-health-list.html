@@ -5,27 +5,28 @@
     <div id="health-config-items">
         {{ if .Config.Monitoring.Healthcheck }}
             {{ range $id, $health := .Config.Monitoring.Healthcheck }}
-                <div class="config-item mb-3">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-{{ $health.Icon }} item-icon me-2"></i>
-                        <strong class="me-2">{{ $id }}</strong>
+        <div class="config-item mb-3">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-{{ $health.Icon }} item-icon me-2"></i>
+                <strong class="me-2">{{ $id }}</strong>
                         <span class="me-2 text-muted">(<code>{{ $health.URL }}</code>)</span>
-                        <span class="me-2">Timeout: {{ $health.Timeout }}s</span>
-                        <button
-                            type="button"
-                            class="delete-health-btn ms-auto p-0 btn btn-link"
-                            style="color: #dc3545; border: none; background: none"
-                            data-id="{{ $id }}"
-                            data-group="health"
-                            title="Delete"
-                        >
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                </div>
+                <span class="me-2">Timeout: {{ $health.Timeout }}s</span>
+                <button
+                    type="button"
+                    class="delete-health-btn ms-auto p-0 btn btn-link"
+                    style="color: #dc3545; border: none; background: none"
+                    data-id="{{ $id }}"
+                    data-group="health"
+                    data-detail="{{ $id }} ({{ $health.URL }})"
+                    title="Delete"
+                >
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
             {{ end }}
         {{ else }}
-            <div class="text-center text-muted">No health checks configured.</div>
+        <div class="text-center text-muted">No health checks configured.</div>
         {{ end }}
     </div>
     <hr />

@@ -203,29 +203,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 
-async function loadConfig() {
-  try {
-    const config = await fetchJson("/api/config");
-
-    // Optionally update any global config state if needed
-    window.diskArray = Object.entries(config.Monitoring.Disk || {}).map(
-      ([name, props]) => ({
-        name,
-        ...props,
-      }),
-    );
-    window.lastLoadedInterval = config.Monitoring.Interval || 60;
-    window.healthArray = Object.entries(
-      config.Monitoring.Healthcheck || {},
-    ).map(([name, props]) => ({
-      name,
-      ...props,
-    }));
-    // No client-side rendering of disk/health lists; SSR handles this.
-  } catch (error) {
-    handleFetchError(error, "Failed to load configuration");
-  }
-}
+// No longer needed: loadConfig() is obsolete since SSR provides all necessary details for delete popups.
 
 // No longer rendering disk config items client-side; SSR handles this.
 // Only event listeners for delete buttons are needed.
@@ -233,11 +211,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll(".delete-disk-btn").forEach((btn) => {
     btn.addEventListener("click", function () {
       const id = this.getAttribute("data-id");
-      const disk = (window.diskArray || []).find((d) => d.name === id);
-      let detail = id;
-      if (disk) {
-        detail = `${disk.name} (${disk.Path || ""})`;
-      }
+      const detail = this.getAttribute("data-detail") || id;
       deleteMonitor("disk", id, detail);
     });
   });
@@ -249,11 +223,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll(".delete-health-btn").forEach((btn) => {
     btn.addEventListener("click", function () {
       const id = this.getAttribute("data-id");
-      const health = (window.healthArray || []).find((h) => h.name === id);
-      let detail = id;
-      if (health) {
-        detail = `${health.name} (${health.URL || ""})`;
-      }
+      const detail = this.getAttribute("data-detail") || id;
       deleteMonitor("health", id, detail);
     });
   });
@@ -281,9 +251,6 @@ async function deleteMonitor(type, id, detail) {
 
 // Document ready
 document.addEventListener("DOMContentLoaded", function () {
-  // Load configuration (for global state, not rendering lists)
-  loadConfig();
-
   // Add disk form submission
   const addDiskForm = document.getElementById("add-disk-form");
   if (addDiskForm) {
