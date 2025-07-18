@@ -144,10 +144,11 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	require.NoError(t, err, "wait for reload after adding disk")
 	// Instead of using ElementR with a regex, explicitly check for the presence of both spans.
 	// Wait for a config item with disk name "root" and path "/"
-	var found bool
-	for start := time.Now(); time.Since(start) < 2*time.Second; {
+	require.Eventually(t, func() bool {
 		items, err := page.Elements(`#disk-config-items .config-item`)
-		require.NoError(t, err, "get disk config items")
+		if err != nil {
+			return false // If we can't get items, return false to retry
+		}
 		for _, item := range items {
 			nameSpan, err := item.Element(`.config-item-name`)
 			if err != nil {
@@ -166,16 +167,11 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 				continue
 			}
 			if nameText == "root" && pathText == "(/)" {
-				found = true
-				break
+				return true
 			}
 		}
-		if found {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	require.True(t, found, "wait for disk in config list")
+		return false
+	}, 2*time.Second, 50*time.Millisecond, "wait for disk item in config list")
 
 	// Navigate back to dashboard
 	el, err = page.Element(`a.nav-link[href="/"]`)

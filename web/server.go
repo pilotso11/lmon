@@ -370,24 +370,21 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			}
 			mobileItems = append(mobileItems, item)
 		}
+
 		// sort mobileItems by status
 		slices.SortFunc(mobileItems, func(a, b UIResult) int {
 			return int(a.Status - b.Status)
 		})
 		// sort systemItems by display Name
-		slices.SortFunc(systemItems, func(a, b UIResult) int {
-			return strings.Compare(a.DisplayName, b.DisplayName)
-		})
+		slices.SortFunc(systemItems, displayNameSorter)
 		// sort diskItems by display Name
-		slices.SortFunc(diskItems, func(a, b UIResult) int {
-			return strings.Compare(a.DisplayName, b.DisplayName)
-		})
+		slices.SortFunc(diskItems, displayNameSorter)
 		// sort healthItems by display Name
-		slices.SortFunc(healthItems, func(a, b UIResult) int {
-			return strings.Compare(a.DisplayName, b.DisplayName)
-		})
+		slices.SortFunc(healthItems, displayNameSorter)
+
+		// Set even row for styling in mobile view
 		for i, item := range mobileItems {
-			item.EvenRow = i%2 == 0 // Set even row for styling
+			item.EvenRow = i%2 == 0
 			mobileItems[i] = item
 		}
 
@@ -412,7 +409,7 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 		t := templ.Lookup(page)
 		if t == nil {
 			log.Printf("handleTemplate %v: template not found", page)
-			http.Error(w, http.StatusText(http.StatusOK), http.StatusNotFound)
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			return
 		}
 		err = templ.ExecuteTemplate(w, page, data)
@@ -422,6 +419,10 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func displayNameSorter(a, b UIResult) int {
+	return strings.Compare(a.DisplayName, b.DisplayName)
 }
 
 // writeJson serializes the given data as JSON and writes it to the HTTP response.

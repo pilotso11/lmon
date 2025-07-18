@@ -83,7 +83,7 @@
 .item-detail1 {
     margin-left: 12px;
     margin-right: 12px;
-    color: var(--bs-secondary,  #6c757d);
+    color: var(--bs-secondary, #6c757d);
     font-size: 1em;
     word-break: break-all;
     justify-content: space-between;
@@ -106,7 +106,7 @@
 .status-critical,
 .status-error {
     background-color: var(--bs-danger, #dc3545);
-    color:var(--bs-white, #fff);
+    color: var(--bs-white, #fff);
 }
 .status-unknown {
     background-color: var(--bs-secondary, #6c757d);

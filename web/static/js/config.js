@@ -56,7 +56,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!systemResp.ok || !intervalResp.ok) {
           throw new Error("Failed to save system monitoring settings");
         }
-        showToast("Success", "System monitoring settings saved.", false);
+        showToast("Success", "System monitoring settings saved.", "success");
       } catch (err) {
         showToast(
           "Error",
