@@ -472,7 +472,7 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 	name := group + "_" + id
 	item, ok := items[name]
 	if !ok {
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusBadRequest)
 		log.Printf("handleGetItem: item not found: %s", id)
 		return
 	}
@@ -687,7 +687,7 @@ func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 		if err != nil {
 			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
 			if errors.As(err, &monitors.ErrNotFound{}) {
-				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusBadRequest)
 				return
 			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)

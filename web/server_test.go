@@ -71,15 +71,6 @@ func TestGetIndex(t *testing.T) {
 	assert.Less(t, 7000, len(body), "index returned is about the same length as the template")
 }
 
-// within returns true if i2 is within the given tolerance of i.
-func within(i int, i2 int, tolerance float64) bool {
-	d := i - i2
-	if d < 0 {
-		d = -d
-	}
-	return float64(d)/float64(i) < tolerance
-}
-
 // TestGetConfig checks that the /config endpoint returns the configuration HTML.
 func TestGetConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
@@ -216,7 +207,7 @@ func TestDeleteDisk(t *testing.T) {
 	assert.False(t, exists, "deleted disk should not be in /api/items")
 
 	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/disk/"+id)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
 }
 
 // TestAddHealthcheck verifies adding a healthcheck monitor via the API.
@@ -280,7 +271,7 @@ func TestDeleteHealthcheck(t *testing.T) {
 	assert.False(t, exists, "deleted healthcheck should not be in /api/items")
 
 	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/health/"+id)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
 
 }
 
@@ -445,7 +436,7 @@ func TestGetItems(t *testing.T) {
 	})
 	t.Run("getItem missing", func(t *testing.T) {
 		resp, body = GetTestRequest(ctx, t, s, "/api/items/disk/missing")
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode, "status code")
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
 	})
 }
 
@@ -543,13 +534,13 @@ func Test_newUIResult(t *testing.T) {
 		args args
 		want UIResult
 	}{
-		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: "disk-Icon", Group: disk.Group, Threshold: 90, TypeLabel: "Disk"}},
-		{"health", args{"health_test_h", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "health-Icon", Group: healthcheck.Group, TypeLabel: "Health"}},
-		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: "cpu-Icon", Group: system.Group, DisplayName: "cpu", Threshold: 90, TypeLabel: "System"}},
-		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{Status: monitors.RAGAmber, Icon: "mem-Icon", Group: system.Group, DisplayName: "mem", Threshold: 90, TypeLabel: "System"}},
-		{"disk-fallback", args{"disk_test_not-found", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{Status: monitors.RAGGreen, Icon: disk.Icon, Group: disk.Group, Threshold: 0, TypeLabel: "Disk"}},
-		{"health-fallback", args{"health_test_not-found", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{Status: monitors.RAGRed, Icon: healthcheck.Icon, Group: healthcheck.Group, TypeLabel: "Health"}},
-		{"fallback", args{"unknown_unknown", monitors.Result{Group: "unknown", Status: monitors.RAGError}}, UIResult{Status: monitors.RAGError, Icon: "folder", Group: "unknown"}},
+		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{ID: "disk_test_d", Status: monitors.RAGGreen, Icon: "disk-Icon", Group: disk.Group, Threshold: 90, TypeLabel: "Disk", StatusClass: "status-ok"}},
+		{"health", args{"health_test_h", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{ID: "health_test_h", Status: monitors.RAGRed, Icon: "health-Icon", Group: healthcheck.Group, TypeLabel: "Health", StatusClass: "status-error"}},
+		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{ID: "system_cpu", Status: monitors.RAGRed, Icon: "cpu-Icon", Group: system.Group, DisplayName: "cpu", Threshold: 90, TypeLabel: "System", StatusClass: "status-error"}},
+		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{ID: "system_mem", Status: monitors.RAGAmber, Icon: "mem-Icon", Group: system.Group, DisplayName: "mem", Threshold: 90, TypeLabel: "System", StatusClass: "status-warning"}},
+		{"disk-fallback", args{"disk_test_not-found", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{ID: "disk_test_not-found", Status: monitors.RAGGreen, Icon: disk.Icon, Group: disk.Group, Threshold: 0, TypeLabel: "Disk", StatusClass: "status-ok"}},
+		{"health-fallback", args{"health_test_not-found", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{ID: "health_test_not-found", Status: monitors.RAGRed, Icon: healthcheck.Icon, Group: healthcheck.Group, TypeLabel: "Health", StatusClass: "status-error"}},
+		{"fallback", args{"unknown_unknown", monitors.Result{Group: "unknown", Status: monitors.RAGError}}, UIResult{ID: "unknown_unknown", Status: monitors.RAGError, Icon: "folder", Group: "unknown", StatusClass: "status-critical"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

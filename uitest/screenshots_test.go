@@ -22,9 +22,9 @@ func Test_GenerateScreenshots(t *testing.T) {
 	s.Start(ctx)
 
 	browser := getBrowser(t)
-	defer browser.MustClose()
+	defer browser.Close()
 	page := browser.MustPage(s.ServerUrl)
-	defer page.MustClose()
+	defer page.Close()
 
 	_, err := page.Timeout(1 * time.Second).Element(`#system-items .list-group-item[data-id="system_cpu"]`)
 	require.NoError(t, err, "should find cpu monitor")

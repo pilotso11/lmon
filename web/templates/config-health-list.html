@@ -7,11 +7,11 @@
         <div class="config-item mb-3">
             <div class="d-flex align-items-center">
                 <i class="bi bi-{{ $health.Icon }} item-icon me-2"></i>
-                <strong class="me-2">{{ $id }}</strong>
-                <span class="me-2 text-muted"
+                <strong class="me-2 config-item-name">{{ $id }}</strong>
+                <span class="me-2 text-muted config-item-url"
                     >(<code>{{ $health.URL }}</code>)</span
                 >
-                <span class="me-2">Timeout: {{ $health.Timeout }}s</span>
+                <span class="me-2 config-item-timeout">Timeout: {{ $health.Timeout }}s</span>
                 <button
                     type="button"
                     class="delete-health-btn ms-auto p-0 btn btn-link"

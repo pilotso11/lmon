@@ -7,8 +7,8 @@
         <div class="config-item mb-3">
             <div class="d-flex align-items-center">
                 <i class="bi bi-{{ $disk.Icon }} item-icon me-2"></i>
-                <strong class="me-2">{{ $id }}</strong>
-                <span class="me-2 text-muted"
+                <span class="config-item-name"><strong class="me-2">{{ $id }}</strong></span>
+                <span class="me-2 text-muted config-item-path"
                     >(<code>{{ $disk.Path }}</code>)</span
                 >
                 <span class="me-2">Threshold: {{ $disk.Threshold }}%</span>
