@@ -58,9 +58,9 @@ export function getIcon(item) {
  * Show a toast notification (Bootstrap 5).
  * @param {string} title
  * @param {string} message
- * @param {boolean} [isError=false]
+ * @param type toast type: "success", "danger", "warning", "info"
  */
-export function showToast(title, message, isError = false) {
+export function showToast(title, message, type = "success") {
   const toastEl = document.getElementById("toast");
   const toastTitle = document.getElementById("toast-title");
   const toastMessage = document.getElementById("toast-message");
@@ -69,10 +69,31 @@ export function showToast(title, message, isError = false) {
   toastTitle.textContent = title;
   toastMessage.textContent = message;
 
-  if (isError) {
-    toastEl.classList.add("bg-danger", "text-white");
-  } else {
-    toastEl.classList.remove("bg-danger", "text-white");
+  // Remove all possible bg classes
+  toastEl.classList.remove(
+    "bg-success",
+    "bg-danger",
+    "bg-warning",
+    "bg-info",
+    "text-white",
+    "text-dark",
+  );
+
+  // Add the correct bg class
+  switch (type) {
+    case "danger":
+      toastEl.classList.add("bg-danger", "text-white");
+      break;
+    case "warning":
+      toastEl.classList.add("bg-warning", "text-dark");
+      break;
+    case "info":
+      toastEl.classList.add("bg-info", "text-dark");
+      break;
+    case "success":
+    default:
+      toastEl.classList.add("bg-success", "text-white");
+      break;
   }
 
   const toast = new bootstrap.Toast(toastEl);

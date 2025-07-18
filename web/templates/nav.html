@@ -1,0 +1,34 @@
+{{ define "nav" }}
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" role="navigation" aria-label="Main navigation">
+    <div class="container">
+        <a class="navbar-brand" href="/" aria-label="Go to dashboard home">
+            <i class="bi bi-graph-up" aria-hidden="true"></i>
+            lmon - Lightweight Monitoring
+        </a>
+        <button
+            class="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarNav"
+            aria-controls="navbarNav"
+            aria-expanded="false"
+            aria-label="Toggle navigation"
+        >
+            <span class="navbar-toggler-icon" aria-hidden="true"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto" role="menubar">
+                <li class="nav-item" role="none">
+                    <a class="nav-link{{ if eq .ActivePage "dashboard" }} active{{ end }}" href="/" role="menuitem" aria-current="{{ if eq .ActivePage "dashboard" }}page{{ end }}">Dashboard</a>
+                </li>
+                <li class="nav-item" role="none">
+                    <a class="nav-link{{ if eq .ActivePage "mobile" }} active{{ end }}" href="/mobile" role="menuitem" aria-current="{{ if eq .ActivePage "mobile" }}page{{ end }}">Mobile View</a>
+                </li>
+                <li class="nav-item" role="none">
+                    <a class="nav-link{{ if eq .ActivePage "config" }} active{{ end }}" href="/config" role="menuitem" aria-current="{{ if eq .ActivePage "config" }}page{{ end }}">Configuration</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+{{ end }}

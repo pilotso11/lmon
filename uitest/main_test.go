@@ -51,10 +51,10 @@ func TestDefaultConfigUIRod(t *testing.T) {
 	s.Start(ctx)
 
 	browser := getBrowser(t)
-	defer browser.MustClose()
+	defer browser.Close()
 	page, err := browser.Page(proto.TargetCreateTarget{URL: s.ServerUrl})
 	require.NoError(t, err, "open page")
-	defer page.MustClose()
+	defer page.Close()
 
 	// Wait for CPU and Memory items to appear by data-id
 	_, err = page.Timeout(1 * time.Second).Element(`#system-items .list-group-item[data-id="system_cpu"]`)
@@ -108,10 +108,10 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	s.Start(ctx)
 
 	browser := getBrowser(t)
-	defer browser.MustClose()
+	defer browser.Close()
 	page, err := browser.Page(proto.TargetCreateTarget{URL: s.ServerUrl})
 	require.NoError(t, err, "open page")
-	defer page.MustClose()
+	defer page.Close()
 
 	// Navigate to the config tab
 	el, err := page.Element(`a.nav-link[href="/config"]`)
@@ -138,8 +138,40 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	submitEl.MustClick()
 
 	// Wait for the disk to appear in the config list
-	_, err = page.Timeout(1*time.Second).ElementR("#disk-config-items .config-item", "root.*\\(/\\)")
-	require.NoError(t, err, "wait for disk in config list")
+	// The config list now uses two divs per item, and may require a refresh for the new item to appear.
+	// Refresh the page to ensure the new disk appears.
+	err = page.Timeout(time.Second).Reload()
+	require.NoError(t, err, "wait for reload after adding disk")
+	// Instead of using ElementR with a regex, explicitly check for the presence of both spans.
+	// Wait for a config item with disk name "root" and path "/"
+	require.Eventually(t, func() bool {
+		items, err := page.Elements(`#disk-config-items .config-item`)
+		if err != nil {
+			return false // If we can't get items, return false to retry
+		}
+		for _, item := range items {
+			nameSpan, err := item.Element(`.config-item-name`)
+			if err != nil {
+				continue
+			}
+			nameText, err := nameSpan.Text()
+			if err != nil {
+				continue
+			}
+			pathSpan, err := item.Element(`.config-item-path`)
+			if err != nil {
+				continue
+			}
+			pathText, err := pathSpan.Text()
+			if err != nil {
+				continue
+			}
+			if nameText == "root" && pathText == "(/)" {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 50*time.Millisecond, "wait for disk item in config list")
 
 	// Navigate back to dashboard
 	el, err = page.Element(`a.nav-link[href="/"]`)
@@ -182,11 +214,8 @@ func TestAddDiskViaConfigUIRod(t *testing.T) {
 	el, err = page.Element(`a.nav-link[href="/config"]`)
 	require.NoError(t, err, "find config tab (delete)")
 	el.MustClick()
-	_, err = page.Timeout(1 * time.Second).Element(`#disk-config-items`)
-	require.NoError(t, err, "wait for disk-config-items")
-	_, err = page.ElementR(`#disk-config-items .config-item`, "root.*\\(/\\)")
-	require.NoError(t, err, "find disk_root config item")
-	delEl, err := page.Timeout(1 * time.Second).Element(`button.delete-btn[data-type="disk"][data-id="root"]`)
+
+	delEl, err := page.Timeout(1 * time.Second).Element(`button.delete-disk-btn[data-id="root"]`)
 	require.NoError(t, err, "find delete button for disk_root")
 	wait, handle := page.HandleDialog()
 	go delEl.MustClick()
@@ -216,10 +245,10 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	s.Start(ctx)
 
 	browser := getBrowser(t)
-	defer browser.MustClose()
+	defer browser.Close()
 	page, err := browser.Page(proto.TargetCreateTarget{URL: s.ServerUrl})
 	require.NoError(t, err, "open page")
-	defer page.MustClose()
+	defer page.Close()
 
 	// Navigate to the config tab
 	// err := page.WaitStable(time.Second)
@@ -314,7 +343,7 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	require.NoError(t, err, "find health check config items")
 	_, err = page.ElementR(`#health-config-items .config-item`, "local")
 	require.NoError(t, err, "find health check item in config list")
-	el, err = page.Timeout(1 * time.Second).Element(`button.delete-btn[data-type="health"][data-id="local"]`)
+	el, err = page.Timeout(1 * time.Second).Element(`button.delete-health-btn[data-id="local"]`)
 	require.NoError(t, err, "find health check delete button")
 	wait, handle := page.HandleDialog()
 	go el.MustClick()

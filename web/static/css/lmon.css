@@ -3,13 +3,13 @@
 /* --- Mobile-specific styles for striped rows and layout --- */
 .mobile-list-item {
     padding: 12px 16px;
-    border-bottom: 1px solid #e9ecef;;
+    border-bottom: 1px solid #e9ecef;
 }
 .mobile-list-item.even {
-    background: #fff;
+    background: var(--bs-light, #f8f9fa);
 }
 .mobile-list-item.odd {
-    background: #f8f9fa;
+    background: #f0f1f2;
 }
 .mobile-line1 {
     display: flex;
@@ -18,10 +18,8 @@
     gap: 0.5em;
 }
 .mobile-line1-detail {
-
 }
 .mobile-line1-type {
-
 }
 .mobile-line2 {
     display: flex;
@@ -39,15 +37,15 @@
 }
 .mobile-detail {
     margin-left: 12px;
-    color: #555;
+    color: var(--bs-secondary, #6c757d);
     font-size: 0.97em;
     word-break: break-all;
 }
 .mobile-detail2 {
     margin-left: 12px;
     margin-right: 12px;
-    color: #555;
-    font-size: 0.80em;
+    color: var(--bs-gray, #6c757d);
+    font-size: 0.8em;
     word-break: break-all;
 }
 .type-label {
@@ -56,8 +54,8 @@
     margin-left: 8px;
     padding: 2px 8px;
     border-radius: 8px;
-    background: #f1f3f4;
-    color: #333;
+    background: var(--bs-white, #dddedf);
+    color: var(--bs-primary);
     align-items: center;
 }
 .mobile-toggle-link {
@@ -76,7 +74,7 @@
     margin-left: 12px;
     margin-right: 12px;
     margin-top: 6px;
-    color: #555;
+    color: var(--bs-gray, #6c757d);
     font-size: 0.85em;
     word-break: break-all;
     justify-content: space-between;
@@ -85,7 +83,7 @@
 .item-detail1 {
     margin-left: 12px;
     margin-right: 12px;
-    color: #555;
+    color: var(--bs-secondary, #6c757d);
     font-size: 1em;
     word-break: break-all;
     justify-content: space-between;
@@ -98,24 +96,21 @@
 }
 /* Status styles */
 .status-ok {
-    background-color: #28a745;
-    color: white;
+    background-color: var(--bs-success, #198754);
+    color: var(--bs-white, #fff);
 }
 .status-warning {
-    background-color: #ffc107;
-    color: black;
+    background-color: var(--bs-warning, #ffc107);
+    color: var(--bs-dark, #212529);
 }
-.status-critical {
-    background-color: #dc3545;
-    color: white;
-}
+.status-critical,
 .status-error {
-    background-color: #dc3545;
-    color: white;
+    background-color: var(--bs-danger, #dc3545);
+    color: var(--bs-white, #fff);
 }
 .status-unknown {
-    background-color: #6c757d;
-    color: white;
+    background-color: var(--bs-secondary, #6c757d);
+    color: var(--bs-white, #fff);
 }
 .status-indicator {
     width: 20px;
@@ -159,7 +154,7 @@
     background-color: #f8f9fa;
 }
 .delete-btn {
-    color: #dc3545;
+    color: var(--bs-danger, #dc3545) !important;
     cursor: pointer;
 }
 

@@ -1,87 +1,9 @@
 <!doctype html>
 <!--suppress JSUnresolvedLibraryURL -->
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>{{ .title }}</title>
-        <link
-            rel="icon"
-            type="image/png"
-            sizes="64x64"
-            href="/static/icons/icon-64x64.png"
-        />
-        <link
-            rel="icon"
-            type="image/png"
-            sizes="32x32"
-            href="/static/icons/icon-32x32.png"
-        />
-        <link
-            rel="icon"
-            type="image/png"
-            sizes="128x128"
-            href="/static/icons/icon-128x128.png"
-        />
-        <link
-            rel="icon"
-            type="image/png"
-            sizes="256x256"
-            href="/static/icons/icon-256x256.png"
-        />
-        <link
-            rel="icon"
-            type="image/png"
-            sizes="512x512"
-            href="/static/icons/icon-512x512.png"
-        />
-        <link
-            rel="apple-touch-icon"
-            sizes="180x180"
-            href="/static/icons/apple-touch-icon.png"
-        />
-        <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg" />
-        <link rel="manifest" href="/static/manifest.json" />
-        <link
-            href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-            rel="stylesheet"
-        />
-        <link
-            href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-            rel="stylesheet"
-        />
-        <link href="/static/css/lmon.css" rel="stylesheet" />
-    </head>
+    {{ template "header" . }}
     <body>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-            <div class="container">
-                <a class="navbar-brand" href="/">
-                    <i class="bi bi-graph-up"></i>
-                    lmon - Lightweight Monitoring
-                </a>
-                <button
-                    class="navbar-toggler"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#navbarNav"
-                >
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav ms-auto">
-                        <li class="nav-item">
-                            <a class="nav-link active" href="/">Dashboard</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/mobile">Mobile View</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/config">Configuration</a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </nav>
+        {{ template "nav" . }}
 
         <div class="container mt-4">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -90,8 +12,10 @@
                     id="refresh-btn"
                     class="btn btn-primary"
                     data-refresh-interval="{{ .refresh_interval }}"
+                    aria-label="Refresh dashboard"
                 >
-                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    Refresh
                     <span id="refresh-countdown"></span>
                 </button>
             </div>
@@ -101,13 +25,7 @@
                     <div class="card">
                         <div class="card-header">System</div>
                         <div class="card-body" id="system-items">
-                            <div class="text-center">
-                                <div class="spinner-border" role="status">
-                                    <span class="visually-hidden"
-                                        >Loading...</span
-                                    >
-                                </div>
-                            </div>
+                            {{ template "itemList" .SystemItems }}
                         </div>
                     </div>
                 </div>
@@ -115,13 +33,7 @@
                     <div class="card">
                         <div class="card-header">Disk</div>
                         <div class="card-body" id="disk-items">
-                            <div class="text-center">
-                                <div class="spinner-border" role="status">
-                                    <span class="visually-hidden"
-                                        >Loading...</span
-                                    >
-                                </div>
-                            </div>
+                            {{ template "itemList" .DiskItems }}
                         </div>
                     </div>
                 </div>
@@ -132,56 +44,13 @@
                     <div class="card">
                         <div class="card-header">Health Checks</div>
                         <div class="card-body" id="health-items">
-                            <div class="text-center">
-                                <div class="spinner-border" role="status">
-                                    <span class="visually-hidden"
-                                        >Loading...</span
-                                    >
-                                </div>
-                            </div>
+                            {{ template "itemList" .HealthItems }}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Item Detail Modal -->
-        <div
-            class="modal fade"
-            id="itemDetailModal"
-            tabindex="-1"
-            aria-hidden="true"
-        >
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modal-title">
-                            Item Details
-                        </h5>
-                        <button
-                            type="button"
-                            class="btn-close"
-                            data-bs-dismiss="modal"
-                            aria-label="Close"
-                        ></button>
-                    </div>
-                    <div class="modal-body" id="modal-body">
-                        <!-- Details will be populated by JavaScript -->
-                    </div>
-                    <div class="modal-footer">
-                        <button
-                            type="button"
-                            class="btn btn-secondary"
-                            data-bs-dismiss="modal"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-        <script type="module" src="/static/js/index.js"></script>
+        {{ template "footer" . }}
     </body>
 </html>

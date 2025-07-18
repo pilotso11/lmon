@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,79 @@ import (
 	"lmon/monitors/system"
 	"lmon/webhook"
 )
+
+type IconItem struct {
+	Name string // Name of the Icon, used for display and identification.
+	Icon string // Icon class Name, e.g., "bi-cpu" for Bootstrap Icons.
+}
+
+func defaultIconList() []IconItem {
+	return []IconItem{
+		{Name: "cpu", Icon: "bi-cpu"},
+		{Name: "memory", Icon: "bi-memory"},
+		{Name: "sd-card", Icon: "bi-sd-card"},
+		{Name: "hdd", Icon: "bi-hdd"},
+		{Name: "hdd-network", Icon: "bi-hdd-network"},
+		{Name: "hdd-rack", Icon: "bi-hdd-rack"},
+		{Name: "device-hdd", Icon: "bi-device-hdd"},
+		{Name: "database", Icon: "bi-database"},
+		{Name: "pc-horizontal", Icon: "bi-pc-horizontal"},
+		{Name: "pc", Icon: "bi-pc"},
+		{Name: "activity", Icon: "bi-activity"},
+		{Name: "heart-pulse", Icon: "bi-heart-pulse"},
+		{Name: "speedometer", Icon: "bi-speedometer"},
+		{Name: "speedometer2", Icon: "bi-speedometer2"},
+		{Name: "bar-chart", Icon: "bi-bar-chart"},
+		{Name: "graph-up", Icon: "bi-graph-up"},
+		{Name: "router", Icon: "bi-router"},
+		{Name: "wifi", Icon: "bi-wifi"},
+		{Name: "house", Icon: "bi-house"},
+		{Name: "building", Icon: "bi-building"},
+		{Name: "lightning", Icon: "bi-lightning"},
+		{Name: "lightbulb", Icon: "bi-lightbulb"},
+		{Name: "lamp", Icon: "bi-lamp"},
+		{Name: "at", Icon: "bi-at"},
+		{Name: "battery", Icon: "bi-battery"},
+		{Name: "globe", Icon: "bi-globe"},
+		{Name: "printer", Icon: "bi-printer"},
+		{Name: "folder", Icon: "bi-folder"},
+		{Name: "shield", Icon: "bi-shield"},
+		{Name: "collection", Icon: "bi-collection"},
+		{Name: "envelope", Icon: "bi-envelope"},
+		{Name: "inbox", Icon: "bi-inbox"},
+		{Name: "people", Icon: "bi-people"},
+		{Name: "person-circle", Icon: "bi-person-circle"},
+		{Name: "webcam", Icon: "bi-webcam"},
+		{Name: "volume-up", Icon: "bi-volume-up"},
+		{Name: "voicemail", Icon: "bi-voicemail"},
+		{Name: "tv", Icon: "bi-tv"},
+	}
+}
+
+type customResponseWriter struct {
+	writer http.ResponseWriter // Pointer to the HTTP response writer for writing responses.
+	code   int
+}
+
+func (w *customResponseWriter) Write(data []byte) (int, error) {
+	if w.code != http.StatusNotFound {
+		return w.writer.Write(data)
+	}
+	// fake it if we're returning an error
+	return len(data), nil
+}
+
+func (w *customResponseWriter) WriteHeader(status int) {
+	w.code = status
+	if w.code != http.StatusNotFound {
+		w.writer.WriteHeader(status)
+		return
+	}
+}
+
+func (w *customResponseWriter) Header() http.Header {
+	return w.writer.Header()
+}
 
 // Server encapsulates the HTTP server, configuration, and monitoring services.
 // It manages the lifecycle of the web server, routes, and provides thread-safe access to configuration.
@@ -101,11 +175,16 @@ func LoggingHandler(router *http.ServeMux) http.Handler {
 		start := time.Now()
 		// Log the request
 
+		cw := customResponseWriter{writer: w}
 		// Call the actual handler
-		router.ServeHTTP(w, r)
+		router.ServeHTTP(&cw, r)
+
+		if cw.code == http.StatusNotFound {
+			http.Redirect(w, r, "/static/404.html", http.StatusFound)
+		}
 
 		elapsedTime := time.Since(start)
-		log.Printf("[%v] %s %s %s %v", start.Format("2006-01-02 15:04:05.000"), r.Method, r.URL.Path, r.RemoteAddr, elapsedTime)
+		log.Printf("[%v] (%d) %s %s %s %v", start.Format("2006-01-02 15:04:05.000"), cw.code, r.Method, r.URL.Path, r.RemoteAddr, elapsedTime)
 	})
 }
 
@@ -145,6 +224,9 @@ func (s *Server) Stop() error {
 // setupRoutes registers all HTTP endpoints and their handlers for the web server.
 // This includes static assets, health checks, dashboard pages, and API endpoints for monitoring and configuration.
 func (s *Server) setupRoutes(ctx context.Context) {
+
+	templateHandler := s.handleTemplate()
+
 	// Serve static files (e.g., favicon)
 	s.router.HandleFunc("GET /static/", s.handleStatic)
 
@@ -155,10 +237,10 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("POST /testhook", s.handleTestWebhook(ctx))
 
 	// Main dashboard and configuration pages
-	s.router.HandleFunc("GET /", s.handleTemplate())
-	s.router.HandleFunc("GET /index.html", s.handleTemplate())
-	s.router.HandleFunc("GET /config", s.handleTemplate())
-	s.router.HandleFunc("GET /mobile", s.handleTemplate())
+	s.router.HandleFunc("GET /", templateHandler)
+	s.router.HandleFunc("GET /index.html", templateHandler)
+	s.router.HandleFunc("GET /config", templateHandler)
+	s.router.HandleFunc("GET /mobile", templateHandler)
 
 	// API endpoints for monitoring data and configuration management
 	s.router.HandleFunc("GET /api/items", s.handleGetItems)
@@ -234,44 +316,76 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	http.ServeFileFS(w, r, staticFS, r.URL.Path)
 }
 
-//go:embed templates/index.html
-var indexHtml string
-
-//go:embed templates/config.html
-var configHtml string
-
-//go:embed templates/mobile.html
-var mobileHtml string
+//go:embed templates/*
+var templateFS embed.FS
 
 // handleTemplate returns an HTTP handler function that renders the main dashboard or configuration page.
 // Uses the embedded index.html and config.html templates and injects configuration values.
 func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 	// Load templates
-	tIndex, err := template.New("index.html").Parse(indexHtml)
+	templ, err := template.ParseFS(templateFS, "templates/*.html")
 	if err != nil {
-		log.Printf("handleTemplate: %v", err)
+		log.Printf("handleTemplate (Parse Error): %v", err)
+		return func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "Internal Server Error: template parse issue, check logs", http.StatusInternalServerError)
+		}
 	}
-
-	tConfig, err := template.New("config.html").Parse(configHtml)
-	if err != nil {
-		log.Printf("handleTemplate: %v", err)
-	}
-
-	tMobile, err := template.New("mobile.html").Parse(mobileHtml)
-	if err != nil {
-		log.Printf("handleTemplate: %v", err)
-	}
+	log.Printf("handleTemplate: templates loaded")
 
 	// Handler
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		// If we failed to load ...
-		if err != nil {
-			log.Printf("handleIndex %v: %v", r.URL, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+		// select the template based on the URL path
+		page := "404.html"
+		activeTemplate := "dashboard"
+		switch r.URL.Path {
+		case "/", "index.html":
+			page = "index.html"
+			activeTemplate = "dashboard"
+		case "/config":
+			page = "config.html"
+			activeTemplate = "config"
+		case "/mobile":
+			page = "mobile.html"
+			activeTemplate = "mobile"
+		default:
+			page = r.URL.Path[1:]
+		}
+
+		items := s.joinConfigToResults(s.monitor.Results())
+		systemItems := make([]UIResult, 0, 2)
+		diskItems := make([]UIResult, 0, len(items))
+		healthItems := make([]UIResult, 0, len(items))
+		mobileItems := make([]UIResult, 0, len(items))
+		for _, item := range items {
+			switch item.Group {
+			case system.Group:
+				systemItems = append(systemItems, item)
+			case disk.Group:
+				diskItems = append(diskItems, item)
+			case healthcheck.Group:
+				healthItems = append(healthItems, item)
+			}
+			mobileItems = append(mobileItems, item)
+		}
+
+		// sort mobileItems by status
+		slices.SortFunc(mobileItems, func(a, b UIResult) int {
+			return int(a.Status - b.Status)
+		})
+		// sort systemItems by display Name
+		slices.SortFunc(systemItems, displayNameSorter)
+		// sort diskItems by display Name
+		slices.SortFunc(diskItems, displayNameSorter)
+		// sort healthItems by display Name
+		slices.SortFunc(healthItems, displayNameSorter)
+
+		// Set even row for styling in mobile view
+		for i, item := range mobileItems {
+			item.EvenRow = i%2 == 0
+			mobileItems[i] = item
 		}
 
 		// Template data
@@ -281,26 +395,34 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			"refresh_interval":    s.config.Monitoring.Interval,
 			"default_disk_icon":   disk.Icon,        // from monitors/disk.Icon
 			"default_health_icon": healthcheck.Icon, // from monitors/healthcheck.Icon
+			"SystemItems":         systemItems,
+			"DiskItems":           diskItems,
+			"HealthItems":         healthItems,
+			"MobileItems":         mobileItems,
+			"ActivePage":          activeTemplate,
+			"UpdateAt":            time.Now().Format("2006-01-02 15:04:05Z"),
+			"Config":              s.config,
+			"IconChoices":         defaultIconList(), // health
 		}
 
 		// Execute the template
-		switch r.URL.Path {
-		case "/", "/index.html":
-			err = tIndex.ExecuteTemplate(w, "index.html", data)
-		case "/config":
-			err = tConfig.ExecuteTemplate(w, "config.html", data)
-		case "/mobile":
-			err = tMobile.ExecuteTemplate(w, "mobile.html", data)
-		default:
+		t := templ.Lookup(page)
+		if t == nil {
+			log.Printf("handleTemplate %v: template not found", page)
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			return
 		}
-
+		err = templ.ExecuteTemplate(w, page, data)
 		if err != nil {
 			log.Printf("handleTemplate %v: %v", r.URL, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Template error - check logs", http.StatusInternalServerError)
 			return
 		}
 	}
+}
+
+func displayNameSorter(a, b UIResult) int {
+	return strings.Compare(a.DisplayName, b.DisplayName)
 }
 
 // writeJson serializes the given data as JSON and writes it to the HTTP response.
@@ -318,16 +440,6 @@ func (s *Server) writeJson(w http.ResponseWriter, data any) {
 		log.Printf("writeJson %v: %v", reflect.TypeOf(data), err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-}
-
-type UIResult struct {
-	Icon        string
-	Status      monitors.RAG // The RAG status of the check
-	Value       string       // Human-readable value or message
-	Value2      string       // Optional second value for additional context
-	Group       string       // Group/category of the monitor
-	DisplayName string       // Display name for UI
-	Threshold   int          // Threshold for the monitor, if applicable
 }
 
 // handleGetItems responds with a JSON object containing all monitored items and their statuses.
@@ -348,52 +460,6 @@ func (s *Server) joinConfigToResults(items map[string]monitors.Result) map[strin
 	return results
 }
 
-// Find icon and add it to the result.
-func newUIResult(id string, item monitors.Result, c *config.Config) UIResult {
-	icon := "folder" // default icon if no specific icon is found
-	threshold := 0   // default threshold if not set
-	switch item.Group {
-	case disk.Group:
-		icon = disk.Icon // fallback to the default disk icon
-		for k, d := range c.Monitoring.Disk {
-			if item.Group+"_"+k == id {
-				icon = d.Icon
-				threshold = d.Threshold
-				break
-			}
-		}
-	case healthcheck.Group:
-		icon = healthcheck.Icon // fallback to the default health icon
-		for k, h := range c.Monitoring.Healthcheck {
-			if item.Group+"_"+k == id {
-				icon = h.Icon
-				break
-			}
-		}
-	case system.Group:
-		switch item.DisplayName {
-		case system.CPUDisplayName:
-			icon = c.Monitoring.System.CPU.Icon
-			threshold = c.Monitoring.System.CPU.Threshold
-		case system.MemDisplayName:
-			icon = c.Monitoring.System.Memory.Icon
-			threshold = c.Monitoring.System.Memory.Threshold
-		}
-	default:
-		// fallback to a generic icon if no specific icon is found
-	}
-
-	return UIResult{
-		Icon:        icon,
-		Status:      item.Status,
-		Value:       item.Value,
-		Value2:      item.Value2,
-		Group:       item.Group,
-		DisplayName: item.DisplayName,
-		Threshold:   threshold,
-	}
-}
-
 // handleGetItem responds with a JSON object for a specific monitored item, identified by its group and ID.
 // Returns 404 if the item is not found.
 // Route: GET /api/items/{group}/{id}
@@ -407,7 +473,7 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 	name := group + "_" + id
 	item, ok := items[name]
 	if !ok {
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusBadRequest)
 		log.Printf("handleGetItem: item not found: %s", id)
 		return
 	}
@@ -622,7 +688,7 @@ func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 		if err != nil {
 			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
 			if errors.As(err, &monitors.ErrNotFound{}) {
-				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusBadRequest)
 				return
 			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
