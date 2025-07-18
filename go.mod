@@ -7,7 +7,7 @@ require (
 	github.com/puzpuzpuz/xsync/v4 v4.1.0
 	github.com/shirou/gopsutil/v3 v3.24.1
 	github.com/spf13/viper v1.18.2
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.10.0
 )
 
 require (
