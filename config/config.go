@@ -190,6 +190,9 @@ func (l *Loader) Load() (*Config, error) {
 	if config.Monitoring.Healthcheck == nil {
 		config.Monitoring.Healthcheck = make(map[string]HealthcheckConfig)
 	}
+	if config.Monitoring.Ping == nil {
+		config.Monitoring.Ping = make(map[string]PingConfig)
+	}
 
 	return &config, nil
 }
