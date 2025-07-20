@@ -39,6 +39,7 @@ type MonitoringConfig struct {
 	Disk        map[string]DiskConfig
 	System      SystemConfig
 	Healthcheck map[string]HealthcheckConfig
+	Ping        map[string]PingConfig
 }
 
 // DiskConfig represents disk monitoring configuration.
@@ -66,6 +67,14 @@ type HealthcheckConfig struct {
 	URL     string
 	Timeout int
 	Icon    string
+}
+
+// PingConfig represents ping monitor configuration
+type PingConfig struct {
+	Address        string
+	Timeout        int
+	Icon           string
+	AmberThreshold int // Response time in ms for amber status (required)
 }
 
 // WebhookConfig represents webhook notification configuration

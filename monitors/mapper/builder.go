@@ -4,10 +4,12 @@ package mapper
 
 import (
 	"context"
+	"fmt"
 
 	"lmon/config"
 	"lmon/monitors/disk"
 	"lmon/monitors/healthcheck"
+	"lmon/monitors/ping"
 	"lmon/monitors/system"
 )
 
@@ -21,6 +23,7 @@ type Implementations struct {
 	Health  *healthcheck.MockHealthcheckProvider // Optional mock healthcheck provider
 	Cpu     *system.MockCpuProvider              // Optional mock CPU provider
 	Mem     *system.MockMemProvider              // Optional mock memory provider
+	Ping    *ping.MockPingProvider               // Optional mock ping provider for tests; nil uses DefaultPingProvider
 	Webhook WebhookCallbackFunc                  // Optional webhook callback for testing
 }
 
@@ -54,6 +57,22 @@ func (d Mapper) NewHealthcheck(ctx context.Context, name string, cfg config.Heal
 // NewCpu constructs a CPU monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewCpu(ctx context.Context, cfg config.SystemItem) (system.Cpu, error) {
 	return system.NewCpu(cfg.Threshold, cfg.Icon, d.Impls.Cpu), nil
+}
+
+// NewPing constructs a ping monitor using the provided configuration and optional mock provider.
+// AmberThreshold is required and must be > 0.
+func (d Mapper) NewPing(ctx context.Context, name string, cfg config.PingConfig) (ping.PingMonitor, error) {
+	name, _ = config.SanitiseName(name)
+	if cfg.AmberThreshold <= 0 {
+		return ping.PingMonitor{}, fmt.Errorf("AmberThreshold must be > 0 for ping monitor '%s'", name)
+	}
+	var provider ping.PingProvider
+	if d.Impls.Ping != nil {
+		provider = d.Impls.Ping
+	} else {
+		provider = ping.NewDefaultPingProvider()
+	}
+	return ping.NewPingMonitor(name, cfg.Address, cfg.Timeout, cfg.Icon, cfg.AmberThreshold, provider), nil
 }
 
 // NewMem constructs a memory monitor using the provided configuration and optional mock provider.
