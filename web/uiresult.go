@@ -22,14 +22,14 @@ type UIResult struct {
 	StatusClass string       // CSS class for the status, used for styling in the UI
 }
 
-// Find Icon and add it to the result.
+// Find icon and add it to the result.
 func newUIResult(id string, item monitors.Result, c *config.Config) UIResult {
-	icon := "folder" // default Icon if no specific Icon is found
+	icon := "folder" // default icon if no specific icon is found
 	threshold := 0   // default threshold if not set
 	typeLabel := ""
 	switch item.Group {
 	case disk.Group:
-		icon = disk.Icon // fallback to the default disk Icon
+		icon = disk.Icon // fallback to the default disk icon
 		typeLabel = "Disk"
 		for k, d := range c.Monitoring.Disk {
 			if item.Group+"_"+k == id {
@@ -40,7 +40,7 @@ func newUIResult(id string, item monitors.Result, c *config.Config) UIResult {
 		}
 	case healthcheck.Group:
 		typeLabel = "Health"
-		icon = healthcheck.Icon // fallback to the default health Icon
+		icon = healthcheck.Icon // fallback to the default health icon
 		for k, h := range c.Monitoring.Healthcheck {
 			if item.Group+"_"+k == id {
 				icon = h.Icon
@@ -58,7 +58,7 @@ func newUIResult(id string, item monitors.Result, c *config.Config) UIResult {
 			threshold = c.Monitoring.System.Memory.Threshold
 		}
 	default:
-		// fallback to a generic Icon if no specific Icon is found
+		// fallback to a generic icon if no specific icon is found
 	}
 
 	statusClass := ""

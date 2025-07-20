@@ -10,7 +10,7 @@
 //   - Configured with:
 //     - name: Logical name for the ping monitor.
 //     - address: IP address or hostname to ping.
-//     - timeout: Timeout for the ping request (ms).
+//     - timeout: timeout for the ping request (ms).
 //     - icon: UI icon (optional).
 //   - On each check:
 //     - Performs an ICMP ping to the configured address.
@@ -37,8 +37,8 @@ import (
 const Icon = "wifi"    // Default icon for ping monitors
 const Group = "health" // Group name for ping monitors
 
-// PingProvider is an interface for performing ping checks.
-type PingProvider interface {
+// Provider  is an interface for performing ping checks.
+type Provider interface {
 	Ping(ctx context.Context, address string, timeoutMs int) (responseMs int, err error)
 }
 
@@ -71,37 +71,41 @@ func (p *DefaultPingProvider) Ping(ctx context.Context, address string, timeoutM
 	return int(stats.AvgRtt.Milliseconds()), nil
 }
 
-// PingMonitor represents an ICMP ping monitor.
-type PingMonitor struct {
-	Name           string
-	Address        string
-	Timeout        int
-	Icon           string
-	AmberThreshold int
-	Impl           PingProvider
+// Monitor represents an ICMP ping monitor.
+type Monitor struct {
+	name           string
+	address        string
+	timeout        int
+	icon           string
+	amberThreshold int
+	impl           Provider
+}
+
+func (pm Monitor) Name() string {
+	return pm.name
 }
 
 // NewPingMonitor constructs a new PingMonitor.
-func NewPingMonitor(name, address string, timeout int, icon string, amberThreshold int, impl PingProvider) PingMonitor {
+func NewPingMonitor(name, address string, timeout int, icon string, amberThreshold int, impl Provider) Monitor {
 	if icon == "" {
 		icon = Icon
 	}
 	if impl == nil {
 		impl = NewDefaultPingProvider()
 	}
-	return PingMonitor{
-		Name:           name,
-		Address:        address,
-		Timeout:        timeout,
-		Icon:           icon,
-		AmberThreshold: amberThreshold,
-		Impl:           impl,
+	return Monitor{
+		name:           name,
+		address:        address,
+		timeout:        timeout,
+		icon:           icon,
+		amberThreshold: amberThreshold,
+		impl:           impl,
 	}
 }
 
 // Check performs the ping and returns the monitor result.
-func (pm PingMonitor) Check(ctx context.Context) monitors.Result {
-	responseMs, err := pm.Impl.Ping(ctx, pm.Address, pm.Timeout)
+func (pm Monitor) Check(ctx context.Context) monitors.Result {
+	responseMs, err := pm.impl.Ping(ctx, pm.address, pm.timeout)
 	if err != nil {
 		return monitors.Result{
 			Status:      monitors.RAGRed,
@@ -111,7 +115,7 @@ func (pm PingMonitor) Check(ctx context.Context) monitors.Result {
 		}
 	}
 	status := monitors.RAGGreen
-	if responseMs >= pm.AmberThreshold {
+	if responseMs >= pm.amberThreshold {
 		status = monitors.RAGAmber
 	}
 	return monitors.Result{
@@ -122,23 +126,23 @@ func (pm PingMonitor) Check(ctx context.Context) monitors.Result {
 	}
 }
 
-func (pm PingMonitor) DisplayName() string {
-	return fmt.Sprintf("Ping: %s", pm.Name)
+func (pm Monitor) DisplayName() string {
+	return fmt.Sprintf("Ping: %s", pm.Name())
 }
 
-func (pm PingMonitor) Group() string {
+func (pm Monitor) Group() string {
 	return Group
 }
 
 // Save persists the ping monitor configuration to the provided config struct.
-func (pm PingMonitor) Save(cfg *config.Config) {
+func (pm Monitor) Save(cfg *config.Config) {
 	if cfg.Monitoring.Ping == nil {
 		cfg.Monitoring.Ping = make(map[string]config.PingConfig)
 	}
-	cfg.Monitoring.Ping[pm.Name] = config.PingConfig{
-		Address:        pm.Address,
-		Timeout:        pm.Timeout,
-		Icon:           pm.Icon,
-		AmberThreshold: pm.AmberThreshold,
+	cfg.Monitoring.Ping[pm.Name()] = config.PingConfig{
+		Address:        pm.address,
+		Timeout:        pm.timeout,
+		Icon:           pm.icon,
+		AmberThreshold: pm.amberThreshold,
 	}
 }

@@ -61,12 +61,12 @@ func (d Mapper) NewCpu(_ context.Context, cfg config.SystemItem) (system.Cpu, er
 
 // NewPing constructs a ping monitor using the provided configuration and optional mock provider.
 // AmberThreshold is required and must be > 0.
-func (d Mapper) NewPing(_ context.Context, name string, cfg config.PingConfig) (ping.PingMonitor, error) {
+func (d Mapper) NewPing(_ context.Context, name string, cfg config.PingConfig) (ping.Monitor, error) {
 	name, _ = config.SanitiseName(name)
 	if cfg.AmberThreshold <= 0 {
-		return ping.PingMonitor{}, fmt.Errorf("AmberThreshold must be > 0 for ping monitor '%s'", name)
+		return ping.Monitor{}, fmt.Errorf("amberThreshold must be > 0 for ping monitor '%s'", name)
 	}
-	var provider ping.PingProvider
+	var provider ping.Provider
 	if d.Impls.Ping != nil {
 		provider = d.Impls.Ping
 	} else {

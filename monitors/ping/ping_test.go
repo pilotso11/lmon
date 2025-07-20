@@ -52,8 +52,8 @@ func TestPingMonitor_DisplayNameAndGroup(t *testing.T) {
 	if pm.Group() != Group {
 		t.Errorf("Unexpected group: %s", pm.Group())
 	}
-	if fmt.Sprintf("%s_%s", pm.Group(), pm.Name) != "health_display" {
-		t.Errorf("Unexpected name: %s", fmt.Sprintf("%s_%s", pm.Group(), pm.Name))
+	if fmt.Sprintf("%s_%s", pm.Group(), pm.Name()) != "health_display" {
+		t.Errorf("Unexpected name: %s", fmt.Sprintf("%s_%s", pm.Group(), pm.Name()))
 	}
 }
 
@@ -72,7 +72,7 @@ func TestPingMonitor_Save(t *testing.T) {
 
 func TestPingMonitor_DefaultProvider(t *testing.T) {
 	pm := NewPingMonitor("default-provider", "localhost", 1000, "", 100, nil)
-	if pm.Impl == nil {
+	if pm.impl == nil {
 		t.Errorf("Default provider not set")
 	}
 }

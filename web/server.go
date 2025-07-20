@@ -250,6 +250,7 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("POST /api/config/system", s.handleUpdateSystemConfig(ctx))
 	s.router.HandleFunc("POST /api/config/disk/{id}", s.handleAddDiskMonitor(ctx))
 	s.router.HandleFunc("POST /api/config/health/{id}", s.handleAddHealthCheck(ctx))
+	s.router.HandleFunc("POST /api/config/ping/{id}", s.handleAddPingMonitor(ctx))
 	s.router.HandleFunc("POST /api/config/webhook", s.handleUpdateWebhook(ctx))
 	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor(ctx))
 }
@@ -359,6 +360,7 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 		diskItems := make([]UIResult, 0, len(items))
 		healthItems := make([]UIResult, 0, len(items))
 		mobileItems := make([]UIResult, 0, len(items))
+		pingItems := make([]UIResult, 0, len(items))
 		for _, item := range items {
 			switch item.Group {
 			case system.Group:
@@ -366,7 +368,12 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			case disk.Group:
 				diskItems = append(diskItems, item)
 			case healthcheck.Group:
-				healthItems = append(healthItems, item)
+				// Only non-ping healthchecks
+				if strings.HasPrefix(item.DisplayName, "Ping: ") {
+					pingItems = append(pingItems, item)
+				} else {
+					healthItems = append(healthItems, item)
+				}
 			}
 			mobileItems = append(mobileItems, item)
 		}
@@ -381,6 +388,8 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 		slices.SortFunc(diskItems, displayNameSorter)
 		// sort healthItems by display Name
 		slices.SortFunc(healthItems, displayNameSorter)
+		// sort pingItems by display Name
+		slices.SortFunc(pingItems, displayNameSorter)
 
 		// Set even row for styling in mobile view
 		for i, item := range mobileItems {
@@ -393,11 +402,12 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			"title":               s.config.Monitoring.System.Title,
 			"dashboard_title":     s.config.Monitoring.System.Title,
 			"refresh_interval":    s.config.Monitoring.Interval,
-			"default_disk_icon":   disk.Icon,        // from monitors/disk.Icon
-			"default_health_icon": healthcheck.Icon, // from monitors/healthcheck.Icon
+			"default_disk_icon":   disk.Icon,        // from monitors/disk.icon
+			"default_health_icon": healthcheck.Icon, // from monitors/healthcheck.icon
 			"SystemItems":         systemItems,
 			"DiskItems":           diskItems,
 			"HealthItems":         healthItems,
+			"PingItems":           pingItems,
 			"MobileItems":         mobileItems,
 			"ActivePage":          activeTemplate,
 			"UpdateAt":            time.Now().Format("2006-01-02 15:04:05Z"),
@@ -679,6 +689,9 @@ func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 			m, _ = s.mapper.NewDisk(ctx, id, config.DiskConfig{})
 		case "health":
 			m, _ = s.mapper.NewHealthcheck(ctx, id, config.HealthcheckConfig{})
+		case "ping":
+			// Use a dummy config with valid amberThreshold so Name() is correct
+			m, _ = s.mapper.NewPing(ctx, id, config.PingConfig{AmberThreshold: 1})
 		default:
 			log.Printf("handleDeleteMonitor invalid type: %s", r.URL.String())
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -686,7 +699,7 @@ func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 		}
 		err := s.monitor.Remove(m)
 		if err != nil {
-			log.Printf("handleAddHealthCheck %s: %v", r.URL.String(), err)
+			log.Printf("handleDeleteMonitor %s: %v", r.URL.String(), err)
 			if errors.As(err, &monitors.ErrNotFound{}) {
 				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusBadRequest)
 				return
@@ -694,6 +707,39 @@ func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		// Ensure config is updated after ping monitor deletion
+		s.saveConfig(w)
+	}
+}
+
+// handleAddPingMonitor processes a request to add a new ping monitor.
+// Expects a JSON body describing the ping monitor to add.
+// Route: POST /api/config/ping/{id}
+func (s *Server) handleAddPingMonitor(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		id := r.PathValue("id")
+		var cfg config.PingConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+		if cfg.AmberThreshold <= 0 {
+			http.Error(w, "amberThreshold is required and must be > 0", http.StatusBadRequest)
+			return
+		}
+
+		p, err := s.mapper.NewPing(ctx, id, cfg)
+		if err != nil {
+			log.Printf("handleAddPingMonitor %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.monitor.Add(ctx, p)
 
 		s.saveConfig(w)
 	}
@@ -736,6 +782,18 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		}
 		s.monitor.Add(ctx, newHealth)
 		log.Printf("Added Healthcheck %v", newHealth)
+	}
+
+	for name, i := range cfg.Ping {
+		if i.AmberThreshold <= 0 {
+			return fmt.Errorf("Ping monitor '%s' missing required amberThreshold", name)
+		}
+		newPing, err := s.mapper.NewPing(ctx, name, i)
+		if err != nil {
+			return err
+		}
+		s.monitor.Add(ctx, newPing)
+		log.Printf("Added Ping %v", newPing)
 	}
 
 	// Set the monitoring interval to trigger the initial checks.
