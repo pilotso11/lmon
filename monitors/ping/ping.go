@@ -82,7 +82,7 @@ type Monitor struct {
 }
 
 func (pm Monitor) Name() string {
-	return pm.name
+	return fmt.Sprintf("%s_%s", Group, pm.name)
 }
 
 // NewPingMonitor constructs a new PingMonitor.
@@ -127,7 +127,7 @@ func (pm Monitor) Check(ctx context.Context) monitors.Result {
 }
 
 func (pm Monitor) DisplayName() string {
-	return fmt.Sprintf("Ping: %s", pm.Name())
+	return fmt.Sprintf("Ping: %s", pm.name)
 }
 
 func (pm Monitor) Group() string {

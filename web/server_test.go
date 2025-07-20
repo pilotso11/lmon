@@ -17,6 +17,7 @@ import (
 
 	"lmon/config"
 	"lmon/monitors"
+	"lmon/monitors/ping"
 )
 
 // TestNewServerWithContext_Smoke verifies that the server can be created, started, and stopped without panicking.
@@ -342,7 +343,7 @@ func TestPingMonitorAPI(t *testing.T) {
 	assert.Equal(t, "OK\n", body)
 
 	// Check config
-	pc, ok := s.config.Monitoring.Ping["health_"+id]
+	pc, ok := s.config.Monitoring.Ping[ping.Group+"_"+id]
 	assert.True(t, ok, "ping entry exists")
 	assert.Equal(t, data, pc, "ping entry applied")
 
@@ -452,7 +453,7 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 		return stats["health_"+id].Status == monitors.RAGAmber &&
 			len(stats["health_"+id].Value) > 0 &&
 			stats["health_"+id].Value == "150 ms"
-	}, 500*time.Millisecond, 20*time.Millisecond, "should see amber status and value")
+	}, 100*time.Millisecond, 10*time.Millisecond, "should see amber status and value")
 
 	assert.Eventually(t, func() bool {
 		return hook.LastMessage.Load() != "" &&

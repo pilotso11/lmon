@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"lmon/config"
 	"lmon/monitors"
 )
@@ -46,22 +48,16 @@ func TestPingMonitor_FailureRed(t *testing.T) {
 
 func TestPingMonitor_DisplayNameAndGroup(t *testing.T) {
 	pm := NewPingMonitor("display", "localhost", 1000, "", 100, &MockPingProvider{ResponseMs: 10})
-	if pm.DisplayName() != "Ping: display" {
-		t.Errorf("Unexpected display name: %s", pm.DisplayName())
-	}
-	if pm.Group() != Group {
-		t.Errorf("Unexpected group: %s", pm.Group())
-	}
-	if fmt.Sprintf("%s_%s", pm.Group(), pm.Name()) != "health_display" {
-		t.Errorf("Unexpected name: %s", fmt.Sprintf("%s_%s", pm.Group(), pm.Name()))
-	}
+	assert.Equal(t, "Ping: display", pm.DisplayName(), "DisplayName")
+	assert.Equal(t, "health", pm.Group(), "Group")
+	assert.Equal(t, "health_display", pm.Name(), "Name")
 }
 
 func TestPingMonitor_Save(t *testing.T) {
 	cfg := &config.Config{}
 	pm := NewPingMonitor("save-test", "1.2.3.4", 1234, "wifi", 200, &MockPingProvider{ResponseMs: 10})
 	pm.Save(cfg)
-	pc, ok := cfg.Monitoring.Ping["save-test"]
+	pc, ok := cfg.Monitoring.Ping["health_save-test"]
 	if !ok {
 		t.Errorf("Ping config not saved")
 	}
