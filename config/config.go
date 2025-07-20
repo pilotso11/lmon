@@ -248,6 +248,13 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.icon", name), healthcheck.Icon)
 	}
 
+	for name, ping := range config.Monitoring.Ping {
+		l.v.Set(fmt.Sprintf("monitoring.ping.%s.address", name), ping.Address)
+		l.v.Set(fmt.Sprintf("monitoring.ping.%s.timeout", name), ping.Timeout)
+		l.v.Set(fmt.Sprintf("monitoring.ping.%s.icon", name), ping.Icon)
+		l.v.Set(fmt.Sprintf("monitoring.ping.%s.amberthreshold", name), ping.AmberThreshold)
+	}
+
 	// overwrite the config file or create it if it doesn't exist
 	err := l.v.WriteConfig()
 	var configFileNotFoundError viper.ConfigFileNotFoundError
