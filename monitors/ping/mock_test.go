@@ -22,8 +22,7 @@ func TestMockPingProvider_Error(t *testing.T) {
 	ms, err := mock.Ping(context.Background(), "127.0.0.1", 1000)
 	if err == nil {
 		t.Errorf("Expected error, got nil")
-	}
-	if err.Error() != "simulated error" {
+	} else if err.Error() != "simulated error" {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 	if ms != 0 {

@@ -12,7 +12,7 @@ type MockPingProvider struct {
 }
 
 // Ping simulates an ICMP ping by returning the configured response time and error.
-func (m *MockPingProvider) Ping(ctx context.Context, address string, timeoutMs int) (int, error) {
+func (m *MockPingProvider) Ping(_ context.Context, _ string, _ int) (int, error) {
 	return m.ResponseMs, m.Err
 }
 
