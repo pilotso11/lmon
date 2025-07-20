@@ -50,7 +50,7 @@ func NewDefaultPingProvider() *DefaultPingProvider {
 }
 
 // Ping performs an ICMP ping using pro-bing.
-func (p *DefaultPingProvider) Ping(ctx context.Context, address string, timeoutMs int) (int, error) {
+func (p *DefaultPingProvider) Ping(_ context.Context, address string, timeoutMs int) (int, error) {
 	pinger, err := probing.NewPinger(address)
 	if err != nil {
 		return 0, fmt.Errorf("ping setup failed: %v", err)
