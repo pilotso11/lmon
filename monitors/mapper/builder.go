@@ -43,25 +43,25 @@ func NewMapper(impls *Implementations) Mapper {
 }
 
 // NewDisk constructs a disk monitor using the provided configuration and optional mock provider.
-func (d Mapper) NewDisk(ctx context.Context, name string, cfg config.DiskConfig) (disk.Disk, error) {
+func (d Mapper) NewDisk(_ context.Context, name string, cfg config.DiskConfig) (disk.Disk, error) {
 	name, _ = config.SanitiseName(name)
 	return disk.NewDisk(name, cfg.Path, cfg.Threshold, cfg.Icon, d.Impls.Disk), nil
 }
 
 // NewHealthcheck constructs a healthcheck monitor using the provided configuration and optional mock provider.
-func (d Mapper) NewHealthcheck(ctx context.Context, name string, cfg config.HealthcheckConfig) (healthcheck.Healthcheck, error) {
+func (d Mapper) NewHealthcheck(_ context.Context, name string, cfg config.HealthcheckConfig) (healthcheck.Healthcheck, error) {
 	name, _ = config.SanitiseName(name)
 	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.Icon, d.Impls.Health)
 }
 
 // NewCpu constructs a CPU monitor using the provided configuration and optional mock provider.
-func (d Mapper) NewCpu(ctx context.Context, cfg config.SystemItem) (system.Cpu, error) {
+func (d Mapper) NewCpu(_ context.Context, cfg config.SystemItem) (system.Cpu, error) {
 	return system.NewCpu(cfg.Threshold, cfg.Icon, d.Impls.Cpu), nil
 }
 
 // NewPing constructs a ping monitor using the provided configuration and optional mock provider.
 // AmberThreshold is required and must be > 0.
-func (d Mapper) NewPing(ctx context.Context, name string, cfg config.PingConfig) (ping.PingMonitor, error) {
+func (d Mapper) NewPing(_ context.Context, name string, cfg config.PingConfig) (ping.PingMonitor, error) {
 	name, _ = config.SanitiseName(name)
 	if cfg.AmberThreshold <= 0 {
 		return ping.PingMonitor{}, fmt.Errorf("AmberThreshold must be > 0 for ping monitor '%s'", name)
@@ -76,6 +76,6 @@ func (d Mapper) NewPing(ctx context.Context, name string, cfg config.PingConfig)
 }
 
 // NewMem constructs a memory monitor using the provided configuration and optional mock provider.
-func (d Mapper) NewMem(ctx context.Context, cfg config.SystemItem) (system.Mem, error) {
+func (d Mapper) NewMem(_ context.Context, cfg config.SystemItem) (system.Mem, error) {
 	return system.NewMem(cfg.Threshold, cfg.Icon, d.Impls.Mem), nil
 }
