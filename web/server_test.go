@@ -6,7 +6,6 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -403,8 +402,6 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	s.monitor.SetPeriod(ctx, 10*time.Millisecond, 10*time.Millisecond) // Set a short period for testing
 	s.Start(ctx)
 
-	fmt.Printf("[DEBUG] Test mock provider pointer: %p\n", s.mapper.Impls.Ping)
-
 	// Enable webhook for test
 	webhookCfg := config.WebhookConfig{
 		Enabled: true,
@@ -419,7 +416,7 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	// Green status
 	s.mapper.Impls.Ping.ResponseMs.Store(50)
 	s.mapper.Impls.Ping.Err.Store(nil)
-	fmt.Printf("[DEBUG] Test: Set Ping ResponseMs=50, Err=nil, provider_ptr=%p\n", s.mapper.Impls.Ping)
+
 	data := config.PingConfig{
 		Address:        "127.0.0.1",
 		Timeout:        1000,
@@ -429,8 +426,6 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	resp, _ = PostTestRequest(ctx, t, s, "/api/config/ping/"+id, data)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// Debug and assert: Ping monitor should be present in config after API add
-	fmt.Printf("[DEBUG] Config after adding ping: %+v\n", s.config.Monitoring.Ping)
 	_, exists := s.config.Monitoring.Ping["health_"+id]
 	assert.True(t, exists, "Ping monitor should exist in config after API add")
 
@@ -453,7 +448,6 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	// Amber status
 	s.mapper.Impls.Ping.ResponseMs.Store(150)
 	s.mapper.Impls.Ping.Err.Store(nil)
-	fmt.Printf("[DEBUG] Test: Set Ping ResponseMs=150, Err=nil, provider_ptr=%p\n", s.mapper.Impls.Ping)
 	time.Sleep(20 * time.Millisecond)
 	_, body = GetTestRequest(ctx, t, s, "/api/items")
 	stats = map[string]monitors.Result{}
@@ -468,7 +462,6 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 
 	// Red status
 	s.mapper.Impls.Ping.Err.Store(&assert.AnError)
-	fmt.Printf("[DEBUG] Test: Set Ping Err=assert.AnError, provider_ptr=%p\n", s.mapper.Impls.Ping)
 	time.Sleep(20 * time.Millisecond)
 	_, body = GetTestRequest(ctx, t, s, "/api/items")
 	stats = map[string]monitors.Result{}

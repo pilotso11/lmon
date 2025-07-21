@@ -153,3 +153,8 @@ func TestDefaultPingProvider_Ping_Unreachable(t *testing.T) {
 		t.Errorf("Expected error for unreachable TEST-NET-3 address")
 	}
 }
+
+func TestDefaultAmberValue(t *testing.T) {
+	pm := NewPingMonitor("amber-value-test", "localhost", 100, Icon, 0, &DefaultPingProvider{})
+	assert.Equal(t, 50, pm.amberThreshold, "Default amber threshold should be 50 ms")
+}

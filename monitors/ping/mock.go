@@ -2,7 +2,6 @@ package ping
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 )
 
@@ -15,7 +14,7 @@ type MockPingProvider struct {
 
 // Ping simulates an ICMP ping by returning the configured response time and error.
 func (m *MockPingProvider) Ping(_ context.Context, _ string, _ int) (int, error) {
-	fmt.Printf("[DEBUG] MockPingProvider.Ping called: ResponseMs=%d, Err=%v\n", m.ResponseMs.Load(), m.Err.Load())
+
 	err := m.Err.Load()
 	if err != nil {
 		return int(m.ResponseMs.Load()), *err

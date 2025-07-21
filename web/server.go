@@ -748,8 +748,6 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	fmt.Printf("[DEBUG] SetConfig called: cfg.Ping = %+v\n", cfg.Ping)
-
 	cpu, err := s.mapper.NewCpu(ctx, cfg.System.CPU)
 	if err != nil {
 		return err

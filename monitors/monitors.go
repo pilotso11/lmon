@@ -183,7 +183,6 @@ func (s *Service) startMonitors(ctx context.Context) {
 			to := sanitizeTimeout(s.timeout.Load(), s.period.Load())
 
 			if func() bool {
-				fmt.Printf("[DEBUG] Service.startMonitors: periodic check running\n")
 				toCtx, toCancel := context.WithTimeout(ctx, to)
 				defer toCancel()
 				s.checkMonitors(toCtx)
@@ -205,9 +204,7 @@ func (s *Service) startMonitors(ctx context.Context) {
 // checkMonitors checks all monitors and updates the result map.
 // Each check runs in its own goroutine in parallel.
 func (s *Service) checkMonitors(ctx context.Context) {
-	fmt.Printf("[DEBUG] Service.checkMonitors: monitor keys being checked this cycle:\n")
 	s.monitors.Range(func(key string, m Monitor) bool {
-		fmt.Printf("  [DEBUG]   monitor key: %s\n", key)
 		go func(ctx context.Context, m Monitor) {
 			result := m.Check(ctx)
 			result.DisplayName = m.DisplayName()
