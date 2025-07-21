@@ -145,7 +145,7 @@ func TestAddPing(t *testing.T) {
 	cfg, err := loader.Load()
 	assert.NoError(t, err, "no error loading config")
 
-	cfg.Monitoring.Ping["health_sample"] = PingConfig{
+	cfg.Monitoring.Ping["ping_sample"] = PingConfig{
 		Address:        "8.8.8.8",
 		Timeout:        1000,
 		Icon:           "wifi",

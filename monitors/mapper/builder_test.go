@@ -51,7 +51,7 @@ func TestMapper_NewPing(t *testing.T) {
 		AmberThreshold: 100,
 	})
 	assert.NoError(t, err, "should not error")
-	assert.Equal(t, "health_pingtest", p.Name(), "should create ping monitor with correct name")
+	assert.Equal(t, "ping_pingtest", p.Name(), "should create ping monitor with correct name")
 	assert.Equal(t, "Ping: pingtest", p.DisplayName(), "display name should match")
 
 	// Test with mock provider
@@ -64,7 +64,7 @@ func TestMapper_NewPing(t *testing.T) {
 		AmberThreshold: 50,
 	})
 	assert.NoError(t, err, "should not error with mock provider")
-	assert.Equal(t, "health_mockping", p2.Name(), "should create ping monitor with correct name")
+	assert.Equal(t, "ping_mockping", p2.Name(), "should create ping monitor with correct name")
 	assert.Equal(t, "Ping: mockping", p2.DisplayName(), "display name should match")
 
 	// Error case: missing amberThreshold

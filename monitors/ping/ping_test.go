@@ -46,15 +46,15 @@ func TestPingMonitor_FailureRed(t *testing.T) {
 func TestPingMonitor_DisplayNameAndGroup(t *testing.T) {
 	pm := NewPingMonitor("display", "localhost", 1000, "", 100, NewMockPingProvider(10, nil))
 	assert.Equal(t, "Ping: display", pm.DisplayName(), "DisplayName")
-	assert.Equal(t, "health", pm.Group(), "Group")
-	assert.Equal(t, "health_display", pm.Name(), "Name")
+	assert.Equal(t, "ping", pm.Group(), "Group")
+	assert.Equal(t, "ping_display", pm.Name(), "Name")
 }
 
 func TestPingMonitor_Save(t *testing.T) {
 	cfg := &config.Config{}
 	pm := NewPingMonitor("save-test", "1.2.3.4", 1234, "wifi", 200, NewMockPingProvider(10, nil))
 	pm.Save(cfg)
-	pc, ok := cfg.Monitoring.Ping["health_save-test"]
+	pc, ok := cfg.Monitoring.Ping["ping_save-test"]
 	if !ok {
 		t.Errorf("Ping config not saved")
 	}

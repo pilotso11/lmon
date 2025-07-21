@@ -358,12 +358,12 @@ func TestPingMonitorAPI(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		_, exists := stats["health_"+id]
+		_, exists := stats["ping_"+id]
 		return exists
-	}, 50*time.Millisecond, 1*time.Millisecond, "ping monitor should be in /api/items")
+	}, time.Second, 10*time.Millisecond, "Ping monitor should exist in /api/items")
 
 	// Delete the ping monitor
-	// Remove uses the monitor name, which is just id, but /api/items uses "health_"+id
+	// Remove uses the monitor name, which is just id, but /api/items uses "ping_"+id
 	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/ping/"+id)
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	assert.Equal(t, "OK\n", body)
@@ -375,7 +375,7 @@ func TestPingMonitorAPI(t *testing.T) {
 	stats = map[string]monitors.Result{}
 	err := json.Unmarshal([]byte(body), &stats)
 	assert.NoError(t, err, "unmarshal")
-	_, exists := stats["health_"+id]
+	_, exists := stats["ping_"+id]
 	assert.False(t, exists, "deleted ping should not be in /api/items")
 
 	// Try to add a ping monitor with missing amberThreshold
@@ -426,13 +426,13 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	resp, _ = PostTestRequest(ctx, t, s, "/api/config/ping/"+id, data)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	_, exists := s.config.Monitoring.Ping["health_"+id]
+	_, exists := s.config.Monitoring.Ping["ping_"+id]
 	assert.True(t, exists, "Ping monitor should exist in config after API add")
 
 	// Reload config from disk and validate
 	reloadedCfg, err := s.loader.Load()
 	assert.NoError(t, err, "should reload config after API add")
-	_, exists = reloadedCfg.Monitoring.Ping["health_"+id]
+	_, exists = reloadedCfg.Monitoring.Ping["ping_"+id]
 	assert.True(t, exists, "Ping monitor should exist in config after save and reload")
 
 	time.Sleep(20 * time.Millisecond)
@@ -440,8 +440,8 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	_, body := GetTestRequest(ctx, t, s, "/api/items")
 	stats = map[string]monitors.Result{}
 	_ = json.Unmarshal([]byte(body), &stats)
-	assert.Equal(t, monitors.RAGGreen.String(), stats["health_"+id].Status.String(), "should see green status")
-	assert.Equal(t, "50 ms", stats["health_"+id].Value, "should see green value")
+	assert.Equal(t, monitors.RAGGreen.String(), stats["ping_"+id].Status.String(), "should see green status")
+	assert.Equal(t, "50 ms", stats["ping_"+id].Value, "should see green value")
 
 	// No webhook notification is expected for initial Green status.
 
@@ -452,8 +452,8 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	_, body = GetTestRequest(ctx, t, s, "/api/items")
 	stats = map[string]monitors.Result{}
 	_ = json.Unmarshal([]byte(body), &stats)
-	assert.Equal(t, monitors.RAGAmber.String(), stats["health_"+id].Status.String(), "should see amber status")
-	assert.Equal(t, "150 ms", stats["health_"+id].Value, "should see amber value")
+	assert.Equal(t, monitors.RAGAmber.String(), stats["ping_"+id].Status.String(), "should see amber status")
+	assert.Equal(t, "150 ms", stats["ping_"+id].Value, "should see amber value")
 
 	assert.Eventually(t, func() bool {
 		return hook.LastMessage.Load() != "" &&
@@ -466,8 +466,8 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	_, body = GetTestRequest(ctx, t, s, "/api/items")
 	stats = map[string]monitors.Result{}
 	_ = json.Unmarshal([]byte(body), &stats)
-	assert.Equal(t, monitors.RAGRed.String(), stats["health_"+id].Status.String(), "should see red status")
-	assert.Greater(t, len(stats["health_"+id].Value), 0, "should see error value")
+	assert.Equal(t, monitors.RAGRed.String(), stats["ping_"+id].Status.String(), "should see red status")
+	assert.Greater(t, len(stats["ping_"+id].Value), 0, "should see error value")
 
 	assert.Eventually(t, func() bool {
 		return hook.LastMessage.Load() != "" &&

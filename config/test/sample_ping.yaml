@@ -1,7 +1,7 @@
 monitoring:
     interval: 60
     ping:
-        health_sample:
+        ping_sample:
             address: 8.8.8.8
             amberthreshold: 100
             icon: wifi

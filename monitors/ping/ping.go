@@ -34,8 +34,8 @@ import (
 )
 
 // Default values
-const Icon = "wifi"    // Default icon for ping monitors
-const Group = "health" // Group name for ping monitors
+const Icon = "wifi"  // Default icon for ping monitors
+const Group = "ping" // Group name forping"   // Group name forping"   // Group name for ping monitors
 
 // Provider  is an interface for performing ping checks.
 type Provider interface {

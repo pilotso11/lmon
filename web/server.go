@@ -368,12 +368,9 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			case disk.Group:
 				diskItems = append(diskItems, item)
 			case healthcheck.Group:
-				// Only non-ping healthchecks
-				if strings.HasPrefix(item.DisplayName, "Ping: ") {
-					pingItems = append(pingItems, item)
-				} else {
-					healthItems = append(healthItems, item)
-				}
+				healthItems = append(healthItems, item)
+			case "ping":
+				pingItems = append(pingItems, item)
 			}
 			mobileItems = append(mobileItems, item)
 		}
