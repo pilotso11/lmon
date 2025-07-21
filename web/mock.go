@@ -31,7 +31,7 @@ func NewMockImplementations(hook *MockWebhookHandler) *mapper.Implementations {
 		Health:  healthcheck.NewMockHealthcheckProvider(http.StatusOK), // http status code
 		Cpu:     system.NewMockCpuProvider(50),                         // percent usage
 		Mem:     system.NewMockMemProvider(50),                         // percent usage
-		Ping:    &ping.MockPingProvider{ResponseMs: 50, Err: nil},      // default mock ping provider
+		Ping:    ping.NewMockPingProvider(50, nil),                     // default mock ping provider
 		Webhook: hook.webhookCallback,
 	}
 }

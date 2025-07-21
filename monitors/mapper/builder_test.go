@@ -68,13 +68,13 @@ func TestMapper_NewPing(t *testing.T) {
 	assert.Equal(t, "Ping: mockping", p2.DisplayName(), "display name should match")
 
 	// Error case: missing amberThreshold
-	_, err = m.NewPing(t.Context(), "badping", config.PingConfig{
+	p, err = m.NewPing(t.Context(), "badping", config.PingConfig{
 		Address: "localhost",
 		Timeout: 500,
 		Icon:    "wifi",
 		// amberThreshold missing
 	})
-	assert.Error(t, err, "should error if amberThreshold is missing or <= 0")
+	assert.NoError(t, err, "should default not error if amberThreshold is missing or <= 0")
 }
 
 // TestMapper_NewCpu verifies that NewCpu creates a CPU monitor with the correct name and no error.

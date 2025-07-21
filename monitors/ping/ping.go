@@ -90,6 +90,9 @@ func NewPingMonitor(name, address string, timeout int, icon string, amberThresho
 	if icon == "" {
 		icon = Icon
 	}
+	if amberThreshold <= 0 {
+		amberThreshold = 50 // Default amber threshold if not specified
+	}
 	if impl == nil {
 		impl = NewDefaultPingProvider()
 	}
@@ -106,7 +109,9 @@ func NewPingMonitor(name, address string, timeout int, icon string, amberThresho
 // Check performs the ping and returns the monitor result.
 func (pm Monitor) Check(ctx context.Context) monitors.Result {
 	responseMs, err := pm.impl.Ping(ctx, pm.address, pm.timeout)
+	fmt.Printf("[DEBUG] PingMonitor.Check: name=%s address=%s timeout=%d amberThreshold=%d impl=%T provider_ptr=%p ResponseMs=%d Err=%v\n", pm.name, pm.address, pm.timeout, pm.amberThreshold, pm.impl, pm.impl, responseMs, err)
 	if err != nil {
+		fmt.Printf("[DEBUG] PingMonitor.Check: name=%s error=%v\n", pm.name, err)
 		return monitors.Result{
 			Status:      monitors.RAGRed,
 			Value:       fmt.Sprintf("Ping error: %v", err),
@@ -118,6 +123,7 @@ func (pm Monitor) Check(ctx context.Context) monitors.Result {
 	if responseMs >= pm.amberThreshold {
 		status = monitors.RAGAmber
 	}
+	fmt.Printf("[DEBUG] PingMonitor.Check: name=%s responseMs=%d status=%v\n", pm.name, responseMs, status)
 	return monitors.Result{
 		Status:      status,
 		Value:       fmt.Sprintf("%d ms", responseMs),

@@ -727,10 +727,6 @@ func (s *Server) handleAddPingMonitor(ctx context.Context) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if cfg.AmberThreshold <= 0 {
-			http.Error(w, "amberThreshold is required and must be > 0", http.StatusBadRequest)
-			return
-		}
 
 		p, err := s.mapper.NewPing(ctx, id, cfg)
 		if err != nil {
@@ -751,6 +747,8 @@ func (s *Server) handleAddPingMonitor(ctx context.Context) http.HandlerFunc {
 func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	fmt.Printf("[DEBUG] SetConfig called: cfg.Ping = %+v\n", cfg.Ping)
 
 	cpu, err := s.mapper.NewCpu(ctx, cfg.System.CPU)
 	if err != nil {
