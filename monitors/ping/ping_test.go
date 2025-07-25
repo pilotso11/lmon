@@ -2,8 +2,6 @@ package ping
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -67,41 +65,6 @@ func TestPingMonitor_DefaultProvider(t *testing.T) {
 	pm := NewPingMonitor("default-provider", "localhost", 1000, "", 100, nil)
 	if pm.impl == nil {
 		t.Errorf("Default provider not set")
-	}
-}
-
-func TestDefaultPingProvider_ParseOutput(t *testing.T) {
-	// This test is now less relevant since pro-bing is used, but keep for completeness.
-	mockOutput := "64 bytes from 1.2.3.4: icmp_seq=1 ttl=64 time=123 ms"
-	lines := strings.Split(mockOutput, "\n")
-	found := false
-	for _, line := range lines {
-		if strings.Contains(line, "time=") {
-			parts := strings.Split(line, "time=")
-			if len(parts) > 1 {
-				timeStr := strings.Fields(parts[1])[0]
-				var ms int
-				_, err := fmt.Sscanf(timeStr, "%d", &ms)
-				if err == nil && ms == 123 {
-					found = true
-				}
-			}
-		}
-	}
-	if !found {
-		t.Errorf("Failed to parse ping output")
-	}
-
-	mockOutput = "no time here"
-	lines = strings.Split(mockOutput, "\n")
-	found = false
-	for _, line := range lines {
-		if strings.Contains(line, "time=") {
-			found = true
-		}
-	}
-	if found {
-		t.Errorf("Should not find time= in output")
 	}
 }
 

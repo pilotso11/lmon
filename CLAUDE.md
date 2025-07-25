@@ -118,8 +118,8 @@ This repository supports MCP (Model Context Protocol) integrations for enhanced 
 - Avoid complex dependencies
 - Use a single binary for deployment
 * Easy extensibilty and supportability with new monitor implementations
-* Extensive use of unit tests, integration tests, and end-to-end tests with a goal of 90% test coverage, and the only gaps being hard to procuce exception cases.
-* Use of testing libraries like `testify` for assertions and mocking. Attention payed to timeouts using assert.Eventually(), as well as asycnh issues, test -race is used for validation.
+* Extensive use of unit tests, integration tests, and end-to-end tests with a goal of 90% test coverage, and the only gaps being hard to produce exception cases.
+* Use of testing libraries like `testify` for assertions and mocking. Attention payed to timeouts using assert.Eventually(), as well as asyc issues, test -race is used for validation.
 * Full testing of the UI using rod.
 * Rod tests avoid the use of Must functions that panic on failure, instead using error handling to allow for graceful test failures.
-* New implementions follow the same patterns and practices as existing implementations.
+* New implementations follow the same patterns and practices as existing implementations.

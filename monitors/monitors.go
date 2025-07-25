@@ -179,6 +179,7 @@ func (s *Service) startMonitors(ctx context.Context) {
 		// Validate timeout length
 		log.Printf("Starting monitors with period %v and timeout %v", s.period.Load(), s.timeout.Load())
 		ticker := time.NewTicker(s.period.Load())
+		defer ticker.Stop()
 		for {
 			to := sanitizeTimeout(s.timeout.Load(), s.period.Load())
 
