@@ -39,6 +39,7 @@ type MonitoringConfig struct {
 	Disk        map[string]DiskConfig
 	System      SystemConfig
 	Healthcheck map[string]HealthcheckConfig
+	Ping        map[string]PingConfig
 }
 
 // DiskConfig represents disk monitoring configuration.
@@ -66,6 +67,14 @@ type HealthcheckConfig struct {
 	URL     string
 	Timeout int
 	Icon    string
+}
+
+// PingConfig represents ping monitor configuration
+type PingConfig struct {
+	Address        string
+	Timeout        int
+	Icon           string
+	AmberThreshold int // Response time in ms for amber status (required)
 }
 
 // WebhookConfig represents webhook notification configuration
@@ -181,6 +190,9 @@ func (l *Loader) Load() (*Config, error) {
 	if config.Monitoring.Healthcheck == nil {
 		config.Monitoring.Healthcheck = make(map[string]HealthcheckConfig)
 	}
+	if config.Monitoring.Ping == nil {
+		config.Monitoring.Ping = make(map[string]PingConfig)
+	}
 
 	return &config, nil
 }
@@ -237,6 +249,13 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.url", name), healthcheck.URL)
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.timeout", name), healthcheck.Timeout)
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.icon", name), healthcheck.Icon)
+	}
+
+	for name, ping := range config.Monitoring.Ping {
+		l.v.Set(fmt.Sprintf("monitoring.ping.%s.address", name), ping.Address)
+		l.v.Set(fmt.Sprintf("monitoring.ping.%s.timeout", name), ping.Timeout)
+		l.v.Set(fmt.Sprintf("monitoring.ping.%s.icon", name), ping.Icon)
+		l.v.Set(fmt.Sprintf("monitoring.ping.%s.amberthreshold", name), ping.AmberThreshold)
 	}
 
 	// overwrite the config file or create it if it doesn't exist
