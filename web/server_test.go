@@ -16,7 +16,6 @@ import (
 
 	"lmon/config"
 	"lmon/monitors"
-	"lmon/monitors/ping"
 )
 
 // TestNewServerWithContext_Smoke verifies that the server can be created, started, and stopped without panicking.
@@ -342,7 +341,7 @@ func TestPingMonitorAPI(t *testing.T) {
 	assert.Equal(t, "OK\n", body)
 
 	// Check config
-	pc, ok := s.config.Monitoring.Ping[ping.Group+"_"+id]
+	pc, ok := s.config.Monitoring.Ping[id]
 	assert.True(t, ok, "ping entry exists")
 	assert.Equal(t, data, pc, "ping entry applied")
 
@@ -426,13 +425,13 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	resp, _ = PostTestRequest(ctx, t, s, "/api/config/ping/"+id, data)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	_, exists := s.config.Monitoring.Ping["ping_"+id]
+	_, exists := s.config.Monitoring.Ping[id]
 	assert.True(t, exists, "Ping monitor should exist in config after API add")
 
 	// Reload config from disk and validate
 	reloadedCfg, err := s.loader.Load()
 	assert.NoError(t, err, "should reload config after API add")
-	_, exists = reloadedCfg.Monitoring.Ping["ping_"+id]
+	_, exists = reloadedCfg.Monitoring.Ping[id]
 	assert.True(t, exists, "Ping monitor should exist in config after save and reload")
 
 	time.Sleep(20 * time.Millisecond)

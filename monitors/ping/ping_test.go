@@ -54,7 +54,7 @@ func TestPingMonitor_Save(t *testing.T) {
 	cfg := &config.Config{}
 	pm := NewPingMonitor("save-test", "1.2.3.4", 1234, "wifi", 200, NewMockPingProvider(10, nil))
 	pm.Save(cfg)
-	pc, ok := cfg.Monitoring.Ping["ping_save-test"]
+	pc, ok := cfg.Monitoring.Ping["save-test"]
 	if !ok {
 		t.Errorf("Ping config not saved")
 	}

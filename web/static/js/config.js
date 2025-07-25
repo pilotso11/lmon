@@ -211,6 +211,13 @@ document.addEventListener("DOMContentLoaded", function () {
       default_health_icon,
     );
   }
+  if (typeof default_ping_icon !== "undefined") {
+    renderIconDropdown(
+      "ping-icon-dropdown",
+      "ping-icon-select",
+      default_ping_icon,
+    );
+  }
 });
 
 // No longer needed: loadConfig() is obsolete since SSR provides all necessary details for delete popups.
@@ -235,6 +242,18 @@ document.addEventListener("DOMContentLoaded", function () {
       const id = this.getAttribute("data-id");
       const detail = this.getAttribute("data-detail") || id;
       deleteMonitor("health", id, detail);
+    });
+  });
+});
+
+// No longer rendering ping config items client-side; SSR handles this.
+// Only event listeners for delete buttons are needed.
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".delete-ping-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const detail = this.getAttribute("data-detail") || id;
+      deleteMonitor("ping", id, detail);
     });
   });
 });
@@ -373,6 +392,68 @@ document.addEventListener("DOMContentLoaded", function () {
         window.location.reload();
       } catch (error) {
         handleFetchError(error, "Failed to add health check");
+      }
+    });
+  }
+
+  // Add ping form submission
+  const addPingForm = document.getElementById("add-ping-form");
+  if (addPingForm) {
+    addPingForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const pingNameInput = document.getElementById("ping-name");
+      const pingAddressInput = document.getElementById("ping-address");
+      const pingTimeoutInput = document.getElementById("ping-timeout");
+      const pingAmberThresholdInput = document.getElementById("ping-amber-threshold");
+      const pingIconInput = document.getElementById("ping-icon-select");
+      if (
+        !pingNameInput ||
+        !pingAddressInput ||
+        !pingTimeoutInput ||
+        !pingAmberThresholdInput ||
+        !pingIconInput
+      ) {
+        showToast("Error", "Ping form fields missing", true);
+        return;
+      }
+
+      const pingConfig = {
+        name: pingNameInput.value,
+        address: pingAddressInput.value,
+        timeout: parseInt(pingTimeoutInput.value),
+        amberThreshold: parseInt(pingAmberThresholdInput.value),
+        icon: pingIconInput.value,
+      };
+
+      try {
+        await fetchJson(
+          `/api/config/ping/${encodeURIComponent(pingConfig.name)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              address: pingConfig.address,
+              timeout: parseInt(pingConfig.timeout),
+              amberThreshold: parseInt(pingConfig.amberThreshold),
+              icon: pingConfig.icon,
+            }),
+          },
+        );
+        // Persist toast info before reload
+        localStorage.setItem(
+          "pendingToast",
+          JSON.stringify({
+            title: "Success",
+            message: "Ping monitor added",
+            type: "success",
+          }),
+        );
+        window.location.reload();
+      } catch (error) {
+        handleFetchError(error, "Failed to add ping monitor");
       }
     });
   }

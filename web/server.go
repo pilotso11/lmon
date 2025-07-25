@@ -25,6 +25,7 @@ import (
 	"lmon/monitors/disk"
 	"lmon/monitors/healthcheck"
 	"lmon/monitors/mapper"
+	"lmon/monitors/ping"
 	"lmon/monitors/system"
 	"lmon/webhook"
 )
@@ -401,6 +402,7 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			"refresh_interval":    s.config.Monitoring.Interval,
 			"default_disk_icon":   disk.Icon,        // from monitors/disk.icon
 			"default_health_icon": healthcheck.Icon, // from monitors/healthcheck.icon
+			"default_ping_icon":   ping.Icon,        // from monitors/ping.icon
 			"SystemItems":         systemItems,
 			"DiskItems":           diskItems,
 			"HealthItems":         healthItems,

@@ -145,7 +145,7 @@ func (pm Monitor) Save(cfg *config.Config) {
 	if cfg.Monitoring.Ping == nil {
 		cfg.Monitoring.Ping = make(map[string]config.PingConfig)
 	}
-	cfg.Monitoring.Ping[pm.Name()] = config.PingConfig{
+	cfg.Monitoring.Ping[pm.name] = config.PingConfig{
 		Address:        pm.address,
 		Timeout:        pm.timeout,
 		Icon:           pm.icon,

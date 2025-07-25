@@ -31,10 +31,7 @@
             <div class="row mt-4">
                 <div class="col-md-12">
                     <div class="card">
-                        <div class="card-header">Ping Monitors</div>
-                        <div class="card-body">
-                            {{ template "itemList" .PingItems }}
-                        </div>
+                        {{ template "config-ping-list" . }}
                     </div>
                 </div>
             </div>

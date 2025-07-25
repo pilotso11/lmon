@@ -44,7 +44,7 @@ func TestService_Save(t *testing.T) {
 	// Check that each monitor type is present in config
 	diskCfg, diskOk := cfg.Monitoring.Disk["disk1"]
 	healthCfg, healthOk := cfg.Monitoring.Healthcheck["health1"]
-	pingCfg, pingOk := cfg.Monitoring.Ping["ping_ping1"]
+	pingCfg, pingOk := cfg.Monitoring.Ping["ping1"]
 
 	assert.True(t, diskOk, "disk monitor should be saved")
 	assert.True(t, healthOk, "healthcheck monitor should be saved")
