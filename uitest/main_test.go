@@ -259,24 +259,33 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	require.NoError(t, err, "find config link")
 	el.MustClick()
 
-	// Wait for the health check form to appear
-	_, err = page.Timeout(1 * time.Second).Element(`#add-health-form`)
-	require.NoError(t, err, "find health check form")
+	// Wait for the unified monitor form to appear
+	_, err = page.Timeout(1 * time.Second).Element(`#add-monitor-form`)
+	require.NoError(t, err, "find monitor form")
+
+	// HTTP should be selected by default, but verify
+	httpRadio, err := page.Element(`#monitor-type-http`)
+	require.NoError(t, err, "find http radio button")
+	if !httpRadio.MustProperty("checked").Bool() {
+		httpLabel, err := page.Element(`label[for="monitor-type-http"]`)
+		require.NoError(t, err, "find http radio button label")
+		httpLabel.MustClick()
+	}
 
 	// Fill out the Add Health Check form
-	el, err = page.Element(`#health-name`)
-	require.NoError(t, err, "find health check name input")
+	el, err = page.Element(`#monitor-name`)
+	require.NoError(t, err, "find monitor name input")
 	_ = el.MustInput("local")
-	el, err = page.Element(`#health-url`)
-	require.NoError(t, err, "find health check url input")
+	el, err = page.Element(`#monitor-target`)
+	require.NoError(t, err, "find monitor target input")
 	_ = el.Input("http://localhost:8080")
-	el, err = page.Element(`#health-timeout`)
-	require.NoError(t, err, "find health check timeout input")
+	el, err = page.Element(`#monitor-timeout`)
+	require.NoError(t, err, "find monitor timeout input")
 	_ = el.Input("10")
 
 	// Submit the form
-	el, err = page.Element(`#add-health-form button[type="submit"]`)
-	require.NoError(t, err, "find health check submit button")
+	el, err = page.Element(`#add-monitor-form button[type="submit"]`)
+	require.NoError(t, err, "find monitor submit button")
 	el.MustClick()
 
 	// Wait for the health check to appear in the config list
@@ -381,36 +390,41 @@ func TestAddPingViaConfigUIRod(t *testing.T) {
 	require.NoError(t, err, "find config link")
 	el.MustClick()
 
-	// Wait for the ping form to appear
-	_, err = page.Timeout(1 * time.Second).Element(`#add-ping-form`)
-	require.NoError(t, err, "find ping form")
+	// Wait for the unified monitor form to appear
+	_, err = page.Timeout(1 * time.Second).Element(`#add-monitor-form`)
+	require.NoError(t, err, "find monitor form")
+
+	// Switch to ping mode
+	el, err = page.Element(`label[for="monitor-type-ping"]`)
+	require.NoError(t, err, "find ping radio button label")
+	el.MustClick()
 
 	// Fill out the Add Ping Monitor form
-	el, err = page.Element(`#ping-name`)
-	require.NoError(t, err, "find ping name input")
+	el, err = page.Element(`#monitor-name`)
+	require.NoError(t, err, "find monitor name input")
 	err = el.Input("google")
-	require.NoError(t, err, "input ping name")
-	el, err = page.Element(`#ping-address`)
-	require.NoError(t, err, "find ping address input")
+	require.NoError(t, err, "input monitor name")
+	el, err = page.Element(`#monitor-target`)
+	require.NoError(t, err, "find monitor target input")
 	err = el.Input("8.8.8.8")
-	require.NoError(t, err, "input ping address")
-	el, err = page.Element(`#ping-timeout`)
-	require.NoError(t, err, "find ping timeout input")
-	el.MustSelectAllText().MustInput("3000")
-	el, err = page.Element(`#ping-amber-threshold`)
-	require.NoError(t, err, "find ping amber threshold input")
+	require.NoError(t, err, "input monitor target")
+	el, err = page.Element(`#monitor-timeout`)
+	require.NoError(t, err, "find monitor timeout input")
+	el.MustSelectAllText().MustInput("100")
+	el, err = page.Element(`#monitor-amber-threshold`)
+	require.NoError(t, err, "find monitor amber threshold input")
 	el.MustSelectAllText().MustInput("100")
 
 	// Wait for the icon dropdown to be initialized
-	_, err = page.Timeout(500 * time.Millisecond).Element(`#ping-icon-select`)
+	_, err = page.Timeout(500 * time.Millisecond).Element(`#monitor-icon-select`)
 	if err != nil {
 		// Icon dropdown may not be required for form submission
-		t.Logf("Warning: ping icon dropdown not found, continuing anyway")
+		t.Logf("Warning: monitor icon dropdown not found, continuing anyway")
 	}
 
 	// Submit the form
-	el, err = page.Element(`#add-ping-form button[type="submit"]`)
-	require.NoError(t, err, "find ping submit button")
+	el, err = page.Element(`#add-monitor-form button[type="submit"]`)
+	require.NoError(t, err, "find monitor submit button")
 	el.MustClick()
 
 	// Wait for page to reload after form submission and then check config list
@@ -451,13 +465,13 @@ func TestAddPingViaConfigUIRod(t *testing.T) {
 				return true
 			}
 		}
-		
+
 		// Also check if "No ping monitors configured" is shown
 		_, err = page.ElementR(`#ping-config-items`, "No ping monitors configured")
 		if err == nil {
 			t.Logf("Found 'No ping monitors configured' message")
 		}
-		
+
 		return false
 	}, 3*time.Second, 100*time.Millisecond, "wait for ping item in config list")
 

@@ -1,37 +1,7 @@
 {{ define "config-disk-list" }}
 <div class="card-header">Disk Monitoring</div>
 <div class="card-body">
-    <div id="disk-config-items">
-        {{ if .Config.Monitoring.Disk }} {{ range $id, $disk :=
-        .Config.Monitoring.Disk }}
-        <div class="config-item mb-3">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-{{ $disk.Icon }} item-icon me-2"></i>
-                <span class="config-item-name"><strong class="me-2">{{ $id }}</strong></span>
-                <span class="me-2 text-muted config-item-path"
-                    >(<code>{{ $disk.Path }}</code>)</span
-                >
-                <span class="me-2">Threshold: {{ $disk.Threshold }}%</span>
-                <button
-                    type="button"
-                    class="delete-disk-btn ms-auto p-0 btn btn-link"
-                    style="color: #dc3545; border: none; background: none"
-                    data-id="{{ $id }}"
-                    data-group="disk"
-                    data-detail="{{ $id }} ({{ $disk.Path }})"
-                    title="Delete"
-                    aria-label="Delete disk monitor {{ $id }} at path {{ $disk.Path }}"
-                >
-                    <i class="bi bi-trash" aria-hidden="true"></i>
-                </button>
-            </div>
-        </div>
-        {{ end }} {{ else }}
-        <div class="text-center text-muted">No disk monitors configured.</div>
-        {{ end }}
-    </div>
-    <hr />
-    <h5>Add Disk Monitor</h5>
+    <h6>Add Disk Monitor</h6>
     <form id="add-disk-form" aria-label="Add Disk Monitor">
         <div class="row align-items-center mb-2">
             <label for="disk-name" class="col-sm-4 col-form-label"
@@ -100,5 +70,38 @@
             </button>
         </div>
     </form>
+
+    <hr />
+    <div id="disk-config-items">
+        {{ if .Config.Monitoring.Disk }} {{ range $id, $disk :=
+        .Config.Monitoring.Disk }}
+        <div class="config-item mb-3">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-{{ $disk.Icon }} item-icon me-2"></i>
+                <span class="config-item-name"
+                    ><strong class="me-2">{{ $id }}</strong></span
+                >
+                <span class="me-2 text-muted config-item-path"
+                    >(<code>{{ $disk.Path }}</code>)</span
+                >
+                <span class="me-2">Threshold: {{ $disk.Threshold }}%</span>
+                <button
+                    type="button"
+                    class="delete-disk-btn ms-auto p-0 btn btn-link"
+                    style="color: #dc3545; border: none; background: none"
+                    data-id="{{ $id }}"
+                    data-group="disk"
+                    data-detail="{{ $id }} ({{ $disk.Path }})"
+                    title="Delete"
+                    aria-label="Delete disk monitor {{ $id }} at path {{ $disk.Path }}"
+                >
+                    <i class="bi bi-trash" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+        {{ end }} {{ else }}
+        <div class="text-center text-muted">No disk monitors configured.</div>
+        {{ end }}
+    </div>
 </div>
 {{ end }}

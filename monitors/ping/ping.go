@@ -133,7 +133,7 @@ func (pm Monitor) Check(ctx context.Context) monitors.Result {
 }
 
 func (pm Monitor) DisplayName() string {
-	return fmt.Sprintf("Ping: %s", pm.name)
+	return fmt.Sprintf("Ping: %s (%s)", pm.name, pm.address)
 }
 
 func (pm Monitor) Group() string {

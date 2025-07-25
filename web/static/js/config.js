@@ -206,17 +206,99 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   if (typeof default_health_icon !== "undefined") {
     renderIconDropdown(
-      "health-icon-dropdown",
-      "health-icon-select",
+      "monitor-icon-dropdown",
+      "monitor-icon-select",
       default_health_icon,
     );
   }
-  if (typeof default_ping_icon !== "undefined") {
-    renderIconDropdown(
-      "ping-icon-dropdown",
-      "ping-icon-select",
-      default_ping_icon,
-    );
+  
+  // Handle monitor type toggle
+  const httpRadio = document.getElementById("monitor-type-http");
+  const pingRadio = document.getElementById("monitor-type-ping");
+  const targetLabel = document.getElementById("monitor-target-label");
+  const targetField = document.getElementById("monitor-target");
+  const timeoutLabel = document.getElementById("monitor-timeout-label");
+  const timeoutField = document.getElementById("monitor-timeout");
+  const amberThresholdRow = document.getElementById("amber-threshold-row");
+  const amberThresholdField = document.getElementById("monitor-amber-threshold");
+  const submitButton = document.getElementById("add-monitor-button");
+  
+  function updateFormForType(type) {
+    if (type === "ping") {
+      // Update labels and fields for ping
+      targetLabel.textContent = "Address";
+      targetField.type = "text";
+      targetField.placeholder = "e.g., google.com or 8.8.8.8";
+      targetField.setAttribute("aria-label", "Ping address (IP or hostname)");
+      timeoutLabel.textContent = "Timeout (ms)";
+      timeoutField.value = "100";
+      timeoutField.min = "100";
+      timeoutField.max = "30000";
+      timeoutField.setAttribute("aria-label", "Ping timeout in milliseconds");
+      amberThresholdRow.style.display = "flex";
+      amberThresholdField.required = true;
+      submitButton.textContent = "Add Ping Monitor";
+      
+      // Update icon dropdown to use ping icon if available
+      if (typeof default_ping_icon !== "undefined") {
+        const iconSelect = document.getElementById("monitor-icon-select");
+        if (iconSelect) {
+          iconSelect.value = default_ping_icon;
+          if (window.$ && typeof window.$.fn.selectpicker === "function") {
+            window.$(iconSelect).selectpicker("refresh");
+          }
+        }
+      }
+    } else {
+      // Update labels and fields for HTTP
+      targetLabel.textContent = "URL";
+      targetField.type = "url";
+      targetField.placeholder = "";
+      targetField.setAttribute("aria-label", "Health check URL");
+      timeoutLabel.textContent = "Timeout (seconds)";
+      timeoutField.value = "10";
+      timeoutField.min = "1";
+      timeoutField.removeAttribute("max");
+      timeoutField.setAttribute("aria-label", "Health check timeout in seconds");
+      amberThresholdRow.style.display = "none";
+      amberThresholdField.required = false;
+      submitButton.textContent = "Add Health Check";
+      
+      // Update icon dropdown to use health icon if available
+      if (typeof default_health_icon !== "undefined") {
+        const iconSelect = document.getElementById("monitor-icon-select");
+        if (iconSelect) {
+          iconSelect.value = default_health_icon;
+          if (window.$ && typeof window.$.fn.selectpicker === "function") {
+            window.$(iconSelect).selectpicker("refresh");
+          }
+        }
+      }
+    }
+  }
+  
+  // Initialize form based on default selection
+  if (httpRadio && httpRadio.checked) {
+    updateFormForType("http");
+  } else if (pingRadio && pingRadio.checked) {
+    updateFormForType("ping");
+  }
+  
+  // Add change listeners for radio buttons
+  if (httpRadio) {
+    httpRadio.addEventListener("change", function() {
+      if (this.checked) {
+        updateFormForType("http");
+      }
+    });
+  }
+  
+  if (pingRadio) {
+    pingRadio.addEventListener("change", function() {
+      if (this.checked) {
+        updateFormForType("ping");
+      }
+    });
   }
 });
 
@@ -338,122 +420,81 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Add health check form submission
-  const addHealthForm = document.getElementById("add-health-form");
-  if (addHealthForm) {
-    addHealthForm.addEventListener("submit", async function (e) {
+  // Add unified monitor form submission
+  const addMonitorForm = document.getElementById("add-monitor-form");
+  if (addMonitorForm) {
+    addMonitorForm.addEventListener("submit", async function (e) {
       e.preventDefault();
 
-      const healthNameInput = document.getElementById("health-name");
-      const healthUrlInput = document.getElementById("health-url");
-      const healthTimeoutInput = document.getElementById("health-timeout");
-      const healthIconInput = document.getElementById("health-icon-select");
-      if (
-        !healthNameInput ||
-        !healthUrlInput ||
-        !healthTimeoutInput ||
-        !healthIconInput
-      ) {
-        showToast("Error", "Healthcheck form fields missing", true);
+      const nameInput = document.getElementById("monitor-name");
+      const targetInput = document.getElementById("monitor-target");
+      const timeoutInput = document.getElementById("monitor-timeout");
+      const iconInput = document.getElementById("monitor-icon-select");
+      const typeRadio = document.querySelector('input[name="monitor-type"]:checked');
+      
+      if (!nameInput || !targetInput || !timeoutInput || !iconInput || !typeRadio) {
+        showToast("Error", "Monitor form fields missing", "danger");
         return;
       }
 
-      const healthConfig = {
-        name: healthNameInput.value,
-        url: healthUrlInput.value,
-        timeout: parseInt(healthTimeoutInput.value),
-        icon: healthIconInput.value,
-      };
+      const monitorType = typeRadio.value;
+      const name = nameInput.value.trim();
+      const target = targetInput.value.trim();
+      const timeout = parseInt(timeoutInput.value);
+      const icon = iconInput.value;
 
-      try {
-        await fetchJson(
-          `/api/config/health/${encodeURIComponent(healthConfig.name)}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              url: healthConfig.url,
-              icon: healthConfig.icon,
-              timeout: parseInt(healthConfig.timeout),
-            }),
-          },
-        );
-        // Persist toast info before reload
-        localStorage.setItem(
-          "pendingToast",
-          JSON.stringify({
-            title: "Success",
-            message: "Health check added",
-            type: "success",
-          }),
-        );
-        window.location.reload();
-      } catch (error) {
-        handleFetchError(error, "Failed to add health check");
-      }
-    });
-  }
-
-  // Add ping form submission
-  const addPingForm = document.getElementById("add-ping-form");
-  if (addPingForm) {
-    addPingForm.addEventListener("submit", async function (e) {
-      e.preventDefault();
-
-      const pingNameInput = document.getElementById("ping-name");
-      const pingAddressInput = document.getElementById("ping-address");
-      const pingTimeoutInput = document.getElementById("ping-timeout");
-      const pingAmberThresholdInput = document.getElementById("ping-amber-threshold");
-      const pingIconInput = document.getElementById("ping-icon-select");
-      if (
-        !pingNameInput ||
-        !pingAddressInput ||
-        !pingTimeoutInput ||
-        !pingAmberThresholdInput ||
-        !pingIconInput
-      ) {
-        showToast("Error", "Ping form fields missing", true);
+      if (!name) {
+        showToast("Error", "Monitor name is required", "danger");
         return;
       }
 
-      const pingConfig = {
-        name: pingNameInput.value,
-        address: pingAddressInput.value,
-        timeout: parseInt(pingTimeoutInput.value),
-        amberThreshold: parseInt(pingAmberThresholdInput.value),
-        icon: pingIconInput.value,
-      };
-
       try {
-        await fetchJson(
-          `/api/config/ping/${encodeURIComponent(pingConfig.name)}`,
-          {
+        if (monitorType === "ping") {
+          const amberThresholdInput = document.getElementById("monitor-amber-threshold");
+          if (!amberThresholdInput) {
+            showToast("Error", "Amber threshold field missing", "danger");
+            return;
+          }
+          const amberThreshold = parseInt(amberThresholdInput.value);
+          
+          await fetchJson(`/api/config/ping/${encodeURIComponent(name)}`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              address: pingConfig.address,
-              timeout: parseInt(pingConfig.timeout),
-              amberThreshold: parseInt(pingConfig.amberThreshold),
-              icon: pingConfig.icon,
+              address: target,
+              timeout: timeout,
+              amberThreshold: amberThreshold,
+              icon: icon,
             }),
-          },
-        );
-        // Persist toast info before reload
-        localStorage.setItem(
-          "pendingToast",
-          JSON.stringify({
+          });
+          
+          localStorage.setItem("pendingToast", JSON.stringify({
             title: "Success",
             message: "Ping monitor added",
             type: "success",
-          }),
-        );
+          }));
+        } else {
+          // HTTP health check
+          await fetchJson(`/api/config/health/${encodeURIComponent(name)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: target,
+              timeout: timeout,
+              icon: icon,
+            }),
+          });
+          
+          localStorage.setItem("pendingToast", JSON.stringify({
+            title: "Success",
+            message: "Health check added",
+            type: "success",
+          }));
+        }
+        
         window.location.reload();
       } catch (error) {
-        handleFetchError(error, "Failed to add ping monitor");
+        handleFetchError(error, `Failed to add ${monitorType === "ping" ? "ping monitor" : "health check"}`);
       }
     });
   }
