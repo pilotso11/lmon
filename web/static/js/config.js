@@ -144,6 +144,8 @@ const iconChoices = [
   { name: "graph-up", icon: "graph-up" },
   { name: "router", icon: "router" },
   { name: "wifi", icon: "wifi" },
+  { name: "arrow-left-right", icon: "arrow-left-right" },
+  { name: "arrow-up-down", icon: "arrow-up-down" },
   { name: "house", icon: "house" },
   { name: "building", icon: "building" },
   { name: "lightning", icon: "lightning" },
