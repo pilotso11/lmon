@@ -37,6 +37,9 @@ var (
 	//go:embed test/changed_edit_healthcheck.yaml
 	changedYamlEditHealthcheck string
 
+	//go:embed test/sample_ping.yaml
+	samplePingYaml string
+
 	//go:embed test/default.env
 	defaultEnv string
 
@@ -133,6 +136,22 @@ func TestAddFolders(t *testing.T) {
 
 	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test"}
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddDisk)
+}
+
+func TestAddPing(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	assert.NoError(t, err, "no error loading config")
+
+	cfg.Monitoring.Ping["ping_sample"] = PingConfig{
+		Address:        "8.8.8.8",
+		Timeout:        1000,
+		Icon:           "wifi",
+		AmberThreshold: 100,
+	}
+	saveAndCheckContent(t, loader, cfg, testFile, samplePingYaml)
 }
 
 func TestAddHealthcheck(t *testing.T) {

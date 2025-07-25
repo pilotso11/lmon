@@ -1,71 +1,63 @@
 <!doctype html>
 <html lang="en">
-{{ template "header" . }}
-<body>
-{{ template "nav" . }}
+    {{ template "header" . }}
+    <body>
+        {{ template "nav" . }}
 
-<div class="container mt-4">
-    <h1 class="mb-4">Configuration</h1>
+        <div class="container mt-4">
+            <h1 class="mb-4">Configuration</h1>
 
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card">
-                {{ template "config-system-monitoring" . }}
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        {{ template "config-system-monitoring" . }}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">{{ template "config-webhook" . }}</div>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card">{{ template "config-disk-list" . }}</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        {{ template "config-health-list" . }}
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="col-md-6">
-            <div class="card">
-                {{ template "config-webhook" . }}
 
-            </div>
-        </div>
-    </div>
-
-    <div class="row mt-4">
-        <div class="col-md-6">
-            <div class="card">
-                {{ template "config-disk-list" . }}
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card">
-                {{ template "config-health-list" . }}
-            </div>
-        </div>
-    </div>
-        </div>
-    </div>
-</div>
-</div>
-
-<!-- Success/Error Toast -->
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-    <div
-            id="toast"
-            class="toast"
-            role="alert"
-            aria-live="assertive"
-            aria-atomic="true"
-    >
-        <div class="toast-header">
-            <strong class="me-auto" id="toast-title"
-            >Notification</strong
+        <!-- Success/Error Toast -->
+        <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+            <div
+                id="toast"
+                class="toast"
+                role="alert"
+                aria-live="assertive"
+                aria-atomic="true"
             >
-            <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="toast"
-                    aria-label="Close"
-            ></button>
+                <div class="toast-header">
+                    <strong class="me-auto" id="toast-title"
+                        >Notification</strong
+                    >
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="toast"
+                        aria-label="Close"
+                    ></button>
+                </div>
+                <div class="toast-body" id="toast-message">
+                    <!-- Message will be set by JavaScript -->
+                </div>
+            </div>
         </div>
-        <div class="toast-body" id="toast-message">
-            <!-- Message will be set by JavaScript -->
-        </div>
-    </div>
-</div>
 
-{{ template "footer" . }}
-<!-- Your config.js (after everything else) -->
-<script type="module" src="/static/js/config.js"></script>
-</body>
+        {{ template "footer" . }}
+        <!-- Your config.js (after everything else) -->
+        <script type="module" src="/static/js/config.js"></script>
+    </body>
 </html>
