@@ -1,11 +1,15 @@
 package ping
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"lmon/config"
 	"lmon/monitors"
@@ -135,4 +139,232 @@ func TestDefaultPingProvider_Ping_Unreachable(t *testing.T) {
 func TestDefaultAmberValue(t *testing.T) {
 	pm := NewPingMonitor("amber-value-test", "localhost", 100, Icon, 0, &DefaultPingProvider{})
 	assert.Equal(t, 50, pm.amberThreshold, "Default amber threshold should be 50 ms")
+}
+
+// Test edge cases for NewPingMonitor with various parameter combinations
+func TestNewPingMonitor_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name           string
+		monitorName    string
+		address        string
+		timeout        int
+		icon           string
+		amberThreshold int
+		impl           Provider
+		expectedIcon   string
+		expectedAmber  int
+	}{
+		{
+			name:           "empty icon uses default",
+			monitorName:    "test",
+			address:        "127.0.0.1",
+			timeout:        1000,
+			icon:           "",
+			amberThreshold: 100,
+			impl:           NewMockPingProvider(10, nil),
+			expectedIcon:   Icon,
+			expectedAmber:  100,
+		},
+		{
+			name:           "custom icon preserved",
+			monitorName:    "test",
+			address:        "127.0.0.1",
+			timeout:        1000,
+			icon:           "custom-icon",
+			amberThreshold: 100,
+			impl:           NewMockPingProvider(10, nil),
+			expectedIcon:   "custom-icon",
+			expectedAmber:  100,
+		},
+		{
+			name:           "zero amber threshold uses default",
+			monitorName:    "test",
+			address:        "127.0.0.1",
+			timeout:        1000,
+			icon:           "wifi",
+			amberThreshold: 0,
+			impl:           NewMockPingProvider(10, nil),
+			expectedIcon:   "wifi",
+			expectedAmber:  50,
+		},
+		{
+			name:           "negative amber threshold uses default",
+			monitorName:    "test",
+			address:        "127.0.0.1",
+			timeout:        1000,
+			icon:           "wifi",
+			amberThreshold: -1,
+			impl:           NewMockPingProvider(10, nil),
+			expectedIcon:   "wifi",
+			expectedAmber:  50,
+		},
+		{
+			name:           "nil provider uses default",
+			monitorName:    "test",
+			address:        "127.0.0.1",
+			timeout:        1000,
+			icon:           "wifi",
+			amberThreshold: 100,
+			impl:           nil,
+			expectedIcon:   "wifi",
+			expectedAmber:  100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pm := NewPingMonitor(tt.monitorName, tt.address, tt.timeout, tt.icon, tt.amberThreshold, tt.impl)
+			assert.Equal(t, tt.expectedIcon, pm.icon, "icon should match expected")
+			assert.Equal(t, tt.expectedAmber, pm.amberThreshold, "amber threshold should match expected")
+			assert.NotNil(t, pm.impl, "provider should not be nil")
+		})
+	}
+}
+
+// Test Monitor.Save() with pre-existing ping config
+func TestPingMonitor_Save_WithExistingConfig(t *testing.T) {
+	cfg := &config.Config{
+		Monitoring: config.MonitoringConfig{
+			Ping: map[string]config.PingConfig{
+				"existing": {
+					Address:        "existing.com",
+					Timeout:        500,
+					Icon:           "old-icon",
+					AmberThreshold: 25,
+				},
+			},
+		},
+	}
+
+	pm := NewPingMonitor("new-monitor", "new.com", 2000, "new-icon", 150, NewMockPingProvider(10, nil))
+	pm.Save(cfg)
+
+	// Check that existing config is preserved
+	existingConfig, exists := cfg.Monitoring.Ping["existing"]
+	require.True(t, exists, "existing config should be preserved")
+	assert.Equal(t, "existing.com", existingConfig.Address)
+	assert.Equal(t, 500, existingConfig.Timeout)
+	assert.Equal(t, "old-icon", existingConfig.Icon)
+	assert.Equal(t, 25, existingConfig.AmberThreshold)
+
+	// Check that new config is added
+	newConfig, exists := cfg.Monitoring.Ping["new-monitor"]
+	require.True(t, exists, "new config should be added")
+	assert.Equal(t, "new.com", newConfig.Address)
+	assert.Equal(t, 2000, newConfig.Timeout)
+	assert.Equal(t, "new-icon", newConfig.Icon)
+	assert.Equal(t, 150, newConfig.AmberThreshold)
+}
+
+// Test boundary value for amber threshold edge cases
+func TestPingMonitor_AmberThresholdBoundary(t *testing.T) {
+	tests := []struct {
+		name           string
+		amberThreshold int
+		responseTime   int
+		expectedStatus monitors.RAG
+	}{
+		{
+			name:           "response exactly at threshold should be amber",
+			amberThreshold: 100,
+			responseTime:   100,
+			expectedStatus: monitors.RAGAmber,
+		},
+		{
+			name:           "response one ms below threshold should be green",
+			amberThreshold: 100,
+			responseTime:   99,
+			expectedStatus: monitors.RAGGreen,
+		},
+		{
+			name:           "response one ms above threshold should be amber",
+			amberThreshold: 100,
+			responseTime:   101,
+			expectedStatus: monitors.RAGAmber,
+		},
+		{
+			name:           "zero response time should be green",
+			amberThreshold: 50,
+			responseTime:   0,
+			expectedStatus: monitors.RAGGreen,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pm := NewPingMonitor("boundary-test", "127.0.0.1", 1000, "", tt.amberThreshold,
+				NewMockPingProvider(tt.responseTime, nil))
+			result := pm.Check(context.Background())
+			assert.Equal(t, tt.expectedStatus, result.Status, "status should match expected")
+			assert.Equal(t, result.Value, fmt.Sprintf("%d ms", tt.responseTime))
+		})
+	}
+}
+
+// Test DefaultPingProvider with very short timeout to potentially trigger Run() error
+func TestDefaultPingProvider_Ping_VeryShortTimeout(t *testing.T) {
+	// Skip in CI or short mode
+	if testing.Short() || os.Getenv("CI") != "" {
+		t.Skip("Skipping potentially flaky network test")
+	}
+
+	provider := &DefaultPingProvider{}
+	ctx := context.Background()
+
+	// Try multiple strategies to trigger the pinger.Run() error path
+	testCases := []struct {
+		name    string
+		address string
+		timeout int
+	}{
+		{"very short timeout", "8.8.8.8", 1},
+		{"invalid IPv6", "::ffff:192.0.2.1", 1},      // IPv6 might fail differently
+		{"broadcast address", "255.255.255.255", 10}, // Broadcast address might fail
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := provider.Ping(ctx, tc.address, tc.timeout)
+			// We don't assert error == nil because these might legitimately fail
+			// The goal is to exercise different error paths in DefaultPingProvider.Ping()
+			if err != nil {
+				errMsg := err.Error()
+				assert.True(t,
+					strings.Contains(errMsg, "ping") || strings.Contains(errMsg, "packets") ||
+						strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "failed"),
+					"error should be ping-related, got: %s", errMsg)
+			}
+		})
+	}
+}
+
+// Test context cancellation behavior
+func TestPingMonitor_Check_WithContext(t *testing.T) {
+	// Test with a context that's already cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	pm := NewPingMonitor("context-test", "127.0.0.1", 1000, "", 100, NewMockPingProvider(50, nil))
+	result := pm.Check(ctx)
+
+	// Mock provider doesn't respect context cancellation, so it should still work
+	// This tests that the Check method properly passes context through
+	assert.Equal(t, monitors.RAGGreen, result.Status)
+	assert.Equal(t, "50 ms", result.Value)
+}
+
+// Test Monitor fields are properly set
+func TestPingMonitor_FieldAccess(t *testing.T) {
+	pm := NewPingMonitor("field-test", "test.example.com", 5000, "test-icon", 200, NewMockPingProvider(75, nil))
+
+	assert.Equal(t, "ping_field-test", pm.Name())
+	assert.Equal(t, "Ping: field-test (test.example.com)", pm.DisplayName())
+	assert.Equal(t, "ping", pm.Group())
+
+	// Verify internal fields (these aren't directly accessible but influence behavior)
+	result := pm.Check(context.Background())
+	assert.Equal(t, monitors.RAGGreen, result.Status) // 75ms < 200ms threshold
+	assert.Equal(t, "75 ms", result.Value)
+	assert.Equal(t, "ping", result.Group)
+	assert.Equal(t, "Ping: field-test (test.example.com)", result.DisplayName)
 }

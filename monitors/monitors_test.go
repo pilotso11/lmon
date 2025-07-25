@@ -10,7 +10,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 	"go.uber.org/goleak"
+
+	"lmon/config"
 )
 
 // TestNewService verifies that a Service can be created, a monitor can be added, and checks are performed.
@@ -229,4 +232,151 @@ func TestRAG_String(t *testing.T) {
 	for _, tt := range tests {
 		assert.Equal(t, tt.expected, tt.rag.String(), "RAG(%d) string mismatch", tt.rag)
 	}
+}
+
+// TestService_SetPush tests the SetPush function for setting and clearing push callbacks
+func TestService_SetPush(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, time.Second, time.Second, nil)
+
+	// Test setting a push function (simple test without trigger to avoid race conditions)
+	pushCallCount := atomic.NewInt32(0)
+
+	pushFunc := func(ctx context.Context, m Monitor, prev, current Result) {
+		pushCallCount.Inc()
+	}
+
+	// Test SetPush functionality directly
+	svc.SetPush(pushFunc)
+	assert.NotNil(t, svc.push, "push function should be set")
+
+	// Test clearing push function
+	svc.SetPush(nil)
+	assert.Nil(t, svc.push, "push function should be cleared")
+}
+
+// TestService_Size tests the Size function
+func TestService_Size(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, time.Second, time.Second, nil)
+
+	// Initially no monitors
+	assert.Equal(t, 0, svc.Size(), "should start with no monitors")
+
+	// Add monitors
+	m1 := NewMockMonitor("test1", "group1")
+	m2 := NewMockMonitor("test2", "group1")
+	m3 := NewMockMonitor("test3", "group2")
+
+	svc.Add(ctx, m1)
+	assert.Equal(t, 1, svc.Size(), "should have 1 monitor after adding first")
+
+	svc.Add(ctx, m2)
+	assert.Equal(t, 2, svc.Size(), "should have 2 monitors after adding second")
+
+	svc.Add(ctx, m3)
+	assert.Equal(t, 3, svc.Size(), "should have 3 monitors after adding third")
+
+	// Remove a monitor
+	err := svc.Remove(m2)
+	assert.NoError(t, err, "removing existing monitor should not error")
+	assert.Equal(t, 2, svc.Size(), "should have 2 monitors after removing one")
+
+	// Remove another monitor
+	err = svc.Remove(m1)
+	assert.NoError(t, err, "removing existing monitor should not error")
+	assert.Equal(t, 1, svc.Size(), "should have 1 monitor after removing another")
+
+	// Remove last monitor
+	err = svc.Remove(m3)
+	assert.NoError(t, err, "removing existing monitor should not error")
+	assert.Equal(t, 0, svc.Size(), "should have 0 monitors after removing all")
+}
+
+// TestService_Save tests the Save function with various monitor configurations
+func TestService_Save(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, time.Second, time.Second, nil)
+
+	// Create a mock config to save to
+	cfg := &config.Config{
+		Monitoring: config.MonitoringConfig{
+			Disk: map[string]config.DiskConfig{
+				"existing": {Path: "/existing", Threshold: 50},
+			},
+			Healthcheck: map[string]config.HealthcheckConfig{
+				"existing": {URL: "http://existing.com", Timeout: 1000},
+			},
+			Ping: map[string]config.PingConfig{
+				"existing": {Address: "existing.com", AmberThreshold: 50},
+			},
+		},
+	}
+
+	// Add some monitors
+	m1 := NewMockMonitor("monitor1", "group1")
+	m2 := NewMockMonitor("monitor2", "group2")
+	m3 := NewMockMonitor("monitor3", "group1")
+
+	svc.Add(ctx, m1)
+	svc.Add(ctx, m2)
+	svc.Add(ctx, m3)
+
+	// Save the configuration
+	err := svc.Save(cfg)
+	assert.NoError(t, err, "Save should not return an error")
+
+	// Verify that existing entries were cleared
+	assert.Empty(t, cfg.Monitoring.Disk, "existing disk config should be cleared")
+	assert.Empty(t, cfg.Monitoring.Healthcheck, "existing healthcheck config should be cleared")
+	assert.Empty(t, cfg.Monitoring.Ping, "existing ping config should be cleared")
+
+	// The mock Save method is a no-op, but we can verify Save was called by checking that
+	// the function completed without error
+	// Since MockMonitor.Save() doesn't track calls, we just verify the operation succeeded
+}
+
+// TestService_Save_EmptyService tests Save with no monitors
+func TestService_Save_EmptyService(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, time.Second, time.Second, nil)
+
+	// Create a config with existing data
+	cfg := &config.Config{
+		Monitoring: config.MonitoringConfig{
+			Disk: map[string]config.DiskConfig{
+				"existing": {Path: "/existing", Threshold: 50},
+			},
+			Healthcheck: map[string]config.HealthcheckConfig{
+				"existing": {URL: "http://existing.com", Timeout: 1000},
+			},
+			Ping: map[string]config.PingConfig{
+				"existing": {Address: "existing.com", AmberThreshold: 50},
+			},
+		},
+	}
+
+	// Save with empty service
+	err := svc.Save(cfg)
+	assert.NoError(t, err, "Save should not return an error")
+
+	// Verify that existing entries were cleared but maps are initialized
+	assert.NotNil(t, cfg.Monitoring.Disk, "disk config map should be initialized")
+	assert.Empty(t, cfg.Monitoring.Disk, "disk config should be empty")
+	assert.NotNil(t, cfg.Monitoring.Healthcheck, "healthcheck config map should be initialized")
+	assert.Empty(t, cfg.Monitoring.Healthcheck, "healthcheck config should be empty")
+	assert.NotNil(t, cfg.Monitoring.Ping, "ping config map should be initialized")
+	assert.Empty(t, cfg.Monitoring.Ping, "ping config should be empty")
 }

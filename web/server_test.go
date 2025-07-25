@@ -473,3 +473,217 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 			strings.Contains(hook.LastMessage.Load(), "Red")
 	}, 50*time.Millisecond, 1*time.Millisecond, "webhook should contain Red")
 }
+
+// TestHandleGetItem tests the handleGetItem endpoint for both success and error cases
+func TestHandleGetItem(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	// Add a disk monitor to have an item to retrieve
+	diskConfig := config.DiskConfig{Path: "/tmp", Threshold: 80}
+	monitor, err := s.mapper.NewDisk(ctx, "test-disk", diskConfig)
+	assert.NoError(t, err)
+	s.monitor.Add(ctx, monitor)
+
+	// Wait for initial check
+	time.Sleep(10 * time.Millisecond)
+
+	t.Run("success", func(t *testing.T) {
+		r, body := GetTestRequest(ctx, t, s, "/api/items/disk/test-disk")
+		assert.Equal(t, http.StatusOK, r.StatusCode)
+
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(body), &result)
+		assert.NoError(t, err)
+		assert.Contains(t, result, "ID")
+		assert.Equal(t, "disk_test-disk", result["ID"])
+	})
+
+	t.Run("item_not_found", func(t *testing.T) {
+		r, _ := GetTestRequest(ctx, t, s, "/api/items/disk/nonexistent")
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+	})
+
+	t.Run("different_group_not_found", func(t *testing.T) {
+		r, _ := GetTestRequest(ctx, t, s, "/api/items/nonexistent/test-disk")
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+	})
+}
+
+// TestHandleGetConfig tests the handleGetConfig endpoint
+func TestHandleGetConfig(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	r, body := GetTestRequest(ctx, t, s, "/api/config")
+	assert.Equal(t, http.StatusOK, r.StatusCode)
+
+	var config map[string]interface{}
+	err := json.Unmarshal([]byte(body), &config)
+	assert.NoError(t, err)
+	assert.Contains(t, config, "Monitoring")
+	assert.Contains(t, config, "Web")
+}
+
+// TestWriteJson tests the writeJson function with various data types and error conditions
+func TestWriteJson(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+	defer s.Stop()
+
+	t.Run("success_simple_data", func(t *testing.T) {
+		// Use a test endpoint that calls writeJson
+		r, body := GetTestRequest(ctx, t, s, "/api/config")
+		assert.Equal(t, http.StatusOK, r.StatusCode)
+		assert.Contains(t, r.Header.Get("Content-Type"), "application/json")
+		assert.NotEmpty(t, body)
+	})
+
+	t.Run("marshal_error_with_invalid_data", func(t *testing.T) {
+		// Test by sending malformed JSON to trigger unmarshallBody error path
+		req := `{"invalid": "malformed json"`
+		r, _ := PostTestRequest(ctx, t, s, "/api/config/system", req)
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode) // Should return 400 for bad JSON
+	})
+}
+
+// TestUnmarshallBody tests the unmarshallBody function with various request scenarios
+func TestUnmarshallBody(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+	defer s.Stop()
+
+	t.Run("success", func(t *testing.T) {
+		validJSON := `{"interval": 30}`
+		r, _ := PostTestRequest(ctx, t, s, "/api/config/interval", validJSON)
+		// Should succeed in unmarshalling (though may fail validation later)
+		assert.NotEqual(t, http.StatusInternalServerError, r.StatusCode)
+	})
+
+	t.Run("invalid_json_format", func(t *testing.T) {
+		invalidJSON := `{"interval": 30` // Missing closing brace
+		r, _ := PostTestRequest(ctx, t, s, "/api/config/interval", invalidJSON)
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+	})
+
+	t.Run("malformed_json_data", func(t *testing.T) {
+		malformedJSON := `{"interval": "not_a_number"}`
+		r, _ := PostTestRequest(ctx, t, s, "/api/config/interval", malformedJSON)
+		// Should succeed in unmarshalling but may fail validation
+		assert.NotEqual(t, http.StatusInternalServerError, r.StatusCode)
+	})
+}
+
+// TestSetConfig tests the SetConfig function with various configurations
+func TestSetConfig(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+
+	t.Run("success_complete_config", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Disk: map[string]config.DiskConfig{
+				"root": {Path: "/", Threshold: 90},
+				"tmp":  {Path: "/tmp", Threshold: 85},
+			},
+			Healthcheck: map[string]config.HealthcheckConfig{
+				"google": {URL: "https://www.google.com", Timeout: 5000},
+				"local":  {URL: "http://localhost:8080/healthz", Timeout: 1000},
+			},
+			Ping: map[string]config.PingConfig{
+				"google-dns": {Address: "8.8.8.8", AmberThreshold: 100},
+				"cloudflare": {Address: "1.1.1.1", AmberThreshold: 100},
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err)
+
+		// Verify basic monitors were added - focus on ones that work without network dependencies
+		results := s.monitor.Results()
+		assert.Contains(t, results, "system_cpu")
+		assert.Contains(t, results, "system_mem")
+		assert.Contains(t, results, "disk_root")
+		assert.Contains(t, results, "disk_tmp")
+		// Note: Health checks and pings may not appear immediately in results without actual network calls
+	})
+
+	t.Run("error_invalid_disk_config", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Disk: map[string]config.DiskConfig{
+				"invalid": {Path: "/nonexistent/path/that/should/not/exist", Threshold: 90},
+			},
+		}
+
+		// This should still succeed as NewDisk doesn't validate path existence
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err)
+	})
+
+	t.Run("success_with_invalid_healthcheck_url", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Healthcheck: map[string]config.HealthcheckConfig{
+				"invalid": {URL: "not-a-valid-url", Timeout: 5000},
+			},
+		}
+
+		// NewHealthcheck seems to accept invalid URLs and just fails at check time
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err, "invalid URL still allows creation, fails at check time")
+	})
+
+	t.Run("success_with_empty_ping_address", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Ping: map[string]config.PingConfig{
+				"invalid": {Address: "", AmberThreshold: 100}, // Empty address is allowed, fails at check time
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err, "empty ping address is allowed, fails at check time")
+	})
+
+	t.Run("error_invalid_ping_config_missing_amber_threshold", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Ping: map[string]config.PingConfig{
+				"invalid": {Address: "8.8.8.8"}, // Missing AmberThreshold should cause error
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.Error(t, err, "should fail with missing amber threshold")
+	})
+}

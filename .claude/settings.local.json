@@ -3,7 +3,9 @@
     "allow": [
       "Bash(go test:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(go tool cover:*)"
     ],
     "deny": []
   }
