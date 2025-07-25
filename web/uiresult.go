@@ -5,6 +5,7 @@ import (
 	"lmon/monitors"
 	"lmon/monitors/disk"
 	"lmon/monitors/healthcheck"
+	"lmon/monitors/ping"
 	"lmon/monitors/system"
 )
 
@@ -44,6 +45,16 @@ func newUIResult(id string, item monitors.Result, c *config.Config) UIResult {
 		for k, h := range c.Monitoring.Healthcheck {
 			if item.Group+"_"+k == id {
 				icon = h.Icon
+				break
+			}
+		}
+	case ping.Group:
+		typeLabel = "Ping"
+		icon = ping.Icon // fallback to the default ping icon
+		for k, p := range c.Monitoring.Ping {
+			if item.Group+"_"+k == id {
+				icon = p.Icon
+				threshold = p.AmberThreshold
 				break
 			}
 		}
