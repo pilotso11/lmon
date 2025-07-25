@@ -45,7 +45,7 @@ func TestPingMonitor_FailureRed(t *testing.T) {
 
 func TestPingMonitor_DisplayNameAndGroup(t *testing.T) {
 	pm := NewPingMonitor("display", "localhost", 1000, "", 100, NewMockPingProvider(10, nil))
-	assert.Equal(t, "Ping: display", pm.DisplayName(), "DisplayName")
+	assert.Equal(t, "Ping: display (localhost)", pm.DisplayName(), "DisplayName")
 	assert.Equal(t, "ping", pm.Group(), "Group")
 	assert.Equal(t, "ping_display", pm.Name(), "Name")
 }

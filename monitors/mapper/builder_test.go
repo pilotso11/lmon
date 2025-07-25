@@ -52,7 +52,7 @@ func TestMapper_NewPing(t *testing.T) {
 	})
 	assert.NoError(t, err, "should not error")
 	assert.Equal(t, "ping_pingtest", p.Name(), "should create ping monitor with correct name")
-	assert.Equal(t, "Ping: pingtest", p.DisplayName(), "display name should match")
+	assert.Equal(t, "Ping: pingtest (127.0.0.1)", p.DisplayName(), "display name should match")
 
 	// Test with mock provider
 	mockProvider := ping.NewMockPingProvider(42, nil)
@@ -65,7 +65,7 @@ func TestMapper_NewPing(t *testing.T) {
 	})
 	assert.NoError(t, err, "should not error with mock provider")
 	assert.Equal(t, "ping_mockping", p2.Name(), "should create ping monitor with correct name")
-	assert.Equal(t, "Ping: mockping", p2.DisplayName(), "display name should match")
+	assert.Equal(t, "Ping: mockping (localhost)", p2.DisplayName(), "display name should match")
 
 	// Error case: missing amberThreshold
 	p, err = m.NewPing(t.Context(), "badping", config.PingConfig{
