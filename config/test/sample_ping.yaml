@@ -1,0 +1,22 @@
+monitoring:
+    interval: 60
+    ping:
+        ping_sample:
+            address: 8.8.8.8
+            amberthreshold: 100
+            icon: wifi
+            timeout: 1000
+    system:
+        cpu:
+            icon: cpu
+            threshold: 90
+        memory:
+            icon: speedometer
+            threshold: 90
+        title: LMON Dashboard
+web:
+    host: 0.0.0.0
+    port: 8080
+webhook:
+    enabled: true
+    url: http://localhost:8080/testhook

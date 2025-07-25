@@ -259,24 +259,33 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	require.NoError(t, err, "find config link")
 	el.MustClick()
 
-	// Wait for the health check form to appear
-	_, err = page.Timeout(1 * time.Second).Element(`#add-health-form`)
-	require.NoError(t, err, "find health check form")
+	// Wait for the unified monitor form to appear
+	_, err = page.Timeout(1 * time.Second).Element(`#add-monitor-form`)
+	require.NoError(t, err, "find monitor form")
+
+	// HTTP should be selected by default, but verify
+	httpRadio, err := page.Element(`#monitor-type-http`)
+	require.NoError(t, err, "find http radio button")
+	if !httpRadio.MustProperty("checked").Bool() {
+		httpLabel, err := page.Element(`label[for="monitor-type-http"]`)
+		require.NoError(t, err, "find http radio button label")
+		httpLabel.MustClick()
+	}
 
 	// Fill out the Add Health Check form
-	el, err = page.Element(`#health-name`)
-	require.NoError(t, err, "find health check name input")
+	el, err = page.Element(`#monitor-name`)
+	require.NoError(t, err, "find monitor name input")
 	_ = el.MustInput("local")
-	el, err = page.Element(`#health-url`)
-	require.NoError(t, err, "find health check url input")
+	el, err = page.Element(`#monitor-target`)
+	require.NoError(t, err, "find monitor target input")
 	_ = el.Input("http://localhost:8080")
-	el, err = page.Element(`#health-timeout`)
-	require.NoError(t, err, "find health check timeout input")
+	el, err = page.Element(`#monitor-timeout`)
+	require.NoError(t, err, "find monitor timeout input")
 	_ = el.Input("10")
 
 	// Submit the form
-	el, err = page.Element(`#add-health-form button[type="submit"]`)
-	require.NoError(t, err, "find health check submit button")
+	el, err = page.Element(`#add-monitor-form button[type="submit"]`)
+	require.NoError(t, err, "find monitor submit button")
 	el.MustClick()
 
 	// Wait for the health check to appear in the config list
@@ -361,4 +370,167 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	assert.Panics(t, func() {
 		page.Timeout(1 * time.Second).MustElement(`#health-items .list-group-item[data-id="health_local"]`)
 	}, "Health check item 'local' should be gone from dashboard")
+}
+
+func TestAddPingViaConfigUIRod(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s, _ := web.StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	browser := getBrowser(t)
+	defer browser.Close()
+	page, err := browser.Page(proto.TargetCreateTarget{URL: s.ServerUrl})
+	require.NoError(t, err, "open page")
+	defer page.Close()
+
+	// Navigate to the config tab
+	el, err := page.Element(`a.nav-link[href="/config"]`)
+	require.NoError(t, err, "find config link")
+	el.MustClick()
+
+	// Wait for the unified monitor form to appear
+	_, err = page.Timeout(1 * time.Second).Element(`#add-monitor-form`)
+	require.NoError(t, err, "find monitor form")
+
+	// Switch to ping mode
+	el, err = page.Element(`label[for="monitor-type-ping"]`)
+	require.NoError(t, err, "find ping radio button label")
+	el.MustClick()
+
+	// Fill out the Add Ping Monitor form
+	el, err = page.Element(`#monitor-name`)
+	require.NoError(t, err, "find monitor name input")
+	err = el.Input("google")
+	require.NoError(t, err, "input monitor name")
+	el, err = page.Element(`#monitor-target`)
+	require.NoError(t, err, "find monitor target input")
+	err = el.Input("8.8.8.8")
+	require.NoError(t, err, "input monitor target")
+	el, err = page.Element(`#monitor-timeout`)
+	require.NoError(t, err, "find monitor timeout input")
+	el.MustSelectAllText().MustInput("100")
+	el, err = page.Element(`#monitor-amber-threshold`)
+	require.NoError(t, err, "find monitor amber threshold input")
+	el.MustSelectAllText().MustInput("100")
+
+	// Wait for the icon dropdown to be initialized
+	_, err = page.Timeout(500 * time.Millisecond).Element(`#monitor-icon-select`)
+	if err != nil {
+		// Icon dropdown may not be required for form submission
+		t.Logf("Warning: monitor icon dropdown not found, continuing anyway")
+	}
+
+	// Submit the form
+	el, err = page.Element(`#add-monitor-form button[type="submit"]`)
+	require.NoError(t, err, "find monitor submit button")
+	el.MustClick()
+
+	// Wait for page to reload after form submission and then check config list
+	err = page.Timeout(time.Second).Reload()
+	require.NoError(t, err, "wait for reload after adding ping")
+
+	// Wait for the ping monitor to appear in the config list
+	require.Eventually(t, func() bool {
+		items, err := page.Elements(`#ping-config-items .config-item`)
+		if err != nil {
+			t.Logf("Error getting ping config items: %v", err)
+			return false
+		}
+		t.Logf("Found %d ping config items", len(items))
+		for i, item := range items {
+			nameSpan, err := item.Element(`.config-item-name`)
+			if err != nil {
+				t.Logf("Item %d: no name span found: %v", i, err)
+				continue
+			}
+			nameText, err := nameSpan.Text()
+			if err != nil {
+				t.Logf("Item %d: error getting name text: %v", i, err)
+				continue
+			}
+			addressSpan, err := item.Element(`.config-item-address`)
+			if err != nil {
+				t.Logf("Item %d: no address span found: %v", i, err)
+				continue
+			}
+			addressText, err := addressSpan.Text()
+			if err != nil {
+				t.Logf("Item %d: error getting address text: %v", i, err)
+				continue
+			}
+			t.Logf("Item %d: name='%s', address='%s'", i, nameText, addressText)
+			if nameText == "google" && addressText == "(8.8.8.8)" {
+				return true
+			}
+		}
+
+		// Also check if "No ping monitors configured" is shown
+		_, err = page.ElementR(`#ping-config-items`, "No ping monitors configured")
+		if err == nil {
+			t.Logf("Found 'No ping monitors configured' message")
+		}
+
+		return false
+	}, 3*time.Second, 100*time.Millisecond, "wait for ping item in config list")
+
+	// Navigate back to dashboard
+	el, err = page.Element(`a.nav-link[href="/"]`)
+	require.NoError(t, err, "find dashboard link")
+	el.MustClick()
+
+	// Wait for dashboard ping items to appear
+	_, err = page.Timeout(1 * time.Second).Element(`#ping-items`)
+	require.NoError(t, err, "find ping items")
+
+	// Wait for the ping monitor item to appear in the dashboard
+	_, err = page.Timeout(1 * time.Second).Element(`#ping-items .list-group-item[data-id="ping_google"]`)
+	require.NoError(t, err, "find ping monitor item in dashboard")
+
+	// Assert its presence
+	pingItem, err := page.Element(`#ping-items .list-group-item[data-id="ping_google"]`)
+	require.NoError(t, err, "find ping monitor item in dashboard")
+	assert.NotNil(t, pingItem, "Ping monitor item 'google' is present in dashboard")
+	pingText := pingItem.MustText()
+	assert.Contains(t, pingText, "google", "Ping monitor display name is shown")
+	assert.Regexp(t, `\d+(\.\d+)?\s*ms`, pingText, "Ping response time is shown")
+
+	// --- MOBILE PAGE CHECKS ---
+	el, err = page.Element(`a.nav-link[href="/mobile"]`)
+	require.NoError(t, err, "find mobile link")
+	el.MustClick()
+
+	page.Timeout(1 * time.Second).MustElement(`#mobile-items-list`)
+	pingMobile := page.MustElement(`#mobile-items-list .mobile-list-item[data-id="ping_google"]`)
+	pingMobileText := pingMobile.MustText()
+	assert.Contains(t, pingMobileText, "google", "Ping monitor display name is shown on mobile")
+	assert.Regexp(t, `\d+(\.\d+)?\s*ms`, pingMobileText, "Ping response time is shown on mobile")
+
+	// Go back to config and delete the ping monitor
+	el, err = page.Element(`a.nav-link[href="/config"]`)
+	require.NoError(t, err, "find config link")
+	el.MustClick()
+	_, err = page.Timeout(1 * time.Second).Element(`#ping-config-items`)
+	require.NoError(t, err, "find ping config items")
+	_, err = page.ElementR(`#ping-config-items .config-item`, "google")
+	require.NoError(t, err, "find ping item in config list")
+	el, err = page.Timeout(1 * time.Second).Element(`button.delete-ping-btn[data-id="google"]`)
+	require.NoError(t, err, "find ping delete button")
+	wait, handle := page.HandleDialog()
+	go el.MustClick()
+	_ = wait()
+	_ = handle(&proto.PageHandleJavaScriptDialog{Accept: true})
+
+	// Wait for ping monitor to be removed from config list
+	page.Timeout(1*time.Second).MustElementR(`#ping-config-items`, "No ping monitors configured")
+
+	// Go back to dashboard and verify ping monitor is gone
+	el, err = page.Element(`a.nav-link[href="/"]`)
+	require.NoError(t, err, "find dashboard link")
+	el.MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#ping-items`)
+	assert.Panics(t, func() {
+		page.Timeout(1 * time.Second).MustElement(`#ping-items .list-group-item[data-id="ping_google"]`)
+	}, "Ping monitor item 'google' should be gone from dashboard")
 }

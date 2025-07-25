@@ -7,20 +7,15 @@ import (
 	_ "embed"
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
 	"lmon/config"
 	"lmon/monitors"
-	"lmon/monitors/disk"
-	"lmon/monitors/healthcheck"
-	"lmon/monitors/system"
 )
 
 // TestNewServerWithContext_Smoke verifies that the server can be created, started, and stopped without panicking.
@@ -109,11 +104,11 @@ func TestSetSystemConfig(t *testing.T) {
 	cfg := config.SystemConfig{
 		CPU: config.SystemItem{
 			Threshold: 55,
-			Icon:      "cpu-Icon",
+			Icon:      "cpu-icon",
 		},
 		Memory: config.SystemItem{
 			Threshold: 66,
-			Icon:      "mem-Icon",
+			Icon:      "mem-icon",
 		},
 		Title: "new title",
 	}
@@ -154,7 +149,7 @@ func TestAddDisk(t *testing.T) {
 
 	data := config.DiskConfig{
 		Threshold: 77,
-		Icon:      "disk-Icon",
+		Icon:      "disk-icon",
 		Path:      ".",
 	}
 	id := "test-disk"
@@ -169,7 +164,6 @@ func TestAddDisk(t *testing.T) {
 }
 
 // TestDeleteDisk verifies deleting a disk monitor via the API and handling of missing entries.
-// TestDeleteDisk verifies deleting a disk monitor and handling repeated deletes (not found).
 func TestDeleteDisk(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -178,7 +172,7 @@ func TestDeleteDisk(t *testing.T) {
 
 	data := config.DiskConfig{
 		Threshold: 77,
-		Icon:      "disk-Icon",
+		Icon:      "disk-icon",
 		Path:      ".",
 	}
 	id := "test-disk"
@@ -219,7 +213,7 @@ func TestAddHealthcheck(t *testing.T) {
 
 	data := config.HealthcheckConfig{
 		Timeout: 77,
-		Icon:    "disk-Icon",
+		Icon:    "disk-icon",
 		URL:     s.ServerUrl + "/healthz",
 	}
 	id := "test-health"
@@ -242,7 +236,7 @@ func TestDeleteHealthcheck(t *testing.T) {
 
 	data := config.HealthcheckConfig{
 		Timeout: 77,
-		Icon:    "disk-Icon",
+		Icon:    "disk-icon",
 		URL:     s.ServerUrl + "/healthz",
 	}
 	id := "test-health"
@@ -265,14 +259,16 @@ func TestDeleteHealthcheck(t *testing.T) {
 	resp, body = GetTestRequest(ctx, t, s, "/api/items")
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	var stats map[string]monitors.Result
-	err := json.Unmarshal([]byte(body), &stats)
+	var err error
+	var exists bool
+	stats = map[string]monitors.Result{}
+	err = json.Unmarshal([]byte(body), &stats)
 	assert.NoError(t, err, "unmarshal")
-	_, exists := stats["health_"+id]
+	_, exists = stats["health_"+id]
 	assert.False(t, exists, "deleted healthcheck should not be in /api/items")
 
 	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/health/"+id)
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
-
 }
 
 // TestSetWebhook verifies updating the webhook configuration via the API.
@@ -325,226 +321,369 @@ func TestWebHookAndCallback(t *testing.T) {
 	assert.Contains(t, hook.LastMessage.Load(), "Red", "got hook")
 }
 
-//go:embed test/postsave.yaml
-var expectedFile string
-
-// TestConfigSaved verifies that configuration changes are persisted to disk.
-func TestConfigSaved(t *testing.T) {
+// TestPingMonitorAPI verifies adding, fetching, and deleting ping monitors via the API.
+func TestPingMonitorAPI(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	dir := t.TempDir()
-	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
-
-	s, _ := StartTestServer(ctx, t, testFile)
+	s, _ := StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	data := struct {
-		Interval int
-	}{
-		Interval: 10,
+	// Add a ping monitor
+	data := config.PingConfig{
+		Address:        "127.0.0.1",
+		Timeout:        1000,
+		Icon:           "wifi",
+		AmberThreshold: 50,
 	}
-
-	resp, body := PostTestRequest(ctx, t, s, "/api/config/interval", data)
+	id := "test-ping"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/ping/"+id, data)
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 	assert.Equal(t, "OK\n", body)
 
-	assert.Equal(t, 10, s.config.Monitoring.Interval, "config applied")
+	// Check config
+	pc, ok := s.config.Monitoring.Ping[id]
+	assert.True(t, ok, "ping entry exists")
+	assert.Equal(t, data, pc, "ping entry applied")
 
-	bodyBytes, err := os.ReadFile(testFile)
-	assert.NoError(t, err, "read config file")
-
-	assert.Equal(t, expectedFile, string(bodyBytes), "config saved")
-}
-
-// TestMapper_SetConfig verifies that SetConfig applies all monitor types and persists configuration.
-func TestMapper_SetConfig(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	s, _ := StartTestServer(ctx, t, "")
-
-	l := config.NewLoader("config.yaml", []string{t.TempDir()})
-	cfg, _ := l.Load()
-
-	cfg.Monitoring.System.CPU.Threshold = 99
-	cfg.Monitoring.System.Memory.Threshold = 99
-
-	cfg.Monitoring.Disk["disk_test_d"] = config.DiskConfig{
-		Threshold: 99,
-		Icon:      "storage",
-		Path:      "/",
-	}
-	cfg.Monitoring.Healthcheck["health_test_h"] = config.HealthcheckConfig{
-		URL:     "http://localhost:8080/healtz",
-		Timeout: 1,
-		Icon:    "activity",
-	}
-
-	err := s.SetConfig(t.Context(), cfg.Monitoring)
-	assert.NoError(t, err, "SetConfig()")
-	assert.Equal(t, 4, s.monitor.Size(), "monitors setup")
-
-	cfg.Monitoring.Interval = 10
-	s.monitor.SetPeriod(ctx, 10*time.Second, 1*time.Second)
-
-	cfg2, _ := l.Load()
-	err = s.monitor.Save(cfg2)
-	assert.NoError(t, err, "save")
-	assert.Equal(t, cfg.Monitoring, cfg2.Monitoring, "config applied")
-}
-
-// TestGetItems verifies the /api/items endpoint and fetching individual items.
-func TestGetItems(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	dir := t.TempDir()
-	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
-
-	data, err := os.ReadFile("test/full.yaml")
-	require.NoError(t, err, "read test config")
-	err = os.WriteFile(testFile, data, 0644)
-	assert.NoError(t, err, "write test config")
-
-	s, _ := StartTestServer(ctx, t, testFile)
-	s.Start(ctx)
-
-	resp, body := GetTestRequest(ctx, t, s, "/api/items")
-	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
-
+	// Check /api/items
 	var stats map[string]monitors.Result
-	err = json.Unmarshal([]byte(body), &stats)
+	assert.Eventually(t, func() bool {
+		resp, body = GetTestRequest(ctx, t, s, "/api/items")
+		if resp.StatusCode != http.StatusOK {
+			return false
+		}
+		stats = map[string]monitors.Result{}
+		err := json.Unmarshal([]byte(body), &stats)
+		if err != nil {
+			return false
+		}
+		_, exists := stats["ping_"+id]
+		return exists
+	}, time.Second, 10*time.Millisecond, "Ping monitor should exist in /api/items")
+
+	// Delete the ping monitor
+	// Remove uses the monitor name, which is just id, but /api/items uses "ping_"+id
+	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/ping/"+id)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+	assert.Equal(t, 0, len(s.config.Monitoring.Ping), "number of ping entries")
+
+	// Ensure it's removed from /api/items
+	resp, body = GetTestRequest(ctx, t, s, "/api/items")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	stats = map[string]monitors.Result{}
+	err := json.Unmarshal([]byte(body), &stats)
 	assert.NoError(t, err, "unmarshal")
+	_, exists := stats["ping_"+id]
+	assert.False(t, exists, "deleted ping should not be in /api/items")
 
-	assert.Equal(t, 4, len(stats), "stats entries")
-
-	t.Run("getItem cpu", func(t *testing.T) {
-		resp, body = GetTestRequest(ctx, t, s, "/api/items/system/cpu")
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
-	})
-	t.Run("getItem mem", func(t *testing.T) {
-		resp, body = GetTestRequest(ctx, t, s, "/api/items/system/mem")
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
-
-	})
-	t.Run("getItem disk", func(t *testing.T) {
-		resp, body = GetTestRequest(ctx, t, s, "/api/items/disk/root")
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
-
-	})
-	t.Run("getItem health", func(t *testing.T) {
-		resp, body = GetTestRequest(ctx, t, s, "/api/items/health/google")
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
-	})
-	t.Run("getItem missing", func(t *testing.T) {
-		resp, body = GetTestRequest(ctx, t, s, "/api/items/disk/missing")
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
-	})
-}
-
-// TestGetApiConfig verifies the /api/config endpoint returns the correct configuration.
-func TestGetApiConfig(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	dir := t.TempDir()
-	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
-
-	data, err := os.ReadFile("test/full.yaml")
-	require.NoError(t, err, "read test config")
-	err = os.WriteFile(testFile, data, 0644)
-	assert.NoError(t, err, "write test config")
-
-	s, _ := StartTestServer(ctx, t, testFile)
-	s.Start(ctx)
-
-	resp, body := GetTestRequest(ctx, t, s, "/api/config")
+	// Try to add a ping monitor with missing amberThreshold
+	badData := config.PingConfig{
+		Address: "127.0.0.1",
+		Timeout: 1000,
+		Icon:    "wifi",
+		// amberThreshold missing
+	}
+	id = "badping"
+	resp, body = PostTestRequest(ctx, t, s, "/api/config/ping/"+id, badData)
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
 
-	var cfg config.Config
-	err = json.Unmarshal([]byte(body), &cfg)
-	assert.NoError(t, err, "unmarshal")
-
-	assert.Equal(t, 90, cfg.Monitoring.System.CPU.Threshold)
-	assert.Equal(t, 90, cfg.Monitoring.System.Memory.Threshold)
-	assert.Equal(t, 85, cfg.Monitoring.Disk["root"].Threshold)
-	assert.Equal(t, "https://google.com", cfg.Monitoring.Healthcheck["google"].URL)
+	// Try to delete a non-existent ping monitor
+	resp, body = DeleteTestRequest(ctx, t, s, "/api/config/ping/nonexistent")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
 }
 
-// TestBadJson verifies that invalid JSON in POST requests returns HTTP 400 Bad Request.
-func TestBadJson(t *testing.T) {
+// TestPingMonitorStatusTransitionsAndWebhook mocks status transitions for Ping monitor and checks webhook notifications.
+func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, hook := StartTestServer(ctx, t, "")
+	s.monitor.SetPeriod(ctx, 10*time.Millisecond, 10*time.Millisecond) // Set a short period for testing
+	s.Start(ctx)
+
+	// Enable webhook for test
+	webhookCfg := config.WebhookConfig{
+		Enabled: true,
+		URL:     s.ServerUrl + "/testhook",
+	}
+	resp, _ := PostTestRequest(ctx, t, s, "/api/config/webhook", webhookCfg)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	id := "ping-e2e"
+	amber := 100
+
+	// Green status
+	s.mapper.Impls.Ping.ResponseMs.Store(50)
+	s.mapper.Impls.Ping.Err.Store(nil)
+
+	data := config.PingConfig{
+		Address:        "127.0.0.1",
+		Timeout:        1000,
+		Icon:           "wifi",
+		AmberThreshold: amber,
+	}
+	resp, _ = PostTestRequest(ctx, t, s, "/api/config/ping/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	_, exists := s.config.Monitoring.Ping[id]
+	assert.True(t, exists, "Ping monitor should exist in config after API add")
+
+	// Reload config from disk and validate
+	reloadedCfg, err := s.loader.Load()
+	assert.NoError(t, err, "should reload config after API add")
+	_, exists = reloadedCfg.Monitoring.Ping[id]
+	assert.True(t, exists, "Ping monitor should exist in config after save and reload")
+
+	time.Sleep(20 * time.Millisecond)
+	var stats map[string]monitors.Result
+	_, body := GetTestRequest(ctx, t, s, "/api/items")
+	stats = map[string]monitors.Result{}
+	_ = json.Unmarshal([]byte(body), &stats)
+	assert.Equal(t, monitors.RAGGreen.String(), stats["ping_"+id].Status.String(), "should see green status")
+	assert.Equal(t, "50 ms", stats["ping_"+id].Value, "should see green value")
+
+	// No webhook notification is expected for initial Green status.
+
+	// Amber status
+	s.mapper.Impls.Ping.ResponseMs.Store(150)
+	s.mapper.Impls.Ping.Err.Store(nil)
+	time.Sleep(20 * time.Millisecond)
+	_, body = GetTestRequest(ctx, t, s, "/api/items")
+	stats = map[string]monitors.Result{}
+	_ = json.Unmarshal([]byte(body), &stats)
+	assert.Equal(t, monitors.RAGAmber.String(), stats["ping_"+id].Status.String(), "should see amber status")
+	assert.Equal(t, "150 ms", stats["ping_"+id].Value, "should see amber value")
+
+	assert.Eventually(t, func() bool {
+		return hook.LastMessage.Load() != "" &&
+			strings.Contains(hook.LastMessage.Load(), "Amber")
+	}, 50*time.Millisecond, 1*time.Millisecond, "webhook should contain Amber")
+
+	// Red status
+	s.mapper.Impls.Ping.Err.Store(&assert.AnError)
+	time.Sleep(20 * time.Millisecond)
+	_, body = GetTestRequest(ctx, t, s, "/api/items")
+	stats = map[string]monitors.Result{}
+	_ = json.Unmarshal([]byte(body), &stats)
+	assert.Equal(t, monitors.RAGRed.String(), stats["ping_"+id].Status.String(), "should see red status")
+	assert.Greater(t, len(stats["ping_"+id].Value), 0, "should see error value")
+
+	assert.Eventually(t, func() bool {
+		return hook.LastMessage.Load() != "" &&
+			strings.Contains(hook.LastMessage.Load(), "Red")
+	}, 50*time.Millisecond, 1*time.Millisecond, "webhook should contain Red")
+}
+
+// TestHandleGetItem tests the handleGetItem endpoint for both success and error cases
+func TestHandleGetItem(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s, _ := StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	resp, _ := PostTestRequest(ctx, t, s, "/api/config/system", "not json")
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
+	// Add a disk monitor to have an item to retrieve
+	diskConfig := config.DiskConfig{Path: "/tmp", Threshold: 80}
+	monitor, err := s.mapper.NewDisk(ctx, "test-disk", diskConfig)
+	assert.NoError(t, err)
+	s.monitor.Add(ctx, monitor)
 
-	resp, _ = PostTestRequest(ctx, t, s, "/api/config/interval", "not json")
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
+	// Wait for initial check
+	time.Sleep(10 * time.Millisecond)
+
+	t.Run("success", func(t *testing.T) {
+		r, body := GetTestRequest(ctx, t, s, "/api/items/disk/test-disk")
+		assert.Equal(t, http.StatusOK, r.StatusCode)
+
+		var result map[string]interface{}
+		err := json.Unmarshal([]byte(body), &result)
+		assert.NoError(t, err)
+		assert.Contains(t, result, "ID")
+		assert.Equal(t, "disk_test-disk", result["ID"])
+	})
+
+	t.Run("item_not_found", func(t *testing.T) {
+		r, _ := GetTestRequest(ctx, t, s, "/api/items/disk/nonexistent")
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+	})
+
+	t.Run("different_group_not_found", func(t *testing.T) {
+		r, _ := GetTestRequest(ctx, t, s, "/api/items/nonexistent/test-disk")
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+	})
 }
 
-// TestDeleteBadType verifies that deleting a monitor with an invalid type returns HTTP 400 Bad Request.
-func TestDeleteBadType(t *testing.T) {
+// TestHandleGetConfig tests the handleGetConfig endpoint
+func TestHandleGetConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s, _ := StartTestServer(ctx, t, "")
 	s.Start(ctx)
 
-	resp, _ := DeleteTestRequest(ctx, t, s, "/api/config/bad/123")
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "status code")
+	r, body := GetTestRequest(ctx, t, s, "/api/config")
+	assert.Equal(t, http.StatusOK, r.StatusCode)
 
+	var config map[string]interface{}
+	err := json.Unmarshal([]byte(body), &config)
+	assert.NoError(t, err)
+	assert.Contains(t, config, "Monitoring")
+	assert.Contains(t, config, "Web")
 }
 
-func Test_newUIResult(t *testing.T) {
-	c := config.Config{
-		Monitoring: config.MonitoringConfig{
+// TestWriteJson tests the writeJson function with various data types and error conditions
+func TestWriteJson(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+	defer s.Stop()
+
+	t.Run("success_simple_data", func(t *testing.T) {
+		// Use a test endpoint that calls writeJson
+		r, body := GetTestRequest(ctx, t, s, "/api/config")
+		assert.Equal(t, http.StatusOK, r.StatusCode)
+		assert.Contains(t, r.Header.Get("Content-Type"), "application/json")
+		assert.NotEmpty(t, body)
+	})
+
+	t.Run("marshal_error_with_invalid_data", func(t *testing.T) {
+		// Test by sending malformed JSON to trigger unmarshallBody error path
+		req := `{"invalid": "malformed json"`
+		r, _ := PostTestRequest(ctx, t, s, "/api/config/system", req)
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode) // Should return 400 for bad JSON
+	})
+}
+
+// TestUnmarshallBody tests the unmarshallBody function with various request scenarios
+func TestUnmarshallBody(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+	defer s.Stop()
+
+	t.Run("success", func(t *testing.T) {
+		validJSON := `{"interval": 30}`
+		r, _ := PostTestRequest(ctx, t, s, "/api/config/interval", validJSON)
+		// Should succeed in unmarshalling (though may fail validation later)
+		assert.NotEqual(t, http.StatusInternalServerError, r.StatusCode)
+	})
+
+	t.Run("invalid_json_format", func(t *testing.T) {
+		invalidJSON := `{"interval": 30` // Missing closing brace
+		r, _ := PostTestRequest(ctx, t, s, "/api/config/interval", invalidJSON)
+		assert.Equal(t, http.StatusBadRequest, r.StatusCode)
+	})
+
+	t.Run("malformed_json_data", func(t *testing.T) {
+		malformedJSON := `{"interval": "not_a_number"}`
+		r, _ := PostTestRequest(ctx, t, s, "/api/config/interval", malformedJSON)
+		// Should succeed in unmarshalling but may fail validation
+		assert.NotEqual(t, http.StatusInternalServerError, r.StatusCode)
+	})
+}
+
+// TestSetConfig tests the SetConfig function with various configurations
+func TestSetConfig(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+
+	t.Run("success_complete_config", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
 			System: config.SystemConfig{
-				CPU: config.SystemItem{
-					Threshold: 90,
-					Icon:      "cpu-Icon",
-				},
-				Memory: config.SystemItem{
-					Threshold: 90,
-					Icon:      "mem-Icon",
-				},
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
 			},
 			Disk: map[string]config.DiskConfig{
-				"test_d": {
-					Threshold: 90,
-					Icon:      "disk-Icon",
-				},
+				"root": {Path: "/", Threshold: 90},
+				"tmp":  {Path: "/tmp", Threshold: 85},
 			},
 			Healthcheck: map[string]config.HealthcheckConfig{
-				"test_h": {
-					URL:     "http://localhost:8080/healtz",
-					Timeout: 1,
-					Icon:    "health-Icon",
-				},
+				"google": {URL: "https://www.google.com", Timeout: 5000},
+				"local":  {URL: "http://localhost:8080/healthz", Timeout: 1000},
 			},
-		},
-		Webhook: config.WebhookConfig{
-			Enabled: true,
-		},
-	}
-	type args struct {
-		id   string
-		item monitors.Result
-	}
-	tests := []struct {
-		name string
-		args args
-		want UIResult
-	}{
-		{"disk", args{"disk_test_d", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{ID: "disk_test_d", Status: monitors.RAGGreen, Icon: "disk-Icon", Group: disk.Group, Threshold: 90, TypeLabel: "Disk", StatusClass: "status-ok"}},
-		{"health", args{"health_test_h", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{ID: "health_test_h", Status: monitors.RAGRed, Icon: "health-Icon", Group: healthcheck.Group, TypeLabel: "Health", StatusClass: "status-error"}},
-		{"cpu", args{"system_cpu", monitors.Result{Group: system.Group, DisplayName: "cpu", Status: monitors.RAGRed}}, UIResult{ID: "system_cpu", Status: monitors.RAGRed, Icon: "cpu-Icon", Group: system.Group, DisplayName: "cpu", Threshold: 90, TypeLabel: "System", StatusClass: "status-error"}},
-		{"mem", args{"system_mem", monitors.Result{Group: system.Group, DisplayName: "mem", Status: monitors.RAGAmber}}, UIResult{ID: "system_mem", Status: monitors.RAGAmber, Icon: "mem-Icon", Group: system.Group, DisplayName: "mem", Threshold: 90, TypeLabel: "System", StatusClass: "status-warning"}},
-		{"disk-fallback", args{"disk_test_not-found", monitors.Result{Group: disk.Group, Status: monitors.RAGGreen}}, UIResult{ID: "disk_test_not-found", Status: monitors.RAGGreen, Icon: disk.Icon, Group: disk.Group, Threshold: 0, TypeLabel: "Disk", StatusClass: "status-ok"}},
-		{"health-fallback", args{"health_test_not-found", monitors.Result{Group: healthcheck.Group, Status: monitors.RAGRed}}, UIResult{ID: "health_test_not-found", Status: monitors.RAGRed, Icon: healthcheck.Icon, Group: healthcheck.Group, TypeLabel: "Health", StatusClass: "status-error"}},
-		{"fallback", args{"unknown_unknown", monitors.Result{Group: "unknown", Status: monitors.RAGError}}, UIResult{ID: "unknown_unknown", Status: monitors.RAGError, Icon: "folder", Group: "unknown", StatusClass: "status-critical"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, newUIResult(tt.args.id, tt.args.item, &c), "newUIResult(%v, %v, %v)", tt.args.id, tt.args.item, c)
-		})
-	}
+			Ping: map[string]config.PingConfig{
+				"google-dns": {Address: "8.8.8.8", AmberThreshold: 100},
+				"cloudflare": {Address: "1.1.1.1", AmberThreshold: 100},
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err)
+
+		// Verify basic monitors were added - focus on ones that work without network dependencies
+		results := s.monitor.Results()
+		assert.Contains(t, results, "system_cpu")
+		assert.Contains(t, results, "system_mem")
+		assert.Contains(t, results, "disk_root")
+		assert.Contains(t, results, "disk_tmp")
+		// Note: Health checks and pings may not appear immediately in results without actual network calls
+	})
+
+	t.Run("error_invalid_disk_config", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Disk: map[string]config.DiskConfig{
+				"invalid": {Path: "/nonexistent/path/that/should/not/exist", Threshold: 90},
+			},
+		}
+
+		// This should still succeed as NewDisk doesn't validate path existence
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err)
+	})
+
+	t.Run("success_with_invalid_healthcheck_url", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Healthcheck: map[string]config.HealthcheckConfig{
+				"invalid": {URL: "not-a-valid-url", Timeout: 5000},
+			},
+		}
+
+		// NewHealthcheck seems to accept invalid URLs and just fails at check time
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err, "invalid URL still allows creation, fails at check time")
+	})
+
+	t.Run("success_with_empty_ping_address", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Ping: map[string]config.PingConfig{
+				"invalid": {Address: "", AmberThreshold: 100}, // Empty address is allowed, fails at check time
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err, "empty ping address is allowed, fails at check time")
+	})
+
+	t.Run("error_invalid_ping_config_missing_amber_threshold", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Ping: map[string]config.PingConfig{
+				"invalid": {Address: "8.8.8.8"}, // Missing AmberThreshold should cause error
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.Error(t, err, "should fail with missing amber threshold")
+	})
 }

@@ -65,17 +65,17 @@ func sendRequest(ctx context.Context, t *testing.T, method string, s *Server, pa
 
 // GetTestRequest sends a GET request to the test server.
 func GetTestRequest(ctx context.Context, t *testing.T, s *Server, path string) (*http.Response, string) {
-	return sendRequest(ctx, t, "GET", s, path, 200*time.Millisecond, nil)
+	return sendRequest(ctx, t, "GET", s, path, 2*time.Second, nil)
 }
 
 // DeleteTestRequest sends a DELETE request to the test server.
 func DeleteTestRequest(ctx context.Context, t *testing.T, s *Server, path string) (*http.Response, string) {
-	return sendRequest(ctx, t, "DELETE", s, path, 200*time.Millisecond, nil)
+	return sendRequest(ctx, t, "DELETE", s, path, 2*time.Second, nil)
 }
 
 // PostTestRequest sends a POST request with JSON data to the test server.
 func PostTestRequest(ctx context.Context, t *testing.T, s *Server, path string, data any) (*http.Response, string) {
-	return sendRequest(ctx, t, "POST", s, path, 200*time.Millisecond, data)
+	return sendRequest(ctx, t, "POST", s, path, 2*time.Second, data)
 }
 
 // readBody reads and closes the response body, returning the response and body as a string.

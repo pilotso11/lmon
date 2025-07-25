@@ -239,9 +239,10 @@ func (s *Service) Size() int {
 // Save persists the current monitor configuration to the provided config struct.
 // It clears disk and healthcheck entries and saves all monitors' configs.
 func (s *Service) Save(cfg *config.Config) error {
-	// Remove all disks and healthchecks from config
+	// Remove all disks, healthchecks, and ping monitors from config
 	cfg.Monitoring.Disk = make(map[string]config.DiskConfig)
 	cfg.Monitoring.Healthcheck = make(map[string]config.HealthcheckConfig)
+	cfg.Monitoring.Ping = make(map[string]config.PingConfig)
 
 	// Save all the monitors
 	s.monitors.Range(func(key string, m Monitor) bool {
