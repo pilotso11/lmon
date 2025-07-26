@@ -29,7 +29,7 @@ func TestService_Save(t *testing.T) {
 	svc.Add(ctx, diskMon)
 
 	// Add a Healthcheck monitor
-	healthMon, err := healthcheck.NewHealthcheck("health1", "http://localhost/health", 5, "activity", nil)
+	healthMon, err := healthcheck.NewHealthcheck("health1", "http://localhost/health", 5, 401, "activity", nil)
 	require.NoError(t, err)
 	svc.Add(ctx, healthMon)
 
@@ -54,6 +54,7 @@ func TestService_Save(t *testing.T) {
 	assert.Equal(t, "/mnt/disk1", diskCfg.Path)
 	assert.Equal(t, "hdd", diskCfg.Icon)
 	assert.Equal(t, "http://localhost/health", healthCfg.URL)
+	assert.Equal(t, 401, healthCfg.RespCode)
 	assert.Equal(t, "activity", healthCfg.Icon)
 	assert.Equal(t, "127.0.0.1", pingCfg.Address)
 	assert.Equal(t, "wifi", pingCfg.Icon)

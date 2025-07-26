@@ -64,9 +64,10 @@ type SystemConfig struct {
 
 // HealthcheckConfig represents health check monitoring configuration
 type HealthcheckConfig struct {
-	URL     string
-	Timeout int
-	Icon    string
+	URL      string
+	Timeout  int
+	RespCode int
+	Icon     string
 }
 
 // PingConfig represents ping monitor configuration
@@ -248,6 +249,7 @@ func (l *Loader) Save(config *Config) error {
 	for name, healthcheck := range config.Monitoring.Healthcheck {
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.url", name), healthcheck.URL)
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.timeout", name), healthcheck.Timeout)
+		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.respcode", name), healthcheck.RespCode)
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.icon", name), healthcheck.Icon)
 	}
 

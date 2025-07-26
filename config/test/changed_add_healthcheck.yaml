@@ -2,6 +2,7 @@ monitoring:
     healthcheck:
         test:
             icon: test
+            respcode: 401
             timeout: 10
             url: http://localhost:8080/test
     interval: 60
