@@ -98,19 +98,24 @@ func (p *DefaultHealthcheckProvider) Check(ctx context.Context, path *url.URL, m
 
 // Healthcheck represents an HTTP endpoint health monitor.
 type Healthcheck struct {
-	name    string        // Logical name for the healthcheck
-	timeout int           // Timeout in milliseconds for the check
-	url     *url.URL      // URL to check
-	icon    string        // Icon for UI display
-	impl    UsageProvider // Implementation for performing the check
+	name     string        // Logical name for the healthcheck
+	timeout  int           // Timeout in milliseconds for the check
+	respCode int           // Expected response code to consider the check successful
+	url      *url.URL      // URL to check
+	icon     string        // Icon for UI display
+	impl     UsageProvider // Implementation for performing the check
 }
 
 // NewHealthcheck constructs a new Healthcheck monitor with the given parameters.
+// If respCode is <= 0 it defaults to 200 (HTTP OK).
 // If icon is empty, the default Icon is used.
 // If impl is nil, the DefaultHealthcheckProvider is used.
-func NewHealthcheck(name string, urlRaw string, timeout int, icon string, impl UsageProvider) (Healthcheck, error) {
+func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, impl UsageProvider) (Healthcheck, error) {
 	if icon == "" {
 		icon = Icon
+	}
+	if respCode <= 0 {
+		respCode = http.StatusOK // Default to HTTP 200 OK
 	}
 	if common.IsNil(impl) {
 		impl = NewDefaultHealthcheckProvider(0)
@@ -120,11 +125,12 @@ func NewHealthcheck(name string, urlRaw string, timeout int, icon string, impl U
 		return Healthcheck{}, err
 	}
 	return Healthcheck{
-		name:    name,
-		url:     parsedUrl,
-		icon:    icon,
-		impl:    impl,
-		timeout: timeout,
+		name:     name,
+		url:      parsedUrl,
+		icon:     icon,
+		impl:     impl,
+		timeout:  timeout,
+		respCode: respCode,
 	}, nil
 }
 
@@ -136,6 +142,9 @@ func (d Healthcheck) String() string {
 // DisplayName returns a human-readable name for the healthcheck monitor.
 func (d Healthcheck) DisplayName() string {
 	u := fmt.Sprintf("%s://%s", d.url.Scheme, d.url.Host)
+	if d.respCode != http.StatusOK {
+		return fmt.Sprintf("%s (%s - %d)", d.name, u, d.respCode)
+	}
 	return fmt.Sprintf("%s (%s)", d.name, u)
 }
 
@@ -151,10 +160,14 @@ func (d Healthcheck) Name() string {
 
 // Save persists the healthcheck monitor's configuration to the provided config struct.
 func (d Healthcheck) Save(cfg *config.Config) {
+	if d.respCode <= 0 {
+		d.respCode = http.StatusOK // Default to HTTP 200 OK if not set
+	}
 	cfg.Monitoring.Healthcheck[d.name] = config.HealthcheckConfig{
-		URL:     d.url.String(),
-		Timeout: d.timeout,
-		Icon:    d.icon,
+		URL:      d.url.String(),
+		Timeout:  d.timeout,
+		RespCode: d.respCode,
+		Icon:     d.icon,
 	}
 }
 
@@ -171,11 +184,16 @@ func (d Healthcheck) Check(ctx context.Context) monitors.Result {
 
 	res := fmt.Sprintf("%d (%s)", response.StatusCode, response.Status)
 	status := monitors.RAGGreen
+	// status will be green if the response code matches the expected one or is a 2xx code.
 	switch {
+	case response.StatusCode == d.respCode:
+		status = monitors.RAGGreen // Check if the response code matches the expected one and which is not 2xx
+	case response.StatusCode < 300:
+		status = monitors.RAGGreen // 2xx = always green
 	case response.StatusCode >= 500:
-		status = monitors.RAGRed
+		status = monitors.RAGRed // 5xx errors
 	case response.StatusCode >= 300 && response.StatusCode < 500:
-		status = monitors.RAGAmber
+		status = monitors.RAGAmber // 4xx errors
 	}
 
 	return monitors.Result{

@@ -212,9 +212,10 @@ func TestAddHealthcheck(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.HealthcheckConfig{
-		Timeout: 77,
-		Icon:    "disk-icon",
-		URL:     s.ServerUrl + "/healthz",
+		Timeout:  77,
+		Icon:     "disk-icon",
+		URL:      s.ServerUrl + "/healthz",
+		RespCode: 200,
 	}
 	id := "test-health"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
@@ -235,9 +236,10 @@ func TestDeleteHealthcheck(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.HealthcheckConfig{
-		Timeout: 77,
-		Icon:    "disk-icon",
-		URL:     s.ServerUrl + "/healthz",
+		Timeout:  77,
+		Icon:     "disk-icon",
+		URL:      s.ServerUrl + "/healthz",
+		RespCode: 200,
 	}
 	id := "test-health"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)

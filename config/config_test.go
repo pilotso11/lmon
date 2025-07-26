@@ -161,7 +161,7 @@ func TestAddHealthcheck(t *testing.T) {
 	cfg, err := loader.Load()
 	assert.NoError(t, err, "no error loading config")
 
-	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, "test"}
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 401, "test"}
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddHealthcheck)
 }
 
@@ -225,7 +225,7 @@ func TestRemoveHealthCheck(t *testing.T) {
 	// we already have the one to edit?
 	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
 
-	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, "test"}
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test"}
 	delete(cfg.Monitoring.Healthcheck, "self")
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddRemoveHealthcheck)
@@ -246,7 +246,7 @@ func TestLoadChangeAndSave(t *testing.T) {
 	// we already have the one to edit?
 	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
 
-	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, "test"}
+	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test"}
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlEditHealthcheck)
 }

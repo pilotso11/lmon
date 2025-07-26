@@ -219,6 +219,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const targetField = document.getElementById("monitor-target");
   const timeoutLabel = document.getElementById("monitor-timeout-label");
   const timeoutField = document.getElementById("monitor-timeout");
+  const respCodeRow = document.getElementById("respcode-row");
+  const respCodeField = document.getElementById("monitor-respcode");
   const amberThresholdRow = document.getElementById("amber-threshold-row");
   const amberThresholdField = document.getElementById("monitor-amber-threshold");
   const submitButton = document.getElementById("add-monitor-button");
@@ -235,19 +237,18 @@ document.addEventListener("DOMContentLoaded", function () {
       timeoutField.min = "100";
       timeoutField.max = "30000";
       timeoutField.setAttribute("aria-label", "Ping timeout in milliseconds");
+      respCodeRow.style.display = "none";
       amberThresholdRow.style.display = "flex";
       amberThresholdField.required = true;
       submitButton.textContent = "Add Ping Monitor";
       
       // Update icon dropdown to use ping icon if available
       if (typeof default_ping_icon !== "undefined") {
-        const iconSelect = document.getElementById("monitor-icon-select");
-        if (iconSelect) {
-          iconSelect.value = default_ping_icon;
-          if (window.$ && typeof window.$.fn.selectpicker === "function") {
-            window.$(iconSelect).selectpicker("refresh");
-          }
-        }
+        renderIconDropdown(
+            "monitor-icon-dropdown",
+            "monitor-icon-select",
+            default_ping_icon,
+        );
       }
     } else {
       // Update labels and fields for HTTP
@@ -260,19 +261,21 @@ document.addEventListener("DOMContentLoaded", function () {
       timeoutField.min = "1";
       timeoutField.removeAttribute("max");
       timeoutField.setAttribute("aria-label", "Health check timeout in seconds");
+      respCodeRow.style.display = "flex";
+      respCodeField.value = "200";
+      respCodeField.min = "100";
+      respCodeField.max = "599";
       amberThresholdRow.style.display = "none";
       amberThresholdField.required = false;
       submitButton.textContent = "Add Health Check";
       
       // Update icon dropdown to use health icon if available
       if (typeof default_health_icon !== "undefined") {
-        const iconSelect = document.getElementById("monitor-icon-select");
-        if (iconSelect) {
-          iconSelect.value = default_health_icon;
-          if (window.$ && typeof window.$.fn.selectpicker === "function") {
-            window.$(iconSelect).selectpicker("refresh");
-          }
-        }
+        renderIconDropdown(
+            "monitor-icon-dropdown",
+            "monitor-icon-select",
+            default_health_icon,
+        );
       }
     }
   }
@@ -429,6 +432,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const nameInput = document.getElementById("monitor-name");
       const targetInput = document.getElementById("monitor-target");
       const timeoutInput = document.getElementById("monitor-timeout");
+      const respCodeInput = document.getElementById("monitor-respcode");
       const iconInput = document.getElementById("monitor-icon-select");
       const typeRadio = document.querySelector('input[name="monitor-type"]:checked');
       
@@ -474,6 +478,12 @@ document.addEventListener("DOMContentLoaded", function () {
             type: "success",
           }));
         } else {
+          const respCode = parseInt(respCodeInput.value);
+          if (respCode < 100 || respCode > 599) {
+            showToast("Error", "Response code must be between 100 and 599", "danger");
+            return;
+          }
+
           // HTTP health check
           await fetchJson(`/api/config/health/${encodeURIComponent(name)}`, {
             method: "POST",
@@ -481,6 +491,7 @@ document.addEventListener("DOMContentLoaded", function () {
             body: JSON.stringify({
               url: target,
               timeout: timeout,
+              respcode: respCode,
               icon: icon,
             }),
           });

@@ -64,9 +64,10 @@ type SystemConfig struct {
 
 // HealthcheckConfig represents health check monitoring configuration
 type HealthcheckConfig struct {
-	URL     string
-	Timeout int
-	Icon    string
+	URL      string
+	Timeout  int
+	RespCode int
+	Icon     string
 }
 
 // PingConfig represents ping monitor configuration
@@ -210,14 +211,6 @@ func (l *Loader) setDefaults() {
 
 	l.v.SetDefault("webhook.enabled", true)
 	l.v.SetDefault("webhook.url", "http://localhost:8080/testhook")
-
-	// l.v.SetDefault("monitoring.disk.root.path", "/")
-	// l.v.SetDefault("monitoring.disk.root.threshold", 80)
-	// l.v.SetDefault("monitoring.disk.root.icon", "storage")
-	//
-	// l.v.SetDefault("monitoring.healthcheck.self.url", "http://localhost:8080/healthz")
-	// l.v.SetDefault("monitoring.healthcheck.self.timeout", 5)
-	// l.v.SetDefault("monitoring.healthcheck.self.icon", "activity")
 }
 
 // Save saves the configuration to a file
@@ -248,6 +241,7 @@ func (l *Loader) Save(config *Config) error {
 	for name, healthcheck := range config.Monitoring.Healthcheck {
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.url", name), healthcheck.URL)
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.timeout", name), healthcheck.Timeout)
+		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.respcode", name), healthcheck.RespCode)
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.icon", name), healthcheck.Icon)
 	}
 

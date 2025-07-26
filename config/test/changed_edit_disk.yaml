@@ -7,6 +7,7 @@ monitoring:
     healthcheck:
         self:
             icon: activity
+            respcode: 200
             timeout: 5
             url: http://localhost:8080/healthz
     interval: 60
