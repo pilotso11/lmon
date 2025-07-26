@@ -281,7 +281,10 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	_ = el.Input("http://localhost:8080")
 	el, err = page.Element(`#monitor-timeout`)
 	require.NoError(t, err, "find monitor timeout input")
-	_ = el.Input("10")
+	el.MustSelectAllText().MustInput("10")
+	el, err = page.Element(`#monitor-respcode`)
+	require.NoError(t, err, "input response code")
+	el.MustSelectAllText().MustInput("401")
 
 	// Submit the form
 	el, err = page.Element(`#add-monitor-form button[type="submit"]`)
@@ -290,6 +293,9 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 
 	// Wait for the health check to appear in the config list
 	_, err = page.Timeout(1*time.Second).ElementR("#health-config-items .config-item", "local")
+	if err != nil {
+		page.MustScreenshot("health-check-config-error.png")
+	}
 	require.NoError(t, err, "find health check item in config list")
 
 	// Navigate back to dashboard
@@ -312,6 +318,7 @@ func TestAddHealthCheckViaConfigUIRod(t *testing.T) {
 	healthText := healthItem.MustText()
 	assert.Contains(t, healthText, "local", "Health check display name is shown")
 	assert.Contains(t, healthText, "http://localhost:8080", "Health check URL is shown")
+	assert.Contains(t, healthText, "401", "Health check expected code is shown")
 	assert.Contains(t, healthText, "200 (OK)", "Health check status is shown")
 	assert.Regexp(t, `\d+(\.\d+)?`, healthText, "Health check value is shown")
 	// healthItem.MustClick()

@@ -18,6 +18,12 @@ monitoring:
             url: https://google.com
             icon: activity
             timeout: 1
+            respCode: 401
+    ping:
+        google:
+            url: google.com
+            icon: arrow-left-right
+            timeout: 1
 web:
     host: 127.0.0.1
     port: 0
