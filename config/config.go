@@ -211,14 +211,6 @@ func (l *Loader) setDefaults() {
 
 	l.v.SetDefault("webhook.enabled", true)
 	l.v.SetDefault("webhook.url", "http://localhost:8080/testhook")
-
-	// l.v.SetDefault("monitoring.disk.root.path", "/")
-	// l.v.SetDefault("monitoring.disk.root.threshold", 80)
-	// l.v.SetDefault("monitoring.disk.root.icon", "storage")
-	//
-	// l.v.SetDefault("monitoring.healthcheck.self.url", "http://localhost:8080/healthz")
-	// l.v.SetDefault("monitoring.healthcheck.self.timeout", 5)
-	// l.v.SetDefault("monitoring.healthcheck.self.icon", "activity")
 }
 
 // Save saves the configuration to a file

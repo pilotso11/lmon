@@ -184,6 +184,7 @@ func (d Healthcheck) Check(ctx context.Context) monitors.Result {
 
 	res := fmt.Sprintf("%d (%s)", response.StatusCode, response.Status)
 	status := monitors.RAGGreen
+	// status will be green if the response code matches the expected one or is a 2xx code.
 	switch {
 	case response.StatusCode == d.respCode:
 		status = monitors.RAGGreen // Check if the response code matches the expected one and which is not 2xx

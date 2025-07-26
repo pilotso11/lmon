@@ -479,7 +479,7 @@ document.addEventListener("DOMContentLoaded", function () {
           }));
         } else {
           const respCode = parseInt(respCodeInput.value);
-          if(respCode < 100 || respCode > 599) {
+          if (respCode < 100 || respCode > 599) {
             showToast("Error", "Response code must be between 100 and 599", "danger");
             return;
           }
