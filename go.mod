@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/go-rod/rod v0.116.2
 	github.com/prometheus-community/pro-bing v0.7.0
-	github.com/puzpuzpuz/xsync/v4 v4.1.0
+	github.com/puzpuzpuz/xsync/v4 v4.2.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
