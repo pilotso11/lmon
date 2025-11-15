@@ -17,6 +17,11 @@ monitoring:
       icon: heart-pulse
       timeout: 10
       url: http://localhost:8080/healthz
+  docker:
+    app_containers:
+      icon: box
+      containers: "web-app, api-server, worker"
+      threshold: 5
   interval: 60
   system:
     cpu:

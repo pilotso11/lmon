@@ -38,6 +38,7 @@ import (
 	"lmon/common"
 	"lmon/config"
 	"lmon/monitors"
+	"lmon/monitors/docker"
 )
 
 const Icon = "activity" // Default icon for healthcheck monitors
@@ -98,19 +99,22 @@ func (p *DefaultHealthcheckProvider) Check(ctx context.Context, path *url.URL, m
 
 // Healthcheck represents an HTTP endpoint health monitor.
 type Healthcheck struct {
-	name     string        // Logical name for the healthcheck
-	timeout  int           // Timeout in milliseconds for the check
-	respCode int           // Expected response code to consider the check successful
-	url      *url.URL      // URL to check
-	icon     string        // Icon for UI display
-	impl     UsageProvider // Implementation for performing the check
+	name              string          // Logical name for the healthcheck
+	timeout           int             // Timeout in milliseconds for the check
+	respCode          int             // Expected response code to consider the check successful
+	url               *url.URL        // URL to check
+	icon              string          // Icon for UI display
+	restartContainers string          // Optional: comma-separated list of containers to restart
+	impl              UsageProvider   // Implementation for performing the check
+	dockerImpl        docker.Provider // Implementation for Docker restart operations
 }
 
 // NewHealthcheck constructs a new Healthcheck monitor with the given parameters.
 // If respCode is <= 0 it defaults to 200 (HTTP OK).
 // If icon is empty, the default Icon is used.
 // If impl is nil, the DefaultHealthcheckProvider is used.
-func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, impl UsageProvider) (Healthcheck, error) {
+// If dockerImpl is nil and restartContainers is set, a docker.DefaultDockerProvider is created.
+func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, restartContainers string, impl UsageProvider, dockerImpl docker.Provider) (Healthcheck, error) {
 	if icon == "" {
 		icon = Icon
 	}
@@ -120,17 +124,26 @@ func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon 
 	if common.IsNil(impl) {
 		impl = NewDefaultHealthcheckProvider(0)
 	}
+	if common.IsNil(dockerImpl) && restartContainers != "" {
+		var err error
+		dockerImpl, err = docker.NewDefaultDockerProvider()
+		if err != nil {
+			return Healthcheck{}, fmt.Errorf("failed to create Docker provider: %w", err)
+		}
+	}
 	parsedUrl, err := url.Parse(urlRaw)
 	if err != nil {
 		return Healthcheck{}, err
 	}
 	return Healthcheck{
-		name:     name,
-		url:      parsedUrl,
-		icon:     icon,
-		impl:     impl,
-		timeout:  timeout,
-		respCode: respCode,
+		name:              name,
+		url:               parsedUrl,
+		icon:              icon,
+		restartContainers: restartContainers,
+		impl:              impl,
+		dockerImpl:        dockerImpl,
+		timeout:           timeout,
+		respCode:          respCode,
 	}, nil
 }
 
@@ -164,11 +177,31 @@ func (d Healthcheck) Save(cfg *config.Config) {
 		d.respCode = http.StatusOK // Default to HTTP 200 OK if not set
 	}
 	cfg.Monitoring.Healthcheck[d.name] = config.HealthcheckConfig{
-		URL:      d.url.String(),
-		Timeout:  d.timeout,
-		RespCode: d.respCode,
-		Icon:     d.icon,
+		URL:               d.url.String(),
+		Timeout:           d.timeout,
+		RespCode:          d.respCode,
+		Icon:              d.icon,
+		RestartContainers: d.restartContainers,
 	}
+}
+
+// HasRestartContainers returns true if this healthcheck has containers configured for restart
+func (d Healthcheck) HasRestartContainers() bool {
+	return d.restartContainers != ""
+}
+
+// RestartContainers restarts the containers associated with this healthcheck
+func (d Healthcheck) RestartContainers(ctx context.Context) error {
+	if !d.HasRestartContainers() {
+		return fmt.Errorf("no containers configured for restart")
+	}
+
+	if d.dockerImpl == nil {
+		return fmt.Errorf("docker provider not configured")
+	}
+
+	containerList := parseContainerList(d.restartContainers)
+	return d.dockerImpl.RestartContainers(ctx, containerList)
 }
 
 // Check performs a healthcheck by making an HTTP request to the configured URL.
@@ -200,4 +233,10 @@ func (d Healthcheck) Check(ctx context.Context) monitors.Result {
 		Status: status,
 		Value:  res,
 	}
+}
+
+// parseContainerList splits a comma-separated container list
+func parseContainerList(containers string) []string {
+	// Reuse the docker package's parser for consistency
+	return docker.ParseContainerList(containers)
 }

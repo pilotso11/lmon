@@ -252,7 +252,10 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("POST /api/config/disk/{id}", s.handleAddDiskMonitor(ctx))
 	s.router.HandleFunc("POST /api/config/health/{id}", s.handleAddHealthCheck(ctx))
 	s.router.HandleFunc("POST /api/config/ping/{id}", s.handleAddPingMonitor(ctx))
+	s.router.HandleFunc("POST /api/config/docker/{id}", s.handleAddDockerMonitor(ctx))
 	s.router.HandleFunc("POST /api/config/webhook", s.handleUpdateWebhook(ctx))
+	s.router.HandleFunc("POST /api/action/docker/{id}/restart", s.handleRestartDockerContainers(ctx))
+	s.router.HandleFunc("POST /api/action/healthcheck/{id}/restart", s.handleRestartHealthcheckContainers(ctx))
 	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor(ctx))
 }
 
@@ -403,6 +406,7 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			"default_disk_icon":   disk.Icon,        // from monitors/disk.icon
 			"default_health_icon": healthcheck.Icon, // from monitors/healthcheck.icon
 			"default_ping_icon":   ping.Icon,        // from monitors/ping.icon
+			"default_docker_icon": "box",            // Docker icon
 			"SystemItems":         systemItems,
 			"DiskItems":           diskItems,
 			"HealthItems":         healthItems,
@@ -691,11 +695,23 @@ func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 		case "ping":
 			// Use a dummy config with valid amberThreshold so Name() is correct
 			m, _ = s.mapper.NewPing(ctx, id, config.PingConfig{AmberThreshold: 1})
+		case "docker":
+			// Use a dummy config so Name() is correct
+			m, _ = s.mapper.NewDocker(ctx, id, config.DockerConfig{Containers: "dummy", Threshold: 1})
 		default:
 			log.Printf("handleDeleteMonitor invalid type: %s", r.URL.String())
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
+		// Close the monitor to release any resources (e.g., Docker client connections)
+		if actualMonitor := s.monitor.Get(m.Name()); actualMonitor != nil {
+			if closer, ok := actualMonitor.(io.Closer); ok {
+				if err := closer.Close(); err != nil {
+					log.Printf("Error closing monitor %s: %v", m.Name(), err)
+				}
+			}
+		}
+
 		err := s.monitor.Remove(m)
 		if err != nil {
 			log.Printf("handleDeleteMonitor %s: %v", r.URL.String(), err)
@@ -737,6 +753,112 @@ func (s *Server) handleAddPingMonitor(ctx context.Context) http.HandlerFunc {
 		s.monitor.Add(ctx, p)
 
 		s.saveConfig(w)
+	}
+}
+
+// handleAddDockerMonitor processes a request to add a new Docker monitor.
+// Expects a JSON body describing the Docker monitor to add.
+// Route: POST /api/config/docker/{id}
+func (s *Server) handleAddDockerMonitor(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		id := r.PathValue("id")
+		var cfg config.DockerConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		d, err := s.mapper.NewDocker(ctx, id, cfg)
+		if err != nil {
+			log.Printf("handleAddDockerMonitor %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.monitor.Add(ctx, d)
+
+		s.saveConfig(w)
+	}
+}
+
+// handleRestartDockerContainers processes a request to restart containers in a Docker monitor.
+// Route: POST /api/action/docker/{id}/restart
+func (s *Server) handleRestartDockerContainers(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		id := r.PathValue("id")
+
+		// Find the Docker monitor
+		monitorName := fmt.Sprintf("docker_%s", id)
+		m := s.monitor.Get(monitorName)
+		if m == nil {
+			log.Printf("handleRestartDockerContainers monitor not found: %s", monitorName)
+			http.Error(w, "Monitor not found", http.StatusNotFound)
+			return
+		}
+
+		// Type assert to Docker monitor to access Restart method
+		dockerMonitor, ok := m.(interface{ Restart(context.Context) error })
+		if !ok {
+			log.Printf("handleRestartDockerContainers monitor is not a Docker monitor: %s", monitorName)
+			http.Error(w, "Not a Docker monitor", http.StatusBadRequest)
+			return
+		}
+
+		// Restart the containers
+		if err := dockerMonitor.Restart(ctx); err != nil {
+			log.Printf("handleRestartDockerContainers error restarting containers: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to restart containers: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("Successfully restarted containers for monitor: %s", monitorName)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"success"}`))
+	}
+}
+
+// handleRestartHealthcheckContainers processes a request to restart containers configured for a healthcheck monitor.
+// Route: POST /api/action/healthcheck/{id}/restart
+func (s *Server) handleRestartHealthcheckContainers(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		id := r.PathValue("id")
+
+		// Find the healthcheck monitor
+		monitorName := fmt.Sprintf("health_%s", id)
+		m := s.monitor.Get(monitorName)
+		if m == nil {
+			log.Printf("handleRestartHealthcheckContainers monitor not found: %s", monitorName)
+			http.Error(w, "Monitor not found", http.StatusNotFound)
+			return
+		}
+
+		// Type assert to healthcheck monitor to access RestartContainers method
+		healthcheckMonitor, ok := m.(interface{ RestartContainers(context.Context) error })
+		if !ok {
+			log.Printf("handleRestartHealthcheckContainers monitor is not a healthcheck monitor: %s", monitorName)
+			http.Error(w, "Not a healthcheck monitor", http.StatusBadRequest)
+			return
+		}
+
+		// Restart the containers
+		if err := healthcheckMonitor.RestartContainers(ctx); err != nil {
+			log.Printf("handleRestartHealthcheckContainers error restarting containers: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to restart containers: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("Successfully restarted containers for healthcheck monitor: %s", monitorName)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"success"}`))
 	}
 }
 
@@ -789,6 +911,15 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		}
 		s.monitor.Add(ctx, newPing)
 		log.Printf("Added Ping %v", newPing)
+	}
+
+	for name, i := range cfg.Docker {
+		newDocker, err := s.mapper.NewDocker(ctx, name, i)
+		if err != nil {
+			return err
+		}
+		s.monitor.Add(ctx, newDocker)
+		log.Printf("Added Docker %v", newDocker)
 	}
 
 	// Set the monitoring interval to trigger the initial checks.

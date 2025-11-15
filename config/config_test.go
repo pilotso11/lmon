@@ -40,6 +40,9 @@ var (
 	//go:embed test/sample_ping.yaml
 	samplePingYaml string
 
+	//go:embed test/sample_docker.yaml
+	sampleDockerYaml string
+
 	//go:embed test/default.env
 	defaultEnv string
 
@@ -154,6 +157,21 @@ func TestAddPing(t *testing.T) {
 	saveAndCheckContent(t, loader, cfg, testFile, samplePingYaml)
 }
 
+func TestAddDocker(t *testing.T) {
+	dir := t.TempDir()
+	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+	loader := NewLoader("test.yaml", []string{dir})
+	cfg, err := loader.Load()
+	assert.NoError(t, err, "no error loading config")
+
+	cfg.Monitoring.Docker["app_containers"] = DockerConfig{
+		Containers: "web-app, api-server",
+		Threshold:  5,
+		Icon:       "box",
+	}
+	saveAndCheckContent(t, loader, cfg, testFile, sampleDockerYaml)
+}
+
 func TestAddHealthcheck(t *testing.T) {
 	dir := t.TempDir()
 	testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
@@ -161,7 +179,7 @@ func TestAddHealthcheck(t *testing.T) {
 	cfg, err := loader.Load()
 	assert.NoError(t, err, "no error loading config")
 
-	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 401, "test"}
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 401, "test", ""}
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddHealthcheck)
 }
 
@@ -225,7 +243,7 @@ func TestRemoveHealthCheck(t *testing.T) {
 	// we already have the one to edit?
 	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
 
-	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test"}
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", ""}
 	delete(cfg.Monitoring.Healthcheck, "self")
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddRemoveHealthcheck)
@@ -246,7 +264,7 @@ func TestLoadChangeAndSave(t *testing.T) {
 	// we already have the one to edit?
 	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
 
-	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test"}
+	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", ""}
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlEditHealthcheck)
 }

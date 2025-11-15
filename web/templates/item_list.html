@@ -4,40 +4,63 @@
 <div class="list-group">
     {{ range . }}
     <div
-            class="list-group-item item-row item-container"
-            data-id="{{ .ID }}"
-            role="listitem"
-            aria-label="Status for {{ .DisplayName }}"
+        class="list-group-item item-row item-container"
+        data-id="{{ .ID }}"
+        role="listitem"
+        aria-label="Status for {{ .DisplayName }}"
     >
         <div class="d-flex justify-content-between align-items-start">
             <div class="item-status">
                 <span style="display: inline-block">
                     <i
-                            class="bi bi-{{ .Icon }} item-icon"
-                            aria-hidden="true"
+                        class="bi bi-{{ .Icon }} item-icon"
+                        aria-hidden="true"
                     ></i>
                 </span>
                 <span
-                        class="status-indicator {{ .StatusClass }}"
-                        aria-label="Status: {{ .Status }}"
+                    class="status-indicator {{ .StatusClass }}"
+                    aria-label="Status: {{ .Status }}"
                 ></span>
             </div>
             <div class="item-stack">
                 <div class="item-detail1">
                     <span aria-label="Name">{{ .DisplayName }}</span>
                     <span
-                            class="badge {{ .StatusClass }}"
-                            aria-label="Status badge: {{ .Status }}"
-                    >{{ .Status }}</span
+                        class="badge {{ .StatusClass }}"
+                        aria-label="Status badge: {{ .Status }}"
+                        >{{ .Status }}</span
                     >
                     <span class="ms-2" aria-label="Value">{{ .Value }}</span>
                 </div>
                 <div class="item-detail2">
                     <span class="ms-2" aria-label="Secondary value"
-                    >{{ .Value2 }}</span
+                        >{{ .Value2 }}</span
                     >
                 </div>
             </div>
+            {{ if eq .Group "docker" }}
+            <div class="item-actions ms-2">
+                <button
+                    class="btn btn-sm btn-warning restart-docker-btn"
+                    data-id="{{ .ID }}"
+                    title="Restart containers"
+                    aria-label="Restart Docker containers for {{ .DisplayName }}"
+                >
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                </button>
+            </div>
+            {{ else if and (eq .Group "health") .HasRestartContainers }}
+            <div class="item-actions ms-2">
+                <button
+                    class="btn btn-sm btn-warning restart-healthcheck-btn"
+                    data-id="{{ .ID }}"
+                    title="Restart containers"
+                    aria-label="Restart containers for {{ .DisplayName }}"
+                >
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                </button>
+            </div>
+            {{ end }}
         </div>
     </div>
     {{ end }}
