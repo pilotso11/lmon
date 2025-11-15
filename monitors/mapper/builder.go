@@ -5,6 +5,7 @@ package mapper
 import (
 	"context"
 
+	"lmon/common"
 	"lmon/config"
 	"lmon/monitors/disk"
 	"lmon/monitors/docker"
@@ -85,5 +86,9 @@ func (d Mapper) NewMem(_ context.Context, cfg config.SystemItem) (system.Mem, er
 // NewDocker constructs a Docker monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewDocker(_ context.Context, name string, cfg config.DockerConfig) (docker.Monitor, error) {
 	name, _ = config.SanitiseName(name)
-	return docker.NewMonitor(name, cfg.Containers, cfg.Threshold, cfg.Icon, d.AllowedRestartContainers, d.Impls.Docker)
+	var impl docker.Provider
+	if !common.IsNil(d.Impls.Docker) {
+		impl = d.Impls.Docker
+	}
+	return docker.NewMonitor(name, cfg.Containers, cfg.Threshold, cfg.Icon, d.AllowedRestartContainers, impl)
 }
