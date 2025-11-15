@@ -98,3 +98,15 @@ func TestMapper_NewMem(t *testing.T) {
 	assert.NoError(t, err, "should not error")
 	assert.Equal(t, "system_mem", mem.Name(), "should create memory monitor with correct name")
 }
+
+// TestMapper_NewDocker verifies that NewDocker creates a Docker monitor with the correct name and no error.
+func TestMapper_NewDocker(t *testing.T) {
+	m := NewMapper(nil)
+	d, err := m.NewDocker(t.Context(), "test", config.DockerConfig{
+		Containers: "web-app, api-server",
+		Threshold:  5,
+		Icon:       "box",
+	})
+	assert.NoError(t, err, "should not error")
+	assert.Equal(t, "docker_test", d.Name(), "should create docker monitor with correct name")
+}

@@ -6,22 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Building:**
 ```bash
-go build                    # Build the lmon binary
-go build -v ./...          # Build all packages with verbose output
+CGO_ENABLED=0 go build                    # Build the lmon binary
+CGO_ENABLED=0 go build -v ./...          # Build all packages with verbose output
 ```
 
 **Testing:**
 ```bash
-go test -race ./...                               # Run all tests
-go test -race -v ./...                           # Run tests with verbose output
-go test -race ./...                        # Run tests with race detection
-go test -v -race ./... -covermode=atomic -coverprofile=coverage.out  # Full test suite with coverage
+CGO_ENABLED=0 go test -race ./...                               # Run all tests
+CGO_ENABLED=0 go test -race -v ./...                           # Run tests with verbose output
+CGO_ENABLED=0 go test -race ./...                        # Run tests with race detection
+CGO_ENABLED=0 go test -v -race ./... -covermode=atomic -coverprofile=coverage.out  # Full test suite with coverage
 go tool cover -func=coverage.out          # View coverage report
 ```
 
 **UI Tests (requires running web server):**
 ```bash
-go test -v ./uitest         # Run UI tests using go-rod browser automation
+CGO_ENABLED=0 go test -v ./uitest         # Run UI tests using go-rod browser automation
 ```
 
 **Docker:**

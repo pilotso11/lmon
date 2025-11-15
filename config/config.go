@@ -40,6 +40,7 @@ type MonitoringConfig struct {
 	System      SystemConfig
 	Healthcheck map[string]HealthcheckConfig
 	Ping        map[string]PingConfig
+	Docker      map[string]DockerConfig
 }
 
 // DiskConfig represents disk monitoring configuration.
@@ -64,10 +65,11 @@ type SystemConfig struct {
 
 // HealthcheckConfig represents health check monitoring configuration
 type HealthcheckConfig struct {
-	URL      string
-	Timeout  int
-	RespCode int
-	Icon     string
+	URL               string
+	Timeout           int
+	RespCode          int
+	Icon              string
+	RestartContainers string `json:"restart_containers,omitempty"` // Optional: comma-separated list of containers to restart
 }
 
 // PingConfig represents ping monitor configuration
@@ -76,6 +78,13 @@ type PingConfig struct {
 	Timeout        int
 	Icon           string
 	AmberThreshold int // Response time in ms for amber status (required)
+}
+
+// DockerConfig represents Docker container monitoring configuration
+type DockerConfig struct {
+	Containers string // Space or comma-separated list of container names/IDs
+	Threshold  int    // Max restart count threshold before alerting
+	Icon       string
 }
 
 // WebhookConfig represents webhook notification configuration
@@ -194,6 +203,9 @@ func (l *Loader) Load() (*Config, error) {
 	if config.Monitoring.Ping == nil {
 		config.Monitoring.Ping = make(map[string]PingConfig)
 	}
+	if config.Monitoring.Docker == nil {
+		config.Monitoring.Docker = make(map[string]DockerConfig)
+	}
 
 	return &config, nil
 }
@@ -243,6 +255,9 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.timeout", name), healthcheck.Timeout)
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.respcode", name), healthcheck.RespCode)
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.icon", name), healthcheck.Icon)
+		if healthcheck.RestartContainers != "" {
+			l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.restartcontainers", name), healthcheck.RestartContainers)
+		}
 	}
 
 	for name, ping := range config.Monitoring.Ping {
@@ -250,6 +265,12 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.timeout", name), ping.Timeout)
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.icon", name), ping.Icon)
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.amberthreshold", name), ping.AmberThreshold)
+	}
+
+	for name, docker := range config.Monitoring.Docker {
+		l.v.Set(fmt.Sprintf("monitoring.docker.%s.containers", name), docker.Containers)
+		l.v.Set(fmt.Sprintf("monitoring.docker.%s.threshold", name), docker.Threshold)
+		l.v.Set(fmt.Sprintf("monitoring.docker.%s.icon", name), docker.Icon)
 	}
 
 	// overwrite the config file or create it if it doesn't exist
