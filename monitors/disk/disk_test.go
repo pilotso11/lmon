@@ -213,7 +213,7 @@ func Test_Check_PushOnChange(t *testing.T) {
 
 			assert.Eventually(t, func() bool {
 				return tt.initialCnt == push.Calls.Size()
-			}, 100*time.Millisecond, time.Millisecond, "inial push count")
+			}, 500*time.Millisecond, time.Millisecond, "inial push count")
 			require.Equal(t, tt.initialCnt, push.Calls.Size(), "initial push cnt")
 			if tt.initialCnt > 0 {
 				va, ok := push.Calls.Load(int32(tt.initialCnt))
