@@ -96,7 +96,9 @@ func TestService_Remove(t *testing.T) {
 	assert.Error(t, err, "removing non-existent monitor should fail")
 	assert.ErrorAs(t, err, &ErrNotFound{}, "ErrNotFound")
 	assert.NotNil(t, err, "error should be non-nil")
-	assert.Equal(t, err err.Error(), "monitor test1 not found", "error message")
+	if err != nil {
+		assert.Equal(t, err.Error(), "monitor test1 not found", "error message")
+	}
 
 	// Test removing the last monitor
 	err = svc.Remove(m2)
