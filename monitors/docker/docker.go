@@ -92,7 +92,7 @@ func NewMonitor(name string, containers string, threshold int, icon string, impl
 	}
 
 	// Parse container list (support both space and comma separation)
-	containerList := parseContainerList(containers)
+	containerList := ParseContainerList(containers)
 	if len(containerList) == 0 {
 		return Monitor{}, fmt.Errorf("no containers specified")
 	}
