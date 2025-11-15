@@ -100,9 +100,16 @@ document.addEventListener("DOMContentLoaded", function () {
       e.stopPropagation();
 
       const monitorId = this.getAttribute("data-id");
-      const displayName = this.closest(".item-container")
-        .querySelector('[aria-label*="Name"]')
-        .textContent.trim();
+      // Try to find the display name in both desktop (.item-container) and mobile views
+      let container = this.closest(".item-container");
+      let nameElem;
+      if (container) {
+        nameElem = container.querySelector('[aria-label*="Name"]');
+      } else {
+        // Fallback for mobile: search from the button's parent
+        nameElem = this.parentElement.querySelector('[aria-label*="Name"]');
+      }
+      const displayName = nameElem ? nameElem.textContent.trim() : "";
 
       if (
         !confirm(
