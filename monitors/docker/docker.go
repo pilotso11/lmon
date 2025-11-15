@@ -116,7 +116,7 @@ func NewMonitor(name string, containers string, threshold int, icon string, impl
 	}, nil
 }
 
-// parseContainerList splits a container list by spaces and commas
+// ParseContainerList splits a container list by spaces and commas
 func ParseContainerList(containers string) []string {
 	// Split by comma or space
 	parts := strings.FieldsFunc(containers, func(r rune) bool {
