@@ -13,6 +13,7 @@ import (
 	"lmon/common"
 	"lmon/config"
 	"lmon/monitors"
+	"lmon/monitors/docker"
 )
 
 // TestNewHealthcheck verifies that a Healthcheck can be created and added to a monitoring service.
@@ -259,7 +260,7 @@ func TestHealthcheck_DefaultImplSmokeTest(t *testing.T) {
 
 // TestHealthcheck_RestartContainers_Success verifies successful container restart.
 func TestHealthcheck_RestartContainers_Success(t *testing.T) {
-	mockDocker := &MockDockerProvider{}
+	mockDocker := &docker.MockDockerProvider{}
 	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "app1,app2,app3", nil, mockDocker)
 	assert.NoError(t, err)
 
@@ -272,7 +273,7 @@ func TestHealthcheck_RestartContainers_Success(t *testing.T) {
 
 // TestHealthcheck_RestartContainers_Error verifies error handling.
 func TestHealthcheck_RestartContainers_Error(t *testing.T) {
-	mockDocker := &MockDockerProvider{
+	mockDocker := &docker.MockDockerProvider{
 		RestartError: assert.AnError,
 	}
 	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "app1", nil, mockDocker)
