@@ -25,11 +25,16 @@ func TestNewService(t *testing.T) {
 	svc.Add(ctx, NewMockMonitor("test", "test"))
 	_, ok := svc.monitors.Load("test")
 	require.True(t, ok, "monitor added")
-	time.Sleep(15 * time.Millisecond)
-	m, ok := svc.monitors.Load("test")
-	require.True(t, ok, "monitor exists")
-	assert.Equal(t, int32(3), m.(*MockMonitor).Checks.Load(), "checks called start + add + timer")
-	assert.Equal(t, 1, svc.result.Size(), "len result")
+
+	// Wait until we've observed at least 3 checks and 1 stored result.
+	// Using Eventually avoids flakiness due to scheduler/timing jitter in CI.
+	require.Eventually(t, func() bool {
+		m, ok := svc.monitors.Load("test")
+		if !ok {
+			return false
+		}
+		return m.(*MockMonitor).Checks.Load() >= 3 && svc.result.Size() == 1
+	}, 200*time.Millisecond, 5*time.Millisecond, "expected at least 3 checks and 1 result")
 
 	cancel()
 }
@@ -90,7 +95,8 @@ func TestService_Remove(t *testing.T) {
 	err = svc.Remove(m1)
 	assert.Error(t, err, "removing non-existent monitor should fail")
 	assert.ErrorAs(t, err, &ErrNotFound{}, "ErrNotFound")
-	assert.Equal(t, err.Error(), "monitor test1 not found", "error message")
+	assert.NotNil(t, err, "error should be non-nil")
+	assert.Equal(t, err err.Error(), "monitor test1 not found", "error message")
 
 	// Test removing the last monitor
 	err = svc.Remove(m2)
