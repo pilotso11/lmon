@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 
 	"lmon/config"
@@ -79,15 +80,16 @@ func (d *DefaultDockerProvider) Close() error {
 
 // Monitor represents a Docker container monitor
 type Monitor struct {
-	name       string
-	containers []string // List of container names/IDs to monitor
-	threshold  int      // Max restart count threshold
-	icon       string
-	impl       Provider
+	name                     string
+	containers               []string // List of container names/IDs to monitor
+	threshold                int      // Max restart count threshold
+	icon                     string
+	impl                     Provider
+	allowedRestartContainers []string // Global whitelist of containers allowed for restart
 }
 
 // NewMonitor creates a new Docker monitor
-func NewMonitor(name string, containers string, threshold int, icon string, impl Provider) (Monitor, error) {
+func NewMonitor(name string, containers string, threshold int, icon string, allowedRestartContainers []string, impl Provider) (Monitor, error) {
 	if icon == "" {
 		icon = Icon
 	}
@@ -108,11 +110,12 @@ func NewMonitor(name string, containers string, threshold int, icon string, impl
 	}
 
 	return Monitor{
-		name:       name,
-		containers: containerList,
-		threshold:  threshold,
-		icon:       icon,
-		impl:       impl,
+		name:                     name,
+		containers:               containerList,
+		threshold:                threshold,
+		icon:                     icon,
+		impl:                     impl,
+		allowedRestartContainers: allowedRestartContainers,
 	}, nil
 }
 
@@ -210,8 +213,67 @@ func (m Monitor) Save(cfg *config.Config) {
 }
 
 // Restart restarts all containers monitored by this monitor
+// Only containers in the allowedRestartContainers whitelist can be restarted
 func (m Monitor) Restart(ctx context.Context) error {
-	return m.impl.RestartContainers(ctx, m.containers)
+	// Filter containers to only those in the allowed list
+	containersToRestart := filterAllowedContainers(m.containers, m.allowedRestartContainers)
+	
+	// If no allowed containers, return an error
+	if len(containersToRestart) == 0 {
+		return fmt.Errorf("no containers in the restart list are allowed by the global whitelist")
+	}
+	
+	// Log if some containers were skipped
+	if len(containersToRestart) < len(m.containers) {
+		skipped := findSkippedContainers(m.containers, containersToRestart)
+		log.Printf("Warning: Skipping restart of containers not in allowedRestartContainers whitelist: %v", skipped)
+	}
+	
+	return m.impl.RestartContainers(ctx, containersToRestart)
+}
+
+// filterAllowedContainers returns only the containers that are in the allowed list
+// If allowedList is empty, all containers are allowed (for backward compatibility)
+func filterAllowedContainers(containers []string, allowedList []string) []string {
+	// If no whitelist is configured, allow all containers
+	if len(allowedList) == 0 {
+		return containers
+	}
+	
+	// Create a map for fast lookup
+	allowed := make(map[string]bool)
+	for _, c := range allowedList {
+		allowed[c] = true
+	}
+	
+	// Filter containers
+	var result []string
+	for _, c := range containers {
+		if allowed[c] {
+			result = append(result, c)
+		}
+	}
+	
+	return result
+}
+
+// findSkippedContainers returns containers that were in the original list but not in the filtered list
+func findSkippedContainers(original []string, filtered []string) []string {
+	// Create a map for fast lookup
+	included := make(map[string]bool)
+	for _, c := range filtered {
+		included[c] = true
+	}
+	
+	// Find skipped containers
+	var skipped []string
+	for _, c := range original {
+		if !included[c] {
+			skipped = append(skipped, c)
+		}
+	}
+	
+	return skipped
 }
 
 // Close closes the Docker client connection if the provider implements io.Closer
