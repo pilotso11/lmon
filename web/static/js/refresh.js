@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   updateCountdown();
-  const intervalId = setInterval(function () {
+  setInterval(function () {
     remaining--;
     updateCountdown();
     if (remaining <= 0) {
