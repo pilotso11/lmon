@@ -236,13 +236,20 @@ func (s *Service) Size() int {
 	return s.monitors.Size()
 }
 
+// Get retrieves a monitor by its name. Returns nil if the monitor is not found.
+func (s *Service) Get(name string) Monitor {
+	m, _ := s.monitors.Load(name)
+	return m
+}
+
 // Save persists the current monitor configuration to the provided config struct.
 // It clears disk and healthcheck entries and saves all monitors' configs.
 func (s *Service) Save(cfg *config.Config) error {
-	// Remove all disks, healthchecks, and ping monitors from config
+	// Remove all disks, healthchecks, ping, and docker monitors from config
 	cfg.Monitoring.Disk = make(map[string]config.DiskConfig)
 	cfg.Monitoring.Healthcheck = make(map[string]config.HealthcheckConfig)
 	cfg.Monitoring.Ping = make(map[string]config.PingConfig)
+	cfg.Monitoring.Docker = make(map[string]config.DockerConfig)
 
 	// Save all the monitors
 	s.monitors.Range(func(key string, m Monitor) bool {

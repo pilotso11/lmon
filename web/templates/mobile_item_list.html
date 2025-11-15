@@ -1,14 +1,12 @@
 {{ define "mobileItemList" }} {{ if not . }}
 <div class="text-center">No items to display</div>
-{{ else }}
-{{ range $idx, $item := . }}
-{{ $bgClass := "" }} {{ if $item.EvenRow }}{{ $bgClass = "even" }}{{ else }}{{
-$bgClass = "odd" }}{{ end }}
+{{ else }} {{ range $idx, $item := . }} {{ $bgClass := "" }} {{ if $item.EvenRow
+}}{{ $bgClass = "even" }}{{ else }}{{ $bgClass = "odd" }}{{ end }}
 <div
-        class="mobile-list-item {{ $bgClass }}"
-        data-id="{{ $item.ID }}"
-        role="listitem"
-        aria-label="Monitor {{ $item.DisplayName }} status {{ $item.Status }}"
+    class="mobile-list-item {{ $bgClass }}"
+    data-id="{{ $item.ID }}"
+    role="listitem"
+    aria-label="Monitor {{ $item.DisplayName }} status {{ $item.Status }}"
 >
     <div class="mobile-line1">
         <div>
@@ -21,21 +19,40 @@ $bgClass = "odd" }}{{ end }}
     <div class="mobile-line2">
         <span class="mobile-status-badge">
             <span
-                    class="badge {{ $item.StatusClass }}"
-                    aria-label="Status: {{ $item.Status }}"
-            >{{ $item.Status }}</span
+                class="badge {{ $item.StatusClass }}"
+                aria-label="Status: {{ $item.Status }}"
+                >{{ $item.Status }}</span
             >
         </span>
         <span class="mobile-detail" aria-label="Detail: {{ $item.Value }}"
-        >{{ $item.Value }}</span
+            >{{ $item.Value }}</span
         >
     </div>
     <div class="mobile-line3">
         <span
-                class="mobile-detail2"
-                aria-label="Additional detail: {{ $item.Value2 }}"
-        >{{ $item.Value2 }}</span
+            class="mobile-detail2"
+            aria-label="Additional detail: {{ $item.Value2 }}"
+            >{{ $item.Value2 }}</span
         >
+        {{ if eq $item.Group "docker" }}
+        <button
+            class="btn btn-sm btn-warning restart-docker-btn ms-auto"
+            data-id="{{ $item.ID }}"
+            title="Restart containers"
+            aria-label="Restart Docker containers for {{ $item.DisplayName }}"
+        >
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+        </button>
+        {{ else if and (eq $item.Group "health") $item.HasRestartContainers }}
+        <button
+            class="btn btn-sm btn-warning restart-healthcheck-btn ms-auto"
+            data-id="{{ $item.ID }}"
+            title="Restart containers"
+            aria-label="Restart containers for {{ $item.DisplayName }}"
+        >
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+        </button>
+        {{ end }}
     </div>
 </div>
 {{ end }} {{ end }} {{ end }}

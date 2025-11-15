@@ -108,22 +108,44 @@
         <!-- Respcode Field (http only) -->
         <div class="row align-items-center mb-2" id="respcode-row">
             <label
-                    for="monitor-respcode"
-                    class="col-sm-4 col-form-label"
-                    id="monitor-respcode-label"
-            >Resp Code</label
+                for="monitor-respcode"
+                class="col-sm-4 col-form-label"
+                id="monitor-respcode-label"
+                >Resp Code</label
             >
             <div class="col-sm-8">
                 <input
-                        type="number"
-                        class="form-control"
-                        id="monitor-respcode"
-                        min="100"
-                        max="599"
-                        value="200"
-                        aria-required="true"
-                        aria-label="Monitor response code"
+                    type="number"
+                    class="form-control"
+                    id="monitor-respcode"
+                    min="100"
+                    max="599"
+                    value="200"
+                    aria-required="true"
+                    aria-label="Monitor response code"
                 />
+            </div>
+        </div>
+
+        <!-- Restart Containers Field (http only) -->
+        <div class="row align-items-center mb-2" id="restart-containers-row">
+            <label
+                for="monitor-restart-containers"
+                class="col-sm-4 col-form-label"
+                id="monitor-restart-containers-label"
+                >Restart Containers</label
+            >
+            <div class="col-sm-8">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="monitor-restart-containers"
+                    placeholder="container1, container2"
+                    aria-label="Comma-separated list of containers to restart"
+                />
+                <small class="form-text text-muted"
+                    >Optional: comma-separated list of container names</small
+                >
             </div>
         </div>
 
@@ -155,7 +177,10 @@
                 >Icon</label
             >
             <div class="col-sm-8">
-                <div id="monitor-icon-dropdown" aria-label="monitor icon selector"></div>
+                <div
+                    id="monitor-icon-dropdown"
+                    aria-label="monitor icon selector"
+                ></div>
             </div>
         </div>
 
@@ -180,13 +205,17 @@
                 <i class="bi bi-{{ $health.Icon }} item-icon me-2"></i>
                 <strong class="me-2 config-item-name">{{ $id }}</strong>
                 <span class="me-2 text-muted config-item-url"
-                    >(<code>{{ $health.URL }}</code>
-                    {{ if ne 200 $health.RespCode }}- {{ $health.RespCode }}{{ end }}
-                    )</span
+                    >(<code>{{ $health.URL }}</code> {{ if ne 200
+                    $health.RespCode }}- {{ $health.RespCode }}{{ end }} )</span
                 >
                 <span class="me-2 config-item-timeout"
                     >Timeout: {{ $health.Timeout }}s</span
                 >
+                {{ if $health.RestartContainers }}
+                <span class="me-2 config-item-containers"
+                    >Restart: <code>{{ $health.RestartContainers }}</code></span
+                >
+                {{ end }}
                 <button
                     type="button"
                     class="delete-health-btn ms-auto p-0 btn btn-link"

@@ -1,0 +1,115 @@
+{{ define "config-docker-list" }}
+<div class="card-header">Docker Monitoring</div>
+<div class="card-body">
+    <h6>Add Docker Monitor</h6>
+    <form id="add-docker-form" aria-label="Add Docker Monitor">
+        <div class="row align-items-center mb-2">
+            <label for="docker-name" class="col-sm-4 col-form-label"
+                >Name (ID)</label
+            >
+            <div class="col-sm-8">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="docker-name"
+                    required
+                    aria-required="true"
+                    aria-label="Docker monitor name or ID"
+                />
+            </div>
+        </div>
+        <div class="row align-items-center mb-2">
+            <label for="docker-containers" class="col-sm-4 col-form-label"
+                >Containers</label
+            >
+            <div class="col-sm-8">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="docker-containers"
+                    required
+                    aria-required="true"
+                    aria-label="Container names or IDs (comma or space separated)"
+                    placeholder="web-app, api-server, worker"
+                />
+                <small class="form-text text-muted"
+                    >Comma or space-separated container names/IDs</small
+                >
+            </div>
+        </div>
+        <div class="row align-items-center mb-2">
+            <label for="docker-threshold" class="col-sm-4 col-form-label"
+                >Restart Threshold</label
+            >
+            <div class="col-sm-8">
+                <input
+                    type="number"
+                    class="form-control"
+                    id="docker-threshold"
+                    min="1"
+                    value="5"
+                    required
+                    aria-required="true"
+                    aria-label="Maximum restart count threshold"
+                />
+                <small class="form-text text-muted"
+                    >Alert when restart count reaches this value</small
+                >
+            </div>
+        </div>
+        <div class="row align-items-center mb-2">
+            <label for="docker-icon-dropdown" class="col-sm-4 col-form-label"
+                >Icon</label
+            >
+            <div class="col-sm-8">
+                <div
+                    id="docker-icon-dropdown"
+                    aria-label="Docker icon selector"
+                ></div>
+            </div>
+        </div>
+        <div class="text-end mt-2">
+            <button
+                type="submit"
+                class="btn btn-primary"
+                aria-label="Add Docker Monitor"
+            >
+                Add Docker Monitor
+            </button>
+        </div>
+    </form>
+
+    <hr />
+    <div id="docker-config-items">
+        {{ if .Config.Monitoring.Docker }} {{ range $id, $docker :=
+        .Config.Monitoring.Docker }}
+        <div class="config-item mb-3">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-{{ $docker.Icon }} item-icon me-2"></i>
+                <span class="config-item-name"
+                    ><strong class="me-2">{{ $id }}</strong></span
+                >
+                <span class="me-2 text-muted config-item-containers"
+                    >({{ $docker.Containers }})</span
+                >
+                <span class="me-2">Threshold: {{ $docker.Threshold }}</span>
+                <button
+                    type="button"
+                    class="delete-docker-btn ms-auto p-0 btn btn-link"
+                    style="color: #dc3545; border: none; background: none"
+                    data-id="{{ $id }}"
+                    data-group="docker"
+                    data-detail="{{ $id }} ({{ $docker.Containers }})"
+                    title="Delete"
+                    aria-label="Delete docker monitor {{ $id }} with containers {{ $docker.Containers }}"
+                >
+                    <i class="bi bi-trash" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+        {{ end }} {{ else }}
+        <div class="text-center text-muted">No Docker monitors configured.</div>
+        {{ end }}
+    </div>
+</div>
+{{ end }}
