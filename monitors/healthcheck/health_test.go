@@ -78,28 +78,6 @@ func TestHealthcheck_HasRestartContainers(t *testing.T) {
 	}
 }
 
-// TestHealthcheck_ParseContainerList verifies the parseContainerList function.
-func TestParseContainerList(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  string
-		expect []string
-	}{
-		{"empty", "", []string{}},
-		{"single", "app1", []string{"app1"}},
-		{"comma separated", "app1,app2,app3", []string{"app1", "app2", "app3"}},
-		{"extra whitespace", "  app1 ,  app2  , app3  ", []string{"app1", "app2", "app3"}},
-		{"trailing comma", "app1,app2,", []string{"app1", "app2"}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := parseContainerList(tt.input)
-			assert.Equal(t, tt.expect, result)
-		})
-	}
-}
-
 // TestHealthcheck_Save_WithRestartContainers verifies Save includes RestartContainers.
 func TestHealthcheck_Save_WithRestartContainers(t *testing.T) {
 	h, err := NewHealthcheck("test", "http://localhost", 5, 200, "icon", "app1,app2", nil, nil)
