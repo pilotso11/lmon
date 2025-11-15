@@ -71,16 +71,44 @@ type DefaultHealthcheckProvider struct {
 // DefaultDockerProvider is the default implementation of DockerProvider
 // using the Docker SDK.
 type DefaultDockerProvider struct {
+	client *dockerclient.Client
 }
 
 // NewDefaultDockerProvider creates a new DefaultDockerProvider
 func NewDefaultDockerProvider() (*DefaultDockerProvider, error) {
-	return &DefaultDockerProvider{}, nil
+	cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Docker client: %w", err)
+	}
+	return &DefaultDockerProvider{client: cli}, nil
 }
 
 // RestartContainers restarts the specified Docker containers
 func (d *DefaultDockerProvider) RestartContainers(ctx context.Context, containerNames []string) error {
-	return restartDockerContainers(ctx, containerNames)
+	if len(containerNames) == 0 {
+		return fmt.Errorf("no containers specified")
+	}
+
+	// Restart each container using the stored client
+	for _, name := range containerNames {
+		timeout := 10 // 10 second timeout for graceful shutdown
+		options := container.StopOptions{
+			Timeout: &timeout,
+		}
+		if err := d.client.ContainerRestart(ctx, name, options); err != nil {
+			return fmt.Errorf("failed to restart container %s: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// Close closes the Docker client connection
+func (d *DefaultDockerProvider) Close() error {
+	if d.client != nil {
+		return d.client.Close()
+	}
+	return nil
 }
 
 // NewDefaultHealthcheckProvider creates a new DefaultHealthcheckProvider with the given timeout in milliseconds.
@@ -256,33 +284,6 @@ func (d Healthcheck) Check(ctx context.Context) monitors.Result {
 		Status: status,
 		Value:  res,
 	}
-}
-
-// restartDockerContainers restarts the specified Docker containers
-func restartDockerContainers(ctx context.Context, containerList []string) error {
-	if len(containerList) == 0 {
-		return fmt.Errorf("no containers specified")
-	}
-
-	// Create Docker client
-	cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
-	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
-	}
-	defer cli.Close()
-
-	// Restart each container
-	for _, name := range containerList {
-		timeout := 10 // 10 second timeout for graceful shutdown
-		options := container.StopOptions{
-			Timeout: &timeout,
-		}
-		if err := cli.ContainerRestart(ctx, name, options); err != nil {
-			return fmt.Errorf("failed to restart container %s: %w", name, err)
-		}
-	}
-
-	return nil
 }
 
 // parseContainerList splits a comma-separated container list
