@@ -31,7 +31,8 @@ type Implementations struct {
 // Mapper constructs monitor implementations from configuration and optional providers.
 // It is used to abstract over production and test/mock implementations.
 type Mapper struct {
-	Impls Implementations
+	Impls                    Implementations
+	AllowedRestartContainers string // Global whitelist of containers allowed for restart
 }
 
 // NewMapper returns a Mapper with the given implementations.
@@ -40,7 +41,10 @@ func NewMapper(impls *Implementations) Mapper {
 	if impls == nil {
 		impls = &Implementations{}
 	}
-	return Mapper{*impls}
+	return Mapper{
+		Impls:                    *impls,
+		AllowedRestartContainers: "", // Empty by default, will be set from config
+	}
 }
 
 // NewDisk constructs a disk monitor using the provided configuration and optional mock provider.
@@ -52,7 +56,7 @@ func (d Mapper) NewDisk(_ context.Context, name string, cfg config.DiskConfig) (
 // NewHealthcheck constructs a healthcheck monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewHealthcheck(_ context.Context, name string, cfg config.HealthcheckConfig) (healthcheck.Healthcheck, error) {
 	name, _ = config.SanitiseName(name)
-	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.RespCode, cfg.Icon, cfg.RestartContainers, d.Impls.Health, d.Impls.Docker)
+	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.RespCode, cfg.Icon, cfg.RestartContainers, d.AllowedRestartContainers, d.Impls.Health, d.Impls.Docker)
 }
 
 // NewCpu constructs a CPU monitor using the provided configuration and optional mock provider.
@@ -81,5 +85,5 @@ func (d Mapper) NewMem(_ context.Context, cfg config.SystemItem) (system.Mem, er
 // NewDocker constructs a Docker monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewDocker(_ context.Context, name string, cfg config.DockerConfig) (docker.Monitor, error) {
 	name, _ = config.SanitiseName(name)
-	return docker.NewMonitor(name, cfg.Containers, cfg.Threshold, cfg.Icon, d.Impls.Docker)
+	return docker.NewMonitor(name, cfg.Containers, cfg.Threshold, cfg.Icon, d.AllowedRestartContainers, d.Impls.Docker)
 }
