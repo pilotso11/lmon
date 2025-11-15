@@ -447,9 +447,11 @@ func TestAddPingViaConfigUIRod(t *testing.T) {
 	requireNoErrorWithScreenshot(t, page, err, "find monitor submit button")
 	el.MustClick()
 
-	// Wait for page to reload after form submission and then check config list
-	err = page.Timeout(time.Second).Reload()
-	requireNoErrorWithScreenshot(t, page, err, "wait for reload after adding ping")
+	// Wait for the page to navigate/reload after form submission completes
+	// The form submit triggers a POST and then the page redirects back to /config
+	time.Sleep(100 * time.Millisecond) // Give the POST time to complete
+	err = page.Timeout(2 * time.Second).WaitLoad()
+	requireNoErrorWithScreenshot(t, page, err, "wait for page load after adding ping")
 
 	// Wait for the ping monitor to appear in the config list
 	require.Eventually(t, func() bool {
