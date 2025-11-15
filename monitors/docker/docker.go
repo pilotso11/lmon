@@ -89,7 +89,7 @@ type Monitor struct {
 }
 
 // NewMonitor creates a new Docker monitor
-func NewMonitor(name string, containers string, threshold int, icon string, allowedRestartContainers string, impl Provider) (Monitor, error) {
+func NewMonitor(name string, containers string, threshold int, icon string, allowedRestartContainers []string, impl Provider) (Monitor, error) {
 	if icon == "" {
 		icon = Icon
 	}
@@ -99,9 +99,6 @@ func NewMonitor(name string, containers string, threshold int, icon string, allo
 	if len(containerList) == 0 {
 		return Monitor{}, fmt.Errorf("no containers specified")
 	}
-
-	// Parse allowed restart containers list
-	allowedList := ParseContainerList(allowedRestartContainers)
 
 	// Create default provider if none provided
 	if impl == nil {
@@ -118,7 +115,7 @@ func NewMonitor(name string, containers string, threshold int, icon string, allo
 		threshold:                threshold,
 		icon:                     icon,
 		impl:                     impl,
-		allowedRestartContainers: allowedList,
+		allowedRestartContainers: allowedRestartContainers,
 	}, nil
 }
 

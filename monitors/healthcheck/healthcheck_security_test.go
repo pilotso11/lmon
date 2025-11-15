@@ -13,46 +13,46 @@ import (
 // TestHealthcheck_RestartContainers_WithWhitelist tests restart with allowed containers
 func TestHealthcheck_RestartContainers_WithWhitelist(t *testing.T) {
 	tests := []struct {
-		name             string
+		name              string
 		restartContainers string
-		allowedContainers string
-		expectRestart    []string
-		expectError      bool
+		allowedContainers []string
+		expectRestart     []string
+		expectError       bool
 	}{
 		{
-			name:             "all containers allowed",
+			name:              "all containers allowed",
 			restartContainers: "web-app, api-server, worker",
-			allowedContainers: "web-app, api-server, worker, database",
-			expectRestart:    []string{"web-app", "api-server", "worker"},
-			expectError:      false,
+			allowedContainers: []string{"web-app", "api-server", "worker", "database"},
+			expectRestart:     []string{"web-app", "api-server", "worker"},
+			expectError:       false,
 		},
 		{
-			name:             "some containers allowed",
+			name:              "some containers allowed",
 			restartContainers: "web-app, api-server, worker",
-			allowedContainers: "web-app, api-server",
-			expectRestart:    []string{"web-app", "api-server"},
-			expectError:      false,
+			allowedContainers: []string{"web-app", "api-server"},
+			expectRestart:     []string{"web-app", "api-server"},
+			expectError:       false,
 		},
 		{
-			name:             "no containers allowed",
+			name:              "no containers allowed",
 			restartContainers: "web-app, api-server",
-			allowedContainers: "database, cache",
-			expectRestart:    nil,
-			expectError:      true,
+			allowedContainers: []string{"database", "cache"},
+			expectRestart:     nil,
+			expectError:       true,
 		},
 		{
-			name:             "empty whitelist allows all",
+			name:              "empty whitelist allows all",
 			restartContainers: "web-app, api-server, worker",
-			allowedContainers: "",
-			expectRestart:    []string{"web-app", "api-server", "worker"},
-			expectError:      false,
+			allowedContainers: nil,
+			expectRestart:     []string{"web-app", "api-server", "worker"},
+			expectError:       false,
 		},
 		{
-			name:             "single container allowed",
+			name:              "single container allowed",
 			restartContainers: "web-app, api-server",
-			allowedContainers: "web-app",
-			expectRestart:    []string{"web-app"},
-			expectError:      false,
+			allowedContainers: []string{"web-app"},
+			expectRestart:     []string{"web-app"},
+			expectError:       false,
 		},
 	}
 

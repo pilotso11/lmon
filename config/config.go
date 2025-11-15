@@ -41,7 +41,7 @@ type MonitoringConfig struct {
 	Healthcheck               map[string]HealthcheckConfig
 	Ping                      map[string]PingConfig
 	Docker                    map[string]DockerConfig
-	AllowedRestartContainers  string // Global whitelist of container names/IDs allowed for restart operations
+	AllowedRestartContainers  []string // Global whitelist of container names/IDs allowed for restart operations
 }
 
 // DiskConfig represents disk monitoring configuration.
@@ -243,7 +243,7 @@ func (l *Loader) Save(config *Config) error {
 	l.v.Set("monitoring.system.title", config.Monitoring.System.Title)
 
 	// Save the global allowed restart containers list
-	if config.Monitoring.AllowedRestartContainers != "" {
+	if len(config.Monitoring.AllowedRestartContainers) > 0 {
 		l.v.Set("monitoring.allowedrestartcontainers", config.Monitoring.AllowedRestartContainers)
 	}
 

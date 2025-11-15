@@ -33,7 +33,7 @@ type Implementations struct {
 // It is used to abstract over production and test/mock implementations.
 type Mapper struct {
 	Impls                    Implementations
-	AllowedRestartContainers string // Global whitelist of containers allowed for restart
+	AllowedRestartContainers []string // Global whitelist of containers allowed for restart
 }
 
 // NewMapper returns a Mapper with the given implementations.
@@ -44,7 +44,7 @@ func NewMapper(impls *Implementations) Mapper {
 	}
 	return Mapper{
 		Impls:                    *impls,
-		AllowedRestartContainers: "", // Empty by default, will be set from config
+		AllowedRestartContainers: nil, // Empty by default, will be set from config
 	}
 }
 

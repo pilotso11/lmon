@@ -115,7 +115,7 @@ type Healthcheck struct {
 // If icon is empty, the default Icon is used.
 // If impl is nil, the DefaultHealthcheckProvider is used.
 // If dockerImpl is nil and restartContainers is set, a docker.DefaultDockerProvider is created.
-func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, restartContainers string, allowedRestartContainers string, impl UsageProvider, dockerImpl docker.Provider) (Healthcheck, error) {
+func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, restartContainers string, allowedRestartContainers []string, impl UsageProvider, dockerImpl docker.Provider) (Healthcheck, error) {
 	if icon == "" {
 		icon = Icon
 	}
@@ -137,9 +137,6 @@ func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon 
 		return Healthcheck{}, err
 	}
 	
-	// Parse allowed restart containers list
-	allowedList := parseContainerList(allowedRestartContainers)
-	
 	return Healthcheck{
 		name:                     name,
 		url:                      parsedUrl,
@@ -149,7 +146,7 @@ func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon 
 		dockerImpl:               dockerImpl,
 		timeout:                  timeout,
 		respCode:                 respCode,
-		allowedRestartContainers: allowedList,
+		allowedRestartContainers: allowedRestartContainers,
 	}, nil
 }
 
