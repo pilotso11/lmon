@@ -38,9 +38,17 @@ document.addEventListener("DOMContentLoaded", function () {
       e.stopPropagation();
 
       const monitorId = this.getAttribute("data-id");
-      const displayName = this.closest(".item-container")
-        .querySelector('[aria-label*="Name"]')
-        .textContent.trim();
+      // Try to find the display name in both desktop and mobile layouts
+      let displayNameElem = this.closest(".item-container")?.querySelector('[aria-label*="Name"]');
+      if (!displayNameElem) {
+        // Fallback: try to find a nearby element with the aria-label in mobile view
+        displayNameElem = this.parentElement?.querySelector('[aria-label*="Name"]');
+      }
+      if (!displayNameElem) {
+        // As a last resort, search the whole document (should not usually be needed)
+        displayNameElem = document.querySelector('[aria-label*="Name"]');
+      }
+      const displayName = displayNameElem ? displayNameElem.textContent.trim() : "this monitor";
 
       if (
         !confirm(
