@@ -614,12 +614,15 @@ func TestSetConfig(t *testing.T) {
 		err := s.SetConfig(ctx, cfg)
 		assert.NoError(t, err)
 
-		// Verify basic monitors were added - focus on ones that work without network dependencies
-		results := s.monitor.Results()
-		assert.Contains(t, results, "system_cpu")
-		assert.Contains(t, results, "system_mem")
-		assert.Contains(t, results, "disk_root")
-		assert.Contains(t, results, "disk_tmp")
+		// Verify basic monitors were added - wait for background checks to populate results
+		assert.Eventually(t, func() bool {
+			results := s.monitor.Results()
+			_, okCPU := results["system_cpu"]
+			_, okMem := results["system_mem"]
+			_, okDiskRoot := results["disk_root"]
+			_, okDiskTmp := results["disk_tmp"]
+			return okCPU && okMem && okDiskRoot && okDiskTmp
+		}, 500*time.Millisecond, 10*time.Millisecond, "monitor results should contain system and disk items")
 		// Note: Health checks and pings may not appear immediately in results without actual network calls
 	})
 
