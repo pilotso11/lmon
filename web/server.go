@@ -703,6 +703,15 @@ func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
+		// Close the monitor to release any resources (e.g., Docker client connections)
+		if actualMonitor := s.monitor.Get(m.Name()); actualMonitor != nil {
+			if closer, ok := actualMonitor.(io.Closer); ok {
+				if err := closer.Close(); err != nil {
+					log.Printf("Error closing monitor %s: %v", m.Name(), err)
+				}
+			}
+		}
+
 		err := s.monitor.Remove(m)
 		if err != nil {
 			log.Printf("handleDeleteMonitor %s: %v", r.URL.String(), err)

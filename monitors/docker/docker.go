@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"lmon/config"
@@ -211,4 +212,12 @@ func (m Monitor) Save(cfg *config.Config) {
 // Restart restarts all containers monitored by this monitor
 func (m Monitor) Restart(ctx context.Context) error {
 	return m.impl.RestartContainers(ctx, m.containers)
+}
+
+// Close closes the Docker client connection if the provider implements io.Closer
+func (m Monitor) Close() error {
+	if closer, ok := m.impl.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
