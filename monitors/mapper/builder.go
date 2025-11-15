@@ -7,6 +7,7 @@ import (
 
 	"lmon/config"
 	"lmon/monitors/disk"
+	"lmon/monitors/docker"
 	"lmon/monitors/healthcheck"
 	"lmon/monitors/ping"
 	"lmon/monitors/system"
@@ -23,6 +24,7 @@ type Implementations struct {
 	Cpu     *system.MockCpuProvider              // Optional mock CPU provider
 	Mem     *system.MockMemProvider              // Optional mock memory provider
 	Ping    *ping.MockPingProvider               // Optional mock ping provider for tests; nil uses DefaultPingProvider
+	Docker  *docker.MockDockerProvider           // Optional mock Docker provider
 	Webhook WebhookCallbackFunc                  // Optional webhook callback for testing
 }
 
@@ -50,7 +52,7 @@ func (d Mapper) NewDisk(_ context.Context, name string, cfg config.DiskConfig) (
 // NewHealthcheck constructs a healthcheck monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewHealthcheck(_ context.Context, name string, cfg config.HealthcheckConfig) (healthcheck.Healthcheck, error) {
 	name, _ = config.SanitiseName(name)
-	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.RespCode, cfg.Icon, d.Impls.Health)
+	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.RespCode, cfg.Icon, cfg.RestartContainers, d.Impls.Health, nil)
 }
 
 // NewCpu constructs a CPU monitor using the provided configuration and optional mock provider.
@@ -74,4 +76,10 @@ func (d Mapper) NewPing(_ context.Context, name string, cfg config.PingConfig) (
 // NewMem constructs a memory monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewMem(_ context.Context, cfg config.SystemItem) (system.Mem, error) {
 	return system.NewMem(cfg.Threshold, cfg.Icon, d.Impls.Mem), nil
+}
+
+// NewDocker constructs a Docker monitor using the provided configuration and optional mock provider.
+func (d Mapper) NewDocker(_ context.Context, name string, cfg config.DockerConfig) (docker.Monitor, error) {
+	name, _ = config.SanitiseName(name)
+	return docker.NewMonitor(name, cfg.Containers, cfg.Threshold, cfg.Icon, d.Impls.Docker)
 }

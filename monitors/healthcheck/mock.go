@@ -33,3 +33,20 @@ func (m MockHealthcheckProvider) Check(_ context.Context, _ *url.URL, _ int) (*h
 func NewMockHealthcheckProvider(code int) *MockHealthcheckProvider {
 	return &MockHealthcheckProvider{Result: atomic.NewInt32(int32(code))}
 }
+
+var _ DockerProvider = (*MockDockerProvider)(nil)
+
+// MockDockerProvider is a mock implementation of DockerProvider for testing.
+type MockDockerProvider struct {
+	RestartError      error    // Error to return from RestartContainers
+	RestartsRequested []string // Track which containers were requested to restart
+}
+
+// RestartContainers mocks restarting Docker containers
+func (m *MockDockerProvider) RestartContainers(ctx context.Context, containerNames []string) error {
+	if m.RestartError != nil {
+		return m.RestartError
+	}
+	m.RestartsRequested = append(m.RestartsRequested, containerNames...)
+	return nil
+}

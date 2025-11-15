@@ -29,7 +29,7 @@ func TestService_Save(t *testing.T) {
 	svc.Add(ctx, diskMon)
 
 	// Add a Healthcheck monitor
-	healthMon, err := healthcheck.NewHealthcheck("health1", "http://localhost/health", 5, 401, "activity", nil)
+	healthMon, err := healthcheck.NewHealthcheck("health1", "http://localhost/health", 5, 401, "activity", "", nil, nil)
 	require.NoError(t, err)
 	svc.Add(ctx, healthMon)
 

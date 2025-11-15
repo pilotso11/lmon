@@ -211,7 +211,14 @@ document.addEventListener("DOMContentLoaded", function () {
       default_health_icon,
     );
   }
-  
+  if (typeof default_docker_icon !== "undefined") {
+    renderIconDropdown(
+      "docker-icon-dropdown",
+      "docker-icon",
+      default_docker_icon,
+    );
+  }
+
   // Handle monitor type toggle
   const httpRadio = document.getElementById("monitor-type-http");
   const pingRadio = document.getElementById("monitor-type-ping");
@@ -221,10 +228,15 @@ document.addEventListener("DOMContentLoaded", function () {
   const timeoutField = document.getElementById("monitor-timeout");
   const respCodeRow = document.getElementById("respcode-row");
   const respCodeField = document.getElementById("monitor-respcode");
+  const restartContainersRow = document.getElementById(
+    "restart-containers-row",
+  );
   const amberThresholdRow = document.getElementById("amber-threshold-row");
-  const amberThresholdField = document.getElementById("monitor-amber-threshold");
+  const amberThresholdField = document.getElementById(
+    "monitor-amber-threshold",
+  );
   const submitButton = document.getElementById("add-monitor-button");
-  
+
   function updateFormForType(type) {
     if (type === "ping") {
       // Update labels and fields for ping
@@ -238,16 +250,17 @@ document.addEventListener("DOMContentLoaded", function () {
       timeoutField.max = "30000";
       timeoutField.setAttribute("aria-label", "Ping timeout in milliseconds");
       respCodeRow.style.display = "none";
+      restartContainersRow.style.display = "none";
       amberThresholdRow.style.display = "flex";
       amberThresholdField.required = true;
       submitButton.textContent = "Add Ping Monitor";
-      
+
       // Update icon dropdown to use ping icon if available
       if (typeof default_ping_icon !== "undefined") {
         renderIconDropdown(
-            "monitor-icon-dropdown",
-            "monitor-icon-select",
-            default_ping_icon,
+          "monitor-icon-dropdown",
+          "monitor-icon-select",
+          default_ping_icon,
         );
       }
     } else {
@@ -260,44 +273,48 @@ document.addEventListener("DOMContentLoaded", function () {
       timeoutField.value = "10";
       timeoutField.min = "1";
       timeoutField.removeAttribute("max");
-      timeoutField.setAttribute("aria-label", "Health check timeout in seconds");
+      timeoutField.setAttribute(
+        "aria-label",
+        "Health check timeout in seconds",
+      );
       respCodeRow.style.display = "flex";
       respCodeField.value = "200";
       respCodeField.min = "100";
       respCodeField.max = "599";
+      restartContainersRow.style.display = "flex";
       amberThresholdRow.style.display = "none";
       amberThresholdField.required = false;
       submitButton.textContent = "Add Health Check";
-      
+
       // Update icon dropdown to use health icon if available
       if (typeof default_health_icon !== "undefined") {
         renderIconDropdown(
-            "monitor-icon-dropdown",
-            "monitor-icon-select",
-            default_health_icon,
+          "monitor-icon-dropdown",
+          "monitor-icon-select",
+          default_health_icon,
         );
       }
     }
   }
-  
+
   // Initialize form based on default selection
   if (httpRadio && httpRadio.checked) {
     updateFormForType("http");
   } else if (pingRadio && pingRadio.checked) {
     updateFormForType("ping");
   }
-  
+
   // Add change listeners for radio buttons
   if (httpRadio) {
-    httpRadio.addEventListener("change", function() {
+    httpRadio.addEventListener("change", function () {
       if (this.checked) {
         updateFormForType("http");
       }
     });
   }
-  
+
   if (pingRadio) {
-    pingRadio.addEventListener("change", function() {
+    pingRadio.addEventListener("change", function () {
       if (this.checked) {
         updateFormForType("ping");
       }
@@ -339,6 +356,18 @@ document.addEventListener("DOMContentLoaded", function () {
       const id = this.getAttribute("data-id");
       const detail = this.getAttribute("data-detail") || id;
       deleteMonitor("ping", id, detail);
+    });
+  });
+});
+
+// No longer rendering Docker config items client-side; SSR handles this.
+// Only event listeners for delete buttons are needed.
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".delete-docker-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const detail = this.getAttribute("data-detail") || id;
+      deleteMonitor("docker", id, detail);
     });
   });
 });
@@ -434,9 +463,17 @@ document.addEventListener("DOMContentLoaded", function () {
       const timeoutInput = document.getElementById("monitor-timeout");
       const respCodeInput = document.getElementById("monitor-respcode");
       const iconInput = document.getElementById("monitor-icon-select");
-      const typeRadio = document.querySelector('input[name="monitor-type"]:checked');
-      
-      if (!nameInput || !targetInput || !timeoutInput || !iconInput || !typeRadio) {
+      const typeRadio = document.querySelector(
+        'input[name="monitor-type"]:checked',
+      );
+
+      if (
+        !nameInput ||
+        !targetInput ||
+        !timeoutInput ||
+        !iconInput ||
+        !typeRadio
+      ) {
         showToast("Error", "Monitor form fields missing", "danger");
         return;
       }
@@ -454,13 +491,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
       try {
         if (monitorType === "ping") {
-          const amberThresholdInput = document.getElementById("monitor-amber-threshold");
+          const amberThresholdInput = document.getElementById(
+            "monitor-amber-threshold",
+          );
           if (!amberThresholdInput) {
             showToast("Error", "Amber threshold field missing", "danger");
             return;
           }
           const amberThreshold = parseInt(amberThresholdInput.value);
-          
+
           await fetchJson(`/api/config/ping/${encodeURIComponent(name)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -471,18 +510,33 @@ document.addEventListener("DOMContentLoaded", function () {
               icon: icon,
             }),
           });
-          
-          localStorage.setItem("pendingToast", JSON.stringify({
-            title: "Success",
-            message: "Ping monitor added",
-            type: "success",
-          }));
+
+          localStorage.setItem(
+            "pendingToast",
+            JSON.stringify({
+              title: "Success",
+              message: "Ping monitor added",
+              type: "success",
+            }),
+          );
         } else {
           const respCode = parseInt(respCodeInput.value);
           if (respCode < 100 || respCode > 599) {
-            showToast("Error", "Response code must be between 100 and 599", "danger");
+            showToast(
+              "Error",
+              "Response code must be between 100 and 599",
+              "danger",
+            );
             return;
           }
+
+          // Get restart containers value (optional)
+          const restartContainersInput = document.getElementById(
+            "monitor-restart-containers",
+          );
+          const restartContainers = restartContainersInput
+            ? restartContainersInput.value.trim()
+            : "";
 
           // HTTP health check
           await fetchJson(`/api/config/health/${encodeURIComponent(name)}`, {
@@ -493,19 +547,86 @@ document.addEventListener("DOMContentLoaded", function () {
               timeout: timeout,
               respcode: respCode,
               icon: icon,
+              restart_containers: restartContainers,
             }),
           });
-          
-          localStorage.setItem("pendingToast", JSON.stringify({
-            title: "Success",
-            message: "Health check added",
-            type: "success",
-          }));
+
+          localStorage.setItem(
+            "pendingToast",
+            JSON.stringify({
+              title: "Success",
+              message: "Health check added",
+              type: "success",
+            }),
+          );
         }
-        
+
         window.location.reload();
       } catch (error) {
-        handleFetchError(error, `Failed to add ${monitorType === "ping" ? "ping monitor" : "health check"}`);
+        handleFetchError(
+          error,
+          `Failed to add ${monitorType === "ping" ? "ping monitor" : "health check"}`,
+        );
+      }
+    });
+  }
+
+  // Add Docker monitor form submission
+  const addDockerForm = document.getElementById("add-docker-form");
+  if (addDockerForm) {
+    addDockerForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const dockerName = document.getElementById("docker-name").value.trim();
+      const dockerContainers = document
+        .getElementById("docker-containers")
+        .value.trim();
+      const dockerIcon = document.getElementById("docker-icon")
+        ? document.getElementById("docker-icon").value.trim()
+        : "";
+      const dockerThreshold = parseInt(
+        document.getElementById("docker-threshold").value,
+      );
+
+      if (!dockerName) {
+        showToast("Error", "Docker monitor name is required", true);
+        return;
+      }
+
+      if (!dockerContainers) {
+        showToast("Error", "Container names are required", true);
+        return;
+      }
+
+      const dockerConfig = {
+        containers: dockerContainers,
+        icon: dockerIcon,
+        threshold: dockerThreshold,
+      };
+
+      try {
+        await fetchJson(
+          `/api/config/docker/${encodeURIComponent(dockerName)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(dockerConfig),
+          },
+        );
+        // Persist toast info before reload
+        localStorage.setItem(
+          "pendingToast",
+          JSON.stringify({
+            title: "Success",
+            message: "Docker monitor added",
+            type: "success",
+          }),
+        );
+        window.location.reload();
+      } catch (error) {
+        handleFetchError(error, "Failed to add Docker monitor");
       }
     });
   }

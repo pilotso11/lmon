@@ -13,6 +13,8 @@ A lightweight, extensible monitoring service written in Go. lmon monitors system
 - Monitor disk usage for any filesystem path
 - Monitor CPU and memory usage with configurable thresholds
 - Monitor HTTP endpoints with health checks
+- Monitor network connectivity via ICMP ping
+- Monitor Docker container restart counts with restart capability
 - Web UI dashboard with traffic light status indicators
 - Add/remove monitors and update thresholds via the web UI
 - Webhook notifications for unhealthy states
@@ -91,6 +93,17 @@ monitoring:
       url: https://google.com
       timeout: 10
       icon: heart-pulse
+  ping:
+    gateway:
+      address: 192.168.1.1
+      timeout: 1000
+      amberThreshold: 100
+      icon: wifi
+  docker:
+    app_containers:
+      containers: "web-app, api-server, worker"
+      threshold: 5
+      icon: box
 
 webhook:
   enabled: true
@@ -100,7 +113,24 @@ webhook:
 **Notes:**
 - Disk and healthcheck monitors are keyed by name (e.g., `root`, `home`, `self`, `google`).
 - `system.cpu` and `system.memory` thresholds are percentages.
+- `ping.amberThreshold` is the response time in milliseconds that triggers amber (warning) status.
+- `docker.containers` can be a comma or space-separated list of container names or IDs.
+- `docker.threshold` is the maximum restart count before alerting.
 - `webhook.enabled` and `webhook.url` control notification integration.
+
+### Docker Monitoring
+
+The Docker monitor tracks container restart counts and can restart containers via the web UI:
+
+- **Requirements**: Docker socket access (typically `/var/run/docker.sock`)
+- **Containers**: Specify container names or IDs (comma or space-separated)
+- **Threshold**: Maximum restart count before triggering alerts
+  - Green: Below 90% of threshold
+  - Amber: Between 90% and threshold
+  - Red: At or above threshold
+- **Restart Action**: Click the restart button in the web UI to restart all containers in the monitor
+
+**Security Note**: Docker socket access grants significant privileges. Ensure lmon runs with appropriate permissions and consider using read-only socket access where possible.
 
 ### Environment Variables
 
@@ -169,6 +199,7 @@ services:
       - /proc:/proc:ro
       - /:/host/root:ro
       - /home:/host/home:ro
+      - /var/run/docker.sock:/var/run/docker.sock  # For Docker container restart
     environment:
       - LMON_WEB_HOST=0.0.0.0
       - LMON_WEB_PORT=8080
@@ -182,6 +213,18 @@ services:
       retries: 3
       start_period: 5s
 
+```
+
+**Note:** To enable Docker container restart functionality, mount the Docker socket as shown above. The container needs appropriate permissions to access it:
+
+```yaml
+# Option 1: Run as root (simplest, but less secure)
+user: "0:0"
+
+# Option 2: Add user to docker group (recommended)
+# First, get your docker group ID: getent group docker | cut -d: -f3
+# Then add to compose file:
+user: "1000:999"  # Replace 999 with your docker group ID
 ```
 
 Run with:
