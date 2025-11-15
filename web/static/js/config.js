@@ -589,12 +589,12 @@ document.addEventListener("DOMContentLoaded", function () {
       );
 
       if (!dockerName) {
-        showToast("Error", "Docker monitor name is required", true);
+        showToast("Error", "Docker monitor name is required", "danger");
         return;
       }
 
       if (!dockerContainers) {
-        showToast("Error", "Container names are required", true);
+        showToast("Error", "Container names are required", "danger");
         return;
       }
 
