@@ -41,8 +41,12 @@ func main() {
 	// startup monitoring
 	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, 10*time.Second, nil)
 
+	// Create mapper with allowed restart containers
+	m := mapper.NewMapper(nil)
+	m.AllowedRestartContainers = cfg.Monitoring.AllowedRestartContainers
+
 	// start server
-	server, err := web.NewServerWithContext(ctx, cfg, l, mon, mapper.NewMapper(nil))
+	server, err := web.NewServerWithContext(ctx, cfg, l, mon, m)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}

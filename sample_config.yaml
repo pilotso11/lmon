@@ -1,4 +1,11 @@
 monitoring:
+  # Global whitelist of containers allowed for restart operations
+  # Only containers listed here can be restarted via API or healthcheck monitors
+  allowedrestartcontainers:
+    - web-app
+    - api-server
+    - worker
+    - database
   disk:
     root:
       icon: hdd

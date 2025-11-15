@@ -35,12 +35,13 @@ type WebConfig struct {
 
 // MonitoringConfig represents the monitoring configuration
 type MonitoringConfig struct {
-	Interval    int
-	Disk        map[string]DiskConfig
-	System      SystemConfig
-	Healthcheck map[string]HealthcheckConfig
-	Ping        map[string]PingConfig
-	Docker      map[string]DockerConfig
+	Interval                  int
+	Disk                      map[string]DiskConfig
+	System                    SystemConfig
+	Healthcheck               map[string]HealthcheckConfig
+	Ping                      map[string]PingConfig
+	Docker                    map[string]DockerConfig
+	AllowedRestartContainers  []string // Global whitelist of container names/IDs allowed for restart operations
 }
 
 // DiskConfig represents disk monitoring configuration.
@@ -240,6 +241,11 @@ func (l *Loader) Save(config *Config) error {
 	l.v.Set("monitoring.system.cpu.icon", config.Monitoring.System.CPU.Icon)
 	l.v.Set("monitoring.system.memory.icon", config.Monitoring.System.Memory.Icon)
 	l.v.Set("monitoring.system.title", config.Monitoring.System.Title)
+
+	// Save the global allowed restart containers list
+	if len(config.Monitoring.AllowedRestartContainers) > 0 {
+		l.v.Set("monitoring.allowedrestartcontainers", config.Monitoring.AllowedRestartContainers)
+	}
 
 	l.v.Set("webhook.enabled", config.Webhook.Enabled)
 	l.v.Set("webhook.url", config.Webhook.URL)

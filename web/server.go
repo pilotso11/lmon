@@ -869,6 +869,9 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Update the allowed restart containers in the mapper
+	s.mapper.AllowedRestartContainers = cfg.AllowedRestartContainers
+
 	cpu, err := s.mapper.NewCpu(ctx, cfg.System.CPU)
 	if err != nil {
 		return err

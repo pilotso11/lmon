@@ -99,14 +99,15 @@ func (p *DefaultHealthcheckProvider) Check(ctx context.Context, path *url.URL, m
 
 // Healthcheck represents an HTTP endpoint health monitor.
 type Healthcheck struct {
-	name              string          // Logical name for the healthcheck
-	timeout           int             // Timeout in milliseconds for the check
-	respCode          int             // Expected response code to consider the check successful
-	url               *url.URL        // URL to check
-	icon              string          // Icon for UI display
-	restartContainers string          // Optional: comma-separated list of containers to restart
-	impl              UsageProvider   // Implementation for performing the check
-	dockerImpl        docker.Provider // Implementation for Docker restart operations
+	name                     string          // Logical name for the healthcheck
+	timeout                  int             // Timeout in milliseconds for the check
+	respCode                 int             // Expected response code to consider the check successful
+	url                      *url.URL        // URL to check
+	icon                     string          // Icon for UI display
+	restartContainers        string          // Optional: comma-separated list of containers to restart
+	impl                     UsageProvider   // Implementation for performing the check
+	dockerImpl               docker.Provider // Implementation for Docker restart operations
+	allowedRestartContainers []string        // Global whitelist of containers allowed for restart
 }
 
 // NewHealthcheck constructs a new Healthcheck monitor with the given parameters.
@@ -114,7 +115,7 @@ type Healthcheck struct {
 // If icon is empty, the default Icon is used.
 // If impl is nil, the DefaultHealthcheckProvider is used.
 // If dockerImpl is nil and restartContainers is set, a docker.DefaultDockerProvider is created.
-func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, restartContainers string, impl UsageProvider, dockerImpl docker.Provider) (Healthcheck, error) {
+func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, restartContainers string, allowedRestartContainers []string, impl UsageProvider, dockerImpl docker.Provider) (Healthcheck, error) {
 	if icon == "" {
 		icon = Icon
 	}
@@ -135,15 +136,17 @@ func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon 
 	if err != nil {
 		return Healthcheck{}, err
 	}
+	
 	return Healthcheck{
-		name:              name,
-		url:               parsedUrl,
-		icon:              icon,
-		restartContainers: restartContainers,
-		impl:              impl,
-		dockerImpl:        dockerImpl,
-		timeout:           timeout,
-		respCode:          respCode,
+		name:                     name,
+		url:                      parsedUrl,
+		icon:                     icon,
+		restartContainers:        restartContainers,
+		impl:                     impl,
+		dockerImpl:               dockerImpl,
+		timeout:                  timeout,
+		respCode:                 respCode,
+		allowedRestartContainers: allowedRestartContainers,
 	}, nil
 }
 
@@ -191,6 +194,7 @@ func (d Healthcheck) HasRestartContainers() bool {
 }
 
 // RestartContainers restarts the containers associated with this healthcheck
+// Only containers in the allowedRestartContainers whitelist can be restarted
 func (d Healthcheck) RestartContainers(ctx context.Context) error {
 	if !d.HasRestartContainers() {
 		return fmt.Errorf("no containers configured for restart")
@@ -201,7 +205,22 @@ func (d Healthcheck) RestartContainers(ctx context.Context) error {
 	}
 
 	containerList := parseContainerList(d.restartContainers)
-	return d.dockerImpl.RestartContainers(ctx, containerList)
+	
+	// Filter containers to only those in the allowed list
+	containersToRestart := filterAllowedContainers(containerList, d.allowedRestartContainers)
+	
+	// If no allowed containers, return an error
+	if len(containersToRestart) == 0 {
+		return fmt.Errorf("no containers in the restart list are allowed by the global whitelist")
+	}
+	
+	// Log if some containers were skipped
+	if len(containersToRestart) < len(containerList) {
+		skipped := findSkippedContainers(containerList, containersToRestart)
+		log.Printf("Warning: Skipping restart of containers not in allowedRestartContainers whitelist: %v", skipped)
+	}
+	
+	return d.dockerImpl.RestartContainers(ctx, containersToRestart)
 }
 
 // Check performs a healthcheck by making an HTTP request to the configured URL.
@@ -239,4 +258,48 @@ func (d Healthcheck) Check(ctx context.Context) monitors.Result {
 func parseContainerList(containers string) []string {
 	// Reuse the docker package's parser for consistency
 	return docker.ParseContainerList(containers)
+}
+
+// filterAllowedContainers returns only the containers that are in the allowed list
+// If allowedList is empty, all containers are allowed (for backward compatibility)
+func filterAllowedContainers(containers []string, allowedList []string) []string {
+	// If no whitelist is configured, allow all containers
+	if len(allowedList) == 0 {
+		return containers
+	}
+	
+	// Create a map for fast lookup
+	allowed := make(map[string]bool)
+	for _, c := range allowedList {
+		allowed[c] = true
+	}
+	
+	// Filter containers
+	var result []string
+	for _, c := range containers {
+		if allowed[c] {
+			result = append(result, c)
+		}
+	}
+	
+	return result
+}
+
+// findSkippedContainers returns containers that were in the original list but not in the filtered list
+func findSkippedContainers(original []string, filtered []string) []string {
+	// Create a map for fast lookup
+	included := make(map[string]bool)
+	for _, c := range filtered {
+		included[c] = true
+	}
+	
+	// Find skipped containers
+	var skipped []string
+	for _, c := range original {
+		if !included[c] {
+			skipped = append(skipped, c)
+		}
+	}
+	
+	return skipped
 }
