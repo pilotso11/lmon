@@ -33,15 +33,12 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"lmon/common"
 	"lmon/config"
 	"lmon/monitors"
-
-	"github.com/docker/docker/api/types/container"
-	dockerclient "github.com/docker/docker/client"
+	"lmon/monitors/docker"
 )
 
 const Icon = "activity" // Default icon for healthcheck monitors
@@ -58,29 +55,9 @@ type UsageProvider interface {
 	Check(ctx context.Context, path *url.URL, timeout int) (*http.Response, error)
 }
 
-// DockerProvider is an interface for Docker container restart operations.
-type DockerProvider interface {
-	RestartContainers(ctx context.Context, containerNames []string) error
-}
-
 // DefaultHealthcheckProvider is the default implementation of UsageProvider
 // using Go's http.Client.
 type DefaultHealthcheckProvider struct {
-}
-
-// DefaultDockerProvider is the default implementation of DockerProvider
-// using the Docker SDK.
-type DefaultDockerProvider struct {
-}
-
-// NewDefaultDockerProvider creates a new DefaultDockerProvider
-func NewDefaultDockerProvider() (*DefaultDockerProvider, error) {
-	return &DefaultDockerProvider{}, nil
-}
-
-// RestartContainers restarts the specified Docker containers
-func (d *DefaultDockerProvider) RestartContainers(ctx context.Context, containerNames []string) error {
-	return restartDockerContainers(ctx, containerNames)
 }
 
 // NewDefaultHealthcheckProvider creates a new DefaultHealthcheckProvider with the given timeout in milliseconds.
@@ -122,22 +99,22 @@ func (p *DefaultHealthcheckProvider) Check(ctx context.Context, path *url.URL, m
 
 // Healthcheck represents an HTTP endpoint health monitor.
 type Healthcheck struct {
-	name              string         // Logical name for the healthcheck
-	timeout           int            // Timeout in milliseconds for the check
-	respCode          int            // Expected response code to consider the check successful
-	url               *url.URL       // URL to check
-	icon              string         // Icon for UI display
-	restartContainers string         // Optional: comma-separated list of containers to restart
-	impl              UsageProvider  // Implementation for performing the check
-	dockerImpl        DockerProvider // Implementation for Docker restart operations
+	name              string          // Logical name for the healthcheck
+	timeout           int             // Timeout in milliseconds for the check
+	respCode          int             // Expected response code to consider the check successful
+	url               *url.URL        // URL to check
+	icon              string          // Icon for UI display
+	restartContainers string          // Optional: comma-separated list of containers to restart
+	impl              UsageProvider   // Implementation for performing the check
+	dockerImpl        docker.Provider // Implementation for Docker restart operations
 }
 
 // NewHealthcheck constructs a new Healthcheck monitor with the given parameters.
 // If respCode is <= 0 it defaults to 200 (HTTP OK).
 // If icon is empty, the default Icon is used.
 // If impl is nil, the DefaultHealthcheckProvider is used.
-// If dockerImpl is nil and restartContainers is set, a DefaultDockerProvider is created.
-func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, restartContainers string, impl UsageProvider, dockerImpl DockerProvider) (Healthcheck, error) {
+// If dockerImpl is nil and restartContainers is set, a docker.DefaultDockerProvider is created.
+func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, restartContainers string, impl UsageProvider, dockerImpl docker.Provider) (Healthcheck, error) {
 	if icon == "" {
 		icon = Icon
 	}
@@ -149,7 +126,7 @@ func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon 
 	}
 	if common.IsNil(dockerImpl) && restartContainers != "" {
 		var err error
-		dockerImpl, err = NewDefaultDockerProvider()
+		dockerImpl, err = docker.NewDefaultDockerProvider()
 		if err != nil {
 			return Healthcheck{}, fmt.Errorf("failed to create Docker provider: %w", err)
 		}
@@ -258,47 +235,8 @@ func (d Healthcheck) Check(ctx context.Context) monitors.Result {
 	}
 }
 
-// restartDockerContainers restarts the specified Docker containers
-func restartDockerContainers(ctx context.Context, containerList []string) error {
-	if len(containerList) == 0 {
-		return fmt.Errorf("no containers specified")
-	}
-
-	// Create Docker client
-	cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
-	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
-	}
-	defer cli.Close()
-
-	// Restart each container
-	for _, name := range containerList {
-		timeout := 10 // 10 second timeout for graceful shutdown
-		options := container.StopOptions{
-			Timeout: &timeout,
-		}
-		if err := cli.ContainerRestart(ctx, name, options); err != nil {
-			return fmt.Errorf("failed to restart container %s: %w", name, err)
-		}
-	}
-
-	return nil
-}
-
 // parseContainerList splits a comma-separated container list
 func parseContainerList(containers string) []string {
-	if containers == "" {
-		return []string{}
-	}
-
-	parts := strings.Split(containers, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-
-	return result
+	// Reuse the docker package's parser for consistency
+	return docker.ParseContainerList(containers)
 }

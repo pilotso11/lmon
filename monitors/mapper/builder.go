@@ -52,7 +52,7 @@ func (d Mapper) NewDisk(_ context.Context, name string, cfg config.DiskConfig) (
 // NewHealthcheck constructs a healthcheck monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewHealthcheck(_ context.Context, name string, cfg config.HealthcheckConfig) (healthcheck.Healthcheck, error) {
 	name, _ = config.SanitiseName(name)
-	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.RespCode, cfg.Icon, cfg.RestartContainers, d.Impls.Health, nil)
+	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.RespCode, cfg.Icon, cfg.RestartContainers, d.Impls.Health, d.Impls.Docker)
 }
 
 // NewCpu constructs a CPU monitor using the provided configuration and optional mock provider.
