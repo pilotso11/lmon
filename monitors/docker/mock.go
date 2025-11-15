@@ -11,6 +11,8 @@ type MockDockerProvider struct {
 	RestartError      error
 	GetCountsError    error
 	RestartsRequested []string
+	CloseCalled       bool
+	CloseError        error
 }
 
 // GetRestartCounts returns mock restart counts
@@ -49,4 +51,10 @@ func (m *MockDockerProvider) RestartContainers(ctx context.Context, containerNam
 
 	m.RestartsRequested = append(m.RestartsRequested, containerNames...)
 	return nil
+}
+
+// Close implements io.Closer for testing
+func (m *MockDockerProvider) Close() error {
+	m.CloseCalled = true
+	return m.CloseError
 }

@@ -371,3 +371,26 @@ func TestParseContainerList(t *testing.T) {
 		})
 	}
 }
+
+func TestMonitor_Close(t *testing.T) {
+	mock := &MockDockerProvider{}
+	m, err := NewMonitor("test", "web-app", 5, "box", mock)
+	require.NoError(t, err)
+
+	err = m.Close()
+	require.NoError(t, err)
+	assert.True(t, mock.CloseCalled, "Close should be called on the provider")
+}
+
+func TestMonitor_Close_Error(t *testing.T) {
+	mock := &MockDockerProvider{
+		CloseError: errors.New("close failed"),
+	}
+	m, err := NewMonitor("test", "web-app", 5, "box", mock)
+	require.NoError(t, err)
+
+	err = m.Close()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "close failed")
+	assert.True(t, mock.CloseCalled, "Close should be called even if it returns an error")
+}
