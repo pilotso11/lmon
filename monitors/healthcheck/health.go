@@ -200,7 +200,7 @@ func (d Healthcheck) RestartContainers(ctx context.Context) error {
 		return fmt.Errorf("docker provider not configured")
 	}
 
-	containerList := parseContainerList(d.restartContainers)
+	containerList := docker.ParseContainerList(d.restartContainers)
 	return d.dockerImpl.RestartContainers(ctx, containerList)
 }
 
@@ -233,10 +233,4 @@ func (d Healthcheck) Check(ctx context.Context) monitors.Result {
 		Status: status,
 		Value:  res,
 	}
-}
-
-// parseContainerList splits a comma-separated container list
-func parseContainerList(containers string) []string {
-	// Reuse the docker package's parser for consistency
-	return docker.ParseContainerList(containers)
 }
