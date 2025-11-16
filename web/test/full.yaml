@@ -19,6 +19,11 @@ monitoring:
             icon: activity
             timeout: 1
             respCode: 401
+    docker:
+        app_containers:
+            containers: web-app, api-server
+            icon: box
+            threshold: 5
     ping:
         google:
             url: google.com
