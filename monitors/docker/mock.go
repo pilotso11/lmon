@@ -15,6 +15,10 @@ type MockDockerProvider struct {
 	CloseError        error
 }
 
+func NewMockDockerProvider() *MockDockerProvider {
+	return &MockDockerProvider{}
+}
+
 // GetRestartCounts returns mock restart counts
 func (m *MockDockerProvider) GetRestartCounts(ctx context.Context, containerNames []string) (map[string]int, error) {
 	if m.GetCountsError != nil {

@@ -460,42 +460,27 @@ func TestAddPingViaConfigUIRod(t *testing.T) {
 			t.Logf("Error getting ping config items: %v", err)
 			return false
 		}
-		t.Logf("Found %d ping config items", len(items))
-		for i, item := range items {
-			nameSpan, err := item.Element(`.config-item-name`)
-			if err != nil {
-				t.Logf("Item %d: no name span found: %v", i, err)
-				continue
-			}
-			nameText, err := nameSpan.Text()
-			if err != nil {
-				t.Logf("Item %d: error getting name text: %v", i, err)
-				continue
-			}
-			addressSpan, err := item.Element(`.config-item-address`)
-			if err != nil {
-				t.Logf("Item %d: no address span found: %v", i, err)
-				continue
-			}
-			addressText, err := addressSpan.Text()
-			if err != nil {
-				t.Logf("Item %d: error getting address text: %v", i, err)
-				continue
-			}
-			t.Logf("Item %d: name='%s', address='%s'", i, nameText, addressText)
-			if nameText == "google" && addressText == "(8.8.8.8)" {
-				return true
-			}
-		}
-
-		// Also check if "No ping monitors configured" is shown
-		_, err = page.ElementR(`#ping-config-items`, "No ping monitors configured")
-		if err == nil {
-			t.Logf("Found 'No ping monitors configured' message")
-		}
-
-		return false
+		return len(items) > 0
 	}, 3*time.Second, 100*time.Millisecond, "wait for ping item in config list")
+
+	items, err := page.Elements(`#ping-config-items .config-item`)
+	assert.NoError(t, err, "get ping config items")
+	assert.Len(t, items, 1, "exactly one ping config item should be present")
+	item := items[0]
+	nameSpan, err := item.Element(`.config-item-name`)
+	assert.NoError(t, err, "get ping item name span")
+	nameText, err := nameSpan.Text()
+	assert.NoError(t, err, "get ping item name text")
+	addressSpan, err := item.Element(`.config-item-address`)
+	assert.NoError(t, err, "get ping item address span")
+	addressText, err := addressSpan.Text()
+	assert.NoError(t, err, "get ping item address text")
+	assert.Equal(t, "google", nameText, "Ping monitor name is shown")
+	assert.Equal(t, "(8.8.8.8)", addressText, "Ping monitor address is shown")
+
+	// Also check if "No ping monitors configured" is shown
+	_, err = page.Timeout(time.Millisecond*20).ElementR(`#ping-config-items`, "No ping monitors configured")
+	assert.Error(t, err, "No ping monitors configured message should be present")
 
 	// Navigate back to dashboard
 	el, err = page.Element(`a.nav-link[href="/"]`)
@@ -556,3 +541,5 @@ func TestAddPingViaConfigUIRod(t *testing.T) {
 		page.Timeout(1 * time.Second).MustElement(`#ping-items .list-group-item[data-id="ping_google"]`)
 	}, "Ping monitor item 'google' should be gone from dashboard")
 }
+
+// todo: add ui test for docker

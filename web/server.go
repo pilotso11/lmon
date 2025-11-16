@@ -23,6 +23,7 @@ import (
 	"lmon/config"
 	"lmon/monitors"
 	"lmon/monitors/disk"
+	"lmon/monitors/docker"
 	"lmon/monitors/healthcheck"
 	"lmon/monitors/mapper"
 	"lmon/monitors/ping"
@@ -365,6 +366,7 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 		healthItems := make([]UIResult, 0, len(items))
 		mobileItems := make([]UIResult, 0, len(items))
 		pingItems := make([]UIResult, 0, len(items))
+		dockerItems := make([]UIResult, 0, len(items))
 		for _, item := range items {
 			switch item.Group {
 			case system.Group:
@@ -373,6 +375,8 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 				diskItems = append(diskItems, item)
 			case healthcheck.Group:
 				healthItems = append(healthItems, item)
+			case docker.Group:
+				dockerItems = append(dockerItems, item)
 			case "ping":
 				pingItems = append(pingItems, item)
 			}
@@ -389,6 +393,8 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 		slices.SortFunc(diskItems, displayNameSorter)
 		// sort healthItems by display Name
 		slices.SortFunc(healthItems, displayNameSorter)
+		// sort dockerItems by display Name
+		slices.SortFunc(dockerItems, displayNameSorter)
 		// sort pingItems by display Name
 		slices.SortFunc(pingItems, displayNameSorter)
 
@@ -410,6 +416,7 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			"SystemItems":         systemItems,
 			"DiskItems":           diskItems,
 			"HealthItems":         healthItems,
+			"DockerItems":         dockerItems,
 			"PingItems":           pingItems,
 			"MobileItems":         mobileItems,
 			"ActivePage":          activeTemplate,
