@@ -39,8 +39,8 @@
                 </div>
             </div>
 
-            <div class="row mt-4">
-                <div class="col-12">
+            <div class="row">
+                <div class="col-md-6">
                     <div class="card">
                         <div class="card-header">Health Checks</div>
                         <div class="card-body" id="health-items">
@@ -48,9 +48,8 @@
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="row mt-4">
-                <div class="col-12">
+
+                <div class="col-md-6">
                     <div class="card">
                         <div class="card-header">Ping Monitors</div>
                         <div class="card-body" id="ping-items">
@@ -59,7 +58,20 @@
                     </div>
                 </div>
             </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Docker Containers</div>
+                        <div class="card-body" id="docker-items">
+                            {{ template "itemList" .DockerItems }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
+
 
         {{ template "footer" . }}
     </body>
