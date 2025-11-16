@@ -583,35 +583,36 @@ func TestAddDockerCheckViConfigUIRod(t *testing.T) {
 	el.MustSelectAllText().MustInput("10")
 
 	// Icon dropdown may be initialized dynamically; not required for submission
-	_, _ = page.Timeout(300 * time.Millisecond).Element(`#docker-icon-dropdown`)
+	_, err = page.Timeout(300 * time.Millisecond).Element(`#docker-icon-dropdown`)
+	assert.NoError(t, err, "docker icon dropdown should be present")
 
 	// Submit the form
 	el, err = page.Element(`#add-docker-form button[type="submit"]`)
 	requireNoErrorWithScreenshot(t, page, err, "find docker submit button")
+	wait2 := page.WaitNavigation(proto.PageLifecycleEventNameLoad)
 	el.MustClick()
-
 	// Wait for the page to reload back to /config
-	time.Sleep(100 * time.Millisecond)
-	err = page.Timeout(2 * time.Second).WaitLoad()
-	requireNoErrorWithScreenshot(t, page, err, "wait for page load after adding docker")
+	wait2()
 
 	// Verify the docker config item appears
 	require.EventuallyWithT(t, func(t *assert.CollectT) {
 		items, err := page.Elements(`#docker-config-items .config-item`)
 		assert.NoError(t, err, "get docker config items")
-		for _, item := range items {
-			nameSpan, err := item.Element(`.config-item-name`)
-			assert.NoError(t, err, "get docker item name span")
-			nameText, err := nameSpan.Text()
-			assert.NoError(t, err, "get docker item name text")
-			contSpan, err := item.Element(`.config-item-containers`)
-			assert.NoError(t, err, "get docker item containers span")
-			contText, err := contSpan.Text()
-			assert.NoError(t, err, "get docker item containers text")
-			assert.Equal(t, name, nameText, "Docker item name is shown")
-			assert.Equal(t, "(web, api)", contText, "Docker item containers are shown")
-		}
+		assert.Len(t, items, 1, "exactly one docker config item should be present")
 	}, 3*time.Second, 100*time.Millisecond, "wait for docker item in config list")
+
+	items, _ := page.Elements(`#docker-config-items .config-item`)
+	item := items[0]
+	nameSpan, err := item.Element(`.config-item-name`)
+	assert.NoError(t, err, "get docker item name span")
+	nameText, err := nameSpan.Text()
+	assert.NoError(t, err, "get docker item name text")
+	contSpan, err := item.Element(`.config-item-containers`)
+	assert.NoError(t, err, "get docker item containers span")
+	contText, err := contSpan.Text()
+	assert.NoError(t, err, "get docker item containers text")
+	assert.Equal(t, name, nameText, "Docker item name is shown")
+	assert.Equal(t, "(web, api)", contText, "Docker item containers are shown")
 
 	// Navigate back to dashboard
 	el, err = page.Element(`a.nav-link[href="/"]`)
