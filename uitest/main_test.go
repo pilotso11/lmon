@@ -460,42 +460,27 @@ func TestAddPingViaConfigUIRod(t *testing.T) {
 			t.Logf("Error getting ping config items: %v", err)
 			return false
 		}
-		t.Logf("Found %d ping config items", len(items))
-		for i, item := range items {
-			nameSpan, err := item.Element(`.config-item-name`)
-			if err != nil {
-				t.Logf("Item %d: no name span found: %v", i, err)
-				continue
-			}
-			nameText, err := nameSpan.Text()
-			if err != nil {
-				t.Logf("Item %d: error getting name text: %v", i, err)
-				continue
-			}
-			addressSpan, err := item.Element(`.config-item-address`)
-			if err != nil {
-				t.Logf("Item %d: no address span found: %v", i, err)
-				continue
-			}
-			addressText, err := addressSpan.Text()
-			if err != nil {
-				t.Logf("Item %d: error getting address text: %v", i, err)
-				continue
-			}
-			t.Logf("Item %d: name='%s', address='%s'", i, nameText, addressText)
-			if nameText == "google" && addressText == "(8.8.8.8)" {
-				return true
-			}
-		}
-
-		// Also check if "No ping monitors configured" is shown
-		_, err = page.ElementR(`#ping-config-items`, "No ping monitors configured")
-		if err == nil {
-			t.Logf("Found 'No ping monitors configured' message")
-		}
-
-		return false
+		return len(items) > 0
 	}, 3*time.Second, 100*time.Millisecond, "wait for ping item in config list")
+
+	items, err := page.Elements(`#ping-config-items .config-item`)
+	assert.NoError(t, err, "get ping config items")
+	assert.Len(t, items, 1, "exactly one ping config item should be present")
+	item := items[0]
+	nameSpan, err := item.Element(`.config-item-name`)
+	assert.NoError(t, err, "get ping item name span")
+	nameText, err := nameSpan.Text()
+	assert.NoError(t, err, "get ping item name text")
+	addressSpan, err := item.Element(`.config-item-address`)
+	assert.NoError(t, err, "get ping item address span")
+	addressText, err := addressSpan.Text()
+	assert.NoError(t, err, "get ping item address text")
+	assert.Equal(t, "google", nameText, "Ping monitor name is shown")
+	assert.Equal(t, "(8.8.8.8)", addressText, "Ping monitor address is shown")
+
+	// Also check if "No ping monitors configured" is shown
+	_, err = page.Timeout(time.Millisecond*20).ElementR(`#ping-config-items`, "No ping monitors configured")
+	assert.Error(t, err, "No ping monitors configured message should be present")
 
 	// Navigate back to dashboard
 	el, err = page.Element(`a.nav-link[href="/"]`)
@@ -555,4 +540,135 @@ func TestAddPingViaConfigUIRod(t *testing.T) {
 	assert.Panics(t, func() {
 		page.Timeout(1 * time.Second).MustElement(`#ping-items .list-group-item[data-id="ping_google"]`)
 	}, "Ping monitor item 'google' should be gone from dashboard")
+}
+
+func TestAddDockerCheckViConfigUIRod(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s, _ := web.StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	browser := getBrowser(t)
+	defer closeBrowser(browser)
+	page, err := browser.Page(proto.TargetCreateTarget{URL: s.ServerUrl})
+	require.NoError(t, err, "open page")
+	defer closePage(page)
+
+	// Navigate to the config tab
+	el, err := page.Element(`a.nav-link[href="/config"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find config link")
+	el.MustClick()
+
+	// Wait for the docker add form
+	_, err = page.Timeout(1 * time.Second).Element(`#add-docker-form`)
+	requireNoErrorWithScreenshot(t, page, err, "find docker add form")
+
+	// Fill the docker add form
+	name := "stack1"
+	containers := "web, api"
+
+	el, err = page.Element(`#docker-name`)
+	requireNoErrorWithScreenshot(t, page, err, "find docker name input")
+	err = el.Input(name)
+	requireNoErrorWithScreenshot(t, page, err, "input docker name")
+
+	el, err = page.Element(`#docker-containers`)
+	requireNoErrorWithScreenshot(t, page, err, "find docker containers input")
+	err = el.Input(containers)
+	requireNoErrorWithScreenshot(t, page, err, "input docker containers")
+
+	el, err = page.Element(`#docker-threshold`)
+	requireNoErrorWithScreenshot(t, page, err, "find docker threshold input")
+	el.MustSelectAllText().MustInput("10")
+
+	// Icon dropdown may be initialized dynamically; not required for submission
+	_, err = page.Timeout(300 * time.Millisecond).Element(`#docker-icon-dropdown`)
+	assert.NoError(t, err, "docker icon dropdown should be present")
+
+	// Submit the form
+	el, err = page.Element(`#add-docker-form button[type="submit"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find docker submit button")
+	wait2 := page.WaitNavigation(proto.PageLifecycleEventNameLoad)
+	el.MustClick()
+	// Wait for the page to reload back to /config
+	wait2()
+
+	// Verify the docker config item appears
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
+		items, err := page.Elements(`#docker-config-items .config-item`)
+		assert.NoError(t, err, "get docker config items")
+		assert.Len(t, items, 1, "exactly one docker config item should be present")
+	}, 3*time.Second, 100*time.Millisecond, "wait for docker item in config list")
+
+	items, _ := page.Elements(`#docker-config-items .config-item`)
+	item := items[0]
+	nameSpan, err := item.Element(`.config-item-name`)
+	assert.NoError(t, err, "get docker item name span")
+	nameText, err := nameSpan.Text()
+	assert.NoError(t, err, "get docker item name text")
+	contSpan, err := item.Element(`.config-item-containers`)
+	assert.NoError(t, err, "get docker item containers span")
+	contText, err := contSpan.Text()
+	assert.NoError(t, err, "get docker item containers text")
+	assert.Equal(t, name, nameText, "Docker item name is shown")
+	assert.Equal(t, "(web, api)", contText, "Docker item containers are shown")
+
+	// Navigate back to dashboard
+	el, err = page.Element(`a.nav-link[href="/"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find dashboard link")
+	el.MustClick()
+
+	// Wait for docker card and item
+	_, err = page.Timeout(1 * time.Second).Element(`#docker-items`)
+	requireNoErrorWithScreenshot(t, page, err, "find docker items container")
+	_, err = page.Timeout(1 * time.Second).Element(`#docker-items .list-group-item[data-id="docker_stack1"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find docker item in dashboard")
+
+	// Assert its presence and content
+	dockerItem, err := page.Element(`#docker-items .list-group-item[data-id="docker_stack1"]`)
+	requireNoErrorWithScreenshot(t, page, err, "get docker item element")
+	assert.NotNil(t, dockerItem, "Docker item 'stack1' is present in dashboard")
+	dockerText := dockerItem.MustText()
+	assert.Contains(t, dockerText, "stack1 (2 containers)", "Docker display name is shown")
+	assert.Regexp(t, `Max\s+restarts:\s*\d+`, dockerText, "Docker value is shown")
+	assert.Contains(t, dockerText, "web", "Docker details include container 'web'")
+	assert.Contains(t, dockerText, "api", "Docker details include container 'api'")
+
+	// --- MOBILE PAGE CHECKS ---
+	el, err = page.Element(`a.nav-link[href="/mobile"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find mobile link")
+	el.MustClick()
+
+	page.Timeout(1 * time.Second).MustElement(`#mobile-items-list`)
+	dockerMobile := page.MustElement(`#mobile-items-list .mobile-list-item[data-id="docker_stack1"]`)
+	dockerMobileText := dockerMobile.MustText()
+	assert.Contains(t, dockerMobileText, "stack1 (2 containers)", "Docker display name is shown on mobile")
+	assert.Regexp(t, `Max\s+restarts:\s*\d+`, dockerMobileText, "Docker value is shown on mobile")
+
+	// Go back to config and delete the docker monitor
+	el, err = page.Element(`a.nav-link[href="/config"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find config link (delete)")
+	el.MustClick()
+
+	_, err = page.Timeout(1 * time.Second).Element(`#docker-config-items`)
+	requireNoErrorWithScreenshot(t, page, err, "find docker config items")
+	delBtn, err := page.Timeout(1 * time.Second).Element(`button.delete-docker-btn[data-id="stack1"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find docker delete button")
+	wait, handle := page.HandleDialog()
+	go delBtn.MustClick()
+	_ = wait()
+	_ = handle(&proto.PageHandleJavaScriptDialog{Accept: true})
+
+	// Wait for docker monitor to be removed from config list
+	page.Timeout(1*time.Second).MustElementR(`#docker-config-items`, "No Docker monitors configured")
+
+	// Go back to dashboard and verify docker monitor is gone
+	el, err = page.Element(`a.nav-link[href="/"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find dashboard link (final)")
+	el.MustClick()
+	page.Timeout(1 * time.Second).MustElement(`#docker-items`)
+	assert.Panics(t, func() {
+		page.Timeout(1 * time.Second).MustElement(`#docker-items .list-group-item[data-id="docker_stack1"]`)
+	}, "Docker item 'stack1' should be gone from dashboard")
 }

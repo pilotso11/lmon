@@ -6,6 +6,7 @@ import (
 	"go.uber.org/atomic"
 
 	"lmon/monitors/disk"
+	"lmon/monitors/docker"
 	"lmon/monitors/healthcheck"
 	"lmon/monitors/mapper"
 	"lmon/monitors/ping"
@@ -32,6 +33,7 @@ func NewMockImplementations(hook *MockWebhookHandler) *mapper.Implementations {
 		Cpu:     system.NewMockCpuProvider(50),                         // percent usage
 		Mem:     system.NewMockMemProvider(50),                         // percent usage
 		Ping:    ping.NewMockPingProvider(50, nil),                     // default mock ping provider
+		Docker:  docker.NewMockDockerProvider(),
 		Webhook: hook.webhookCallback,
 	}
 }
