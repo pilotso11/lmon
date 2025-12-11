@@ -23,7 +23,10 @@ func TestNewMonitor(t *testing.T) {
 		wantCount  int
 	}{
 		{
-			name:       "valid comma separated", monName:    "test", containers: "web-app, api-server, 0, worker", threshold:  5,
+			name:       "valid comma separated",
+			monName:    "test",
+			containers: "web-app, api-server, worker",
+			threshold:  5,
 			icon:       "box",
 			wantErr:    false,
 			wantCount:  3,
@@ -151,7 +154,7 @@ func TestMonitor_Check_Green(t *testing.T) {
 		},
 	}
 
-	m, err := NewMonitor("test", "web-app, api-server, worker", 0, 10, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server, worker", 10, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	result := m.Check(context.Background())
@@ -172,7 +175,7 @@ func TestMonitor_Check_Amber(t *testing.T) {
 		},
 	}
 
-	m, err := NewMonitor("test", "web-app, api-server, worker", 0, 10, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server, worker", 10, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	result := m.Check(context.Background())
@@ -190,7 +193,7 @@ func TestMonitor_Check_Red(t *testing.T) {
 		},
 	}
 
-	m, err := NewMonitor("test", "web-app, api-server, worker", 0, 10, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server, worker", 10, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	result := m.Check(context.Background())
@@ -272,7 +275,7 @@ func TestMonitor_Check_ThresholdEdgeCases(t *testing.T) {
 
 func TestMonitor_Save(t *testing.T) {
 	mock := &MockDockerProvider{}
-	m, err := NewMonitor("test", "web-app, api-server", 5, 0, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server", 5, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	cfg := &config.Config{
@@ -292,7 +295,7 @@ func TestMonitor_Save(t *testing.T) {
 
 func TestMonitor_Restart(t *testing.T) {
 	mock := &MockDockerProvider{}
-	m, err := NewMonitor("test", "web-app, api-server, worker", 0, 5, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server, worker", 5, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	err = m.Restart(context.Background())

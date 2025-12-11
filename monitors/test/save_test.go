@@ -25,16 +25,16 @@ func TestService_Save(t *testing.T) {
 	svc := monitors.NewService(ctx, time.Second, time.Second, nil)
 
 	// Add a Disk monitor
-	diskMon := disk.NewDisk("disk1", "/mnt/disk1", 75, "hdd", nil)
+	diskMon := disk.NewDisk("disk1", "/mnt/disk1", 75, "hdd", 0, nil)
 	svc.Add(ctx, diskMon)
 
 	// Add a Healthcheck monitor
-	healthMon, err := healthcheck.NewHealthcheck("health1", "http://localhost/health", 5, 401, "activity", "", nil, nil, nil)
+	healthMon, err := healthcheck.NewHealthcheck("health1", "http://localhost/health", 5, 401, "activity", "", 0, nil, nil, nil)
 	require.NoError(t, err)
 	svc.Add(ctx, healthMon)
 
 	// Add a Ping monitor
-	pingMon := ping.NewPingMonitor("ping1", "127.0.0.1", 1000, "wifi", 100, nil)
+	pingMon := ping.NewPingMonitor("ping1", "127.0.0.1", 1000, "wifi", 100, 0, nil)
 	svc.Add(ctx, pingMon)
 
 	cfg := &config.Config{}

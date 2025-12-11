@@ -103,12 +103,14 @@ func TestSetSystemConfig(t *testing.T) {
 
 	cfg := config.SystemConfig{
 		CPU: config.SystemItem{
-			Threshold: 55,
-			Icon:      "cpu-icon",
+			Threshold:      55,
+			Icon:           "cpu-icon",
+			AlertThreshold: 1, // Default value
 		},
 		Memory: config.SystemItem{
-			Threshold: 66,
-			Icon:      "mem-icon",
+			Threshold:      66,
+			Icon:           "mem-icon",
+			AlertThreshold: 1, // Default value
 		},
 		Title: "new title",
 	}
@@ -148,9 +150,10 @@ func TestAddDisk(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.DiskConfig{
-		Threshold: 77,
-		Icon:      "disk-icon",
-		Path:      ".",
+		Threshold:      77,
+		Icon:           "disk-icon",
+		Path:           ".",
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-disk"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/disk/"+id, data)
@@ -171,9 +174,10 @@ func TestDeleteDisk(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.DiskConfig{
-		Threshold: 77,
-		Icon:      "disk-icon",
-		Path:      ".",
+		Threshold:      77,
+		Icon:           "disk-icon",
+		Path:           ".",
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-disk"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/disk/"+id, data)
@@ -212,10 +216,11 @@ func TestAddHealthcheck(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.HealthcheckConfig{
-		Timeout:  77,
-		Icon:     "disk-icon",
-		URL:      s.ServerUrl + "/healthz",
-		RespCode: 200,
+		Timeout:        77,
+		Icon:           "disk-icon",
+		URL:            s.ServerUrl + "/healthz",
+		RespCode:       200,
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-health"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
@@ -236,10 +241,11 @@ func TestDeleteHealthcheck(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.HealthcheckConfig{
-		Timeout:  77,
-		Icon:     "disk-icon",
-		URL:      s.ServerUrl + "/healthz",
-		RespCode: 200,
+		Timeout:        77,
+		Icon:           "disk-icon",
+		URL:            s.ServerUrl + "/healthz",
+		RespCode:       200,
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-health"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
@@ -336,6 +342,7 @@ func TestPingMonitorAPI(t *testing.T) {
 		Timeout:        1000,
 		Icon:           "wifi",
 		AmberThreshold: 50,
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-ping"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/ping/"+id, data)
