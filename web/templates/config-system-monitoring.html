@@ -38,6 +38,31 @@
 
         <div class="config-item mb-3">
             <div class="d-flex align-items-center">
+                <i class="bi bi-bell item-icon me-2"></i>
+                <label for="cpu-alert-threshold" class="mb-0"
+                    ><strong>CPU Alert Threshold</strong></label
+                >
+                <div class="ms-auto" style="width: 120px">
+                    <div class="input-group">
+                        <input
+                            type="number"
+                            class="form-control"
+                            style="width: 75px"
+                            id="cpu-alert-threshold"
+                            name="cpu-alert-threshold"
+                            min="1"
+                            max="100"
+                            value="{{ .Config.Monitoring.System.CPU.AlertThreshold }}"
+                            required
+                        />
+                        <span class="input-group-text">#</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="config-item mb-3">
+            <div class="d-flex align-items-center">
                 <i
                     class="bi bi-{{ .Config.Monitoring.System.Memory.Icon }} item-icon me-2"
                 ></i>
@@ -58,6 +83,31 @@
                             required
                         />
                         <span class="input-group-text">%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="config-item mb-3">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-bell item-icon me-2"></i>
+                <label for="memory-alert-threshold" class="mb-0"
+                    ><strong>Memory Alert Threshold</strong></label
+                >
+                <div class="ms-auto" style="width: 120px">
+                    <div class="input-group">
+                        <input
+                            type="number"
+                            class="form-control"
+                            style="width: 75px"
+                            id="memory-alert-threshold"
+                            name="memory-alert-threshold"
+                            min="1"
+                            max="100"
+                            value="{{ .Config.Monitoring.System.Memory.AlertThreshold }}"
+                            required
+                        />
+                        <span class="input-group-text">#</span>
                     </div>
                 </div>
             </div>

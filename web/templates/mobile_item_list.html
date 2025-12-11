@@ -24,6 +24,14 @@
                 >{{ $item.Status }}</span
             >
         </span>
+        {{ if gt $item.FailureCount 0 }}
+        <span
+            class="badge bg-warning text-dark ms-1"
+            aria-label="Failure count"
+            title="Consecutive failures"
+            >{{ $item.FailureCount }} failures</span
+        >
+        {{ end }}
         <span class="mobile-detail" aria-label="Detail: {{ $item.Value }}"
             >{{ $item.Value }}</span
         >

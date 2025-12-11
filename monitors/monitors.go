@@ -295,6 +295,12 @@ func (s *Service) Get(name string) Monitor {
 	return m
 }
 
+// GetFailureCount retrieves the consecutive failure count for a monitor by its name.
+func (s *Service) GetFailureCount(name string) int {
+	count, _ := s.failureCount.Load(name)
+	return count
+}
+
 // Save persists the current monitor configuration to the provided config struct.
 // It clears disk and healthcheck entries and saves all monitors' configs.
 func (s *Service) Save(cfg *config.Config) error {

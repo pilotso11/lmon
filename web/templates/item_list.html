@@ -30,6 +30,14 @@
                         aria-label="Status badge: {{ .Status }}"
                         >{{ .Status }}</span
                     >
+                    {{ if gt .FailureCount 0 }}
+                    <span
+                        class="badge bg-warning text-dark"
+                        aria-label="Failure count"
+                        title="Consecutive failures"
+                        >Failures: {{ .FailureCount }}</span
+                    >
+                    {{ end }}
                     <span class="ms-2" aria-label="Value">{{ .Value }}</span>
                 </div>
                 <div class="item-detail2">
