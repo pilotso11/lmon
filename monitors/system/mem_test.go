@@ -17,7 +17,7 @@ import (
 // TestNewMem verifies that a Mem monitor can be created and added to a monitoring service.
 func TestNewMem(t *testing.T) {
 	push := monitors.NewMockPush()
-	d := NewMem(90, "", MockMemProvider{Current: atomic.NewFloat64(0)})
+	d := NewMem(90, "", 0, MockMemProvider{Current: atomic.NewFloat64(0)})
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
 	svc.Add(t.Context(), d)
 	assert.Equal(t, 1, svc.Size(), "one monitor added")
@@ -65,7 +65,7 @@ func TestMem_Save(t *testing.T) {
 
 // TestMem_DefaultImplSmokeTest verifies that the default implementation of Mem.Check does not return an error status.
 func TestMem_DefaultImplSmokeTest(t *testing.T) {
-	c := NewMem(100, "", nil)
+	c := NewMem(100, "", 0, nil)
 	r := c.Check(t.Context())
 	assert.NotEqual(t, monitors.RAGError, r.Status, "status not error")
 	assert.NotEqual(t, "0.0%", r.Value)
@@ -92,7 +92,7 @@ func TestMem_Check_Mock(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewMem(tt.threshold, "", MockMemProvider{Current: atomic.NewFloat64(tt.usage),
+			c := NewMem(tt.threshold, "", 0, MockMemProvider{Current: atomic.NewFloat64(tt.usage),
 				total: 100 * common.Gigibyte, err: tt.err})
 			r := c.Check(t.Context())
 			assert.Equal(t, tt.want.Status, r.Status, "status")

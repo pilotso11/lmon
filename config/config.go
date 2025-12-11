@@ -46,15 +46,17 @@ type MonitoringConfig struct {
 
 // DiskConfig represents disk monitoring configuration.
 type DiskConfig struct {
-	Threshold int
-	Icon      string
-	Path      string
+	Threshold      int
+	Icon           string
+	Path           string
+	AlertThreshold int // Number of consecutive failures before triggering alert (default: 1)
 }
 
 // SystemItem represents system monitoring configuration.
 type SystemItem struct {
-	Threshold int
-	Icon      string
+	Threshold      int
+	Icon           string
+	AlertThreshold int // Number of consecutive failures before triggering alert (default: 1)
 }
 
 // SystemConfig represents system monitoring configuration.
@@ -71,6 +73,7 @@ type HealthcheckConfig struct {
 	RespCode          int
 	Icon              string
 	RestartContainers string `json:"restart_containers,omitempty"` // Optional: comma-separated list of containers to restart
+	AlertThreshold    int    // Number of consecutive failures before triggering alert (default: 1)
 }
 
 // PingConfig represents ping monitor configuration
@@ -79,13 +82,15 @@ type PingConfig struct {
 	Timeout        int
 	Icon           string
 	AmberThreshold int // Response time in ms for amber status (required)
+	AlertThreshold int // Number of consecutive failures before triggering alert (default: 1)
 }
 
 // DockerConfig represents Docker container monitoring configuration
 type DockerConfig struct {
-	Containers string // Space or comma-separated list of container names/IDs
-	Threshold  int    // Max restart count threshold before alerting
-	Icon       string
+	Containers     string // Space or comma-separated list of container names/IDs
+	Threshold      int    // Max restart count threshold before alerting
+	Icon           string
+	AlertThreshold int // Number of consecutive failures before triggering alert (default: 1)
 }
 
 // WebhookConfig represents webhook notification configuration
@@ -241,6 +246,12 @@ func (l *Loader) Save(config *Config) error {
 	l.v.Set("monitoring.system.cpu.icon", config.Monitoring.System.CPU.Icon)
 	l.v.Set("monitoring.system.memory.icon", config.Monitoring.System.Memory.Icon)
 	l.v.Set("monitoring.system.title", config.Monitoring.System.Title)
+	if config.Monitoring.System.CPU.AlertThreshold > 0 {
+		l.v.Set("monitoring.system.cpu.alertthreshold", config.Monitoring.System.CPU.AlertThreshold)
+	}
+	if config.Monitoring.System.Memory.AlertThreshold > 0 {
+		l.v.Set("monitoring.system.memory.alertthreshold", config.Monitoring.System.Memory.AlertThreshold)
+	}
 
 	// Save the global allowed restart containers list
 	if len(config.Monitoring.AllowedRestartContainers) > 0 {
@@ -254,6 +265,9 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set(fmt.Sprintf("monitoring.disk.%s.path", name), disk.Path)
 		l.v.Set(fmt.Sprintf("monitoring.disk.%s.threshold", name), disk.Threshold)
 		l.v.Set(fmt.Sprintf("monitoring.disk.%s.icon", name), disk.Icon)
+		if disk.AlertThreshold > 0 {
+			l.v.Set(fmt.Sprintf("monitoring.disk.%s.alertthreshold", name), disk.AlertThreshold)
+		}
 	}
 
 	for name, healthcheck := range config.Monitoring.Healthcheck {
@@ -264,6 +278,9 @@ func (l *Loader) Save(config *Config) error {
 		if healthcheck.RestartContainers != "" {
 			l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.restartcontainers", name), healthcheck.RestartContainers)
 		}
+		if healthcheck.AlertThreshold > 0 {
+			l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.alertthreshold", name), healthcheck.AlertThreshold)
+		}
 	}
 
 	for name, ping := range config.Monitoring.Ping {
@@ -271,12 +288,18 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.timeout", name), ping.Timeout)
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.icon", name), ping.Icon)
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.amberthreshold", name), ping.AmberThreshold)
+		if ping.AlertThreshold > 0 {
+			l.v.Set(fmt.Sprintf("monitoring.ping.%s.alertthreshold", name), ping.AlertThreshold)
+		}
 	}
 
 	for name, docker := range config.Monitoring.Docker {
 		l.v.Set(fmt.Sprintf("monitoring.docker.%s.containers", name), docker.Containers)
 		l.v.Set(fmt.Sprintf("monitoring.docker.%s.threshold", name), docker.Threshold)
 		l.v.Set(fmt.Sprintf("monitoring.docker.%s.icon", name), docker.Icon)
+		if docker.AlertThreshold > 0 {
+			l.v.Set(fmt.Sprintf("monitoring.docker.%s.alertthreshold", name), docker.AlertThreshold)
+		}
 	}
 
 	// overwrite the config file or create it if it doesn't exist

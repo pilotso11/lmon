@@ -23,10 +23,7 @@ func TestNewMonitor(t *testing.T) {
 		wantCount  int
 	}{
 		{
-			name:       "valid comma separated",
-			monName:    "test",
-			containers: "web-app, api-server, worker",
-			threshold:  5,
+			name:       "valid comma separated", monName:    "test", containers: "web-app, api-server, 0, worker", threshold:  5,
 			icon:       "box",
 			wantErr:    false,
 			wantCount:  3,
@@ -80,7 +77,7 @@ func TestNewMonitor(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := &MockDockerProvider{}
-			m, err := NewMonitor(tt.monName, tt.containers, tt.threshold, tt.icon, nil, mock)
+			m, err := NewMonitor(tt.monName, tt.containers, tt.threshold, tt.icon, 0, nil, mock)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -102,7 +99,7 @@ func TestNewMonitor(t *testing.T) {
 
 func TestMonitor_Name(t *testing.T) {
 	mock := &MockDockerProvider{}
-	m, err := NewMonitor("test", "web-app", 5, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app", 5, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	assert.Equal(t, "docker_test", m.Name())
@@ -110,7 +107,7 @@ func TestMonitor_Name(t *testing.T) {
 
 func TestMonitor_Group(t *testing.T) {
 	mock := &MockDockerProvider{}
-	m, err := NewMonitor("test", "web-app", 5, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app", 5, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	assert.Equal(t, Group, m.Group())
@@ -137,7 +134,7 @@ func TestMonitor_DisplayName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := &MockDockerProvider{}
-			m, err := NewMonitor("test", tt.containers, 5, "box", nil, mock)
+			m, err := NewMonitor("test", tt.containers, 5, "box", 0, nil, mock)
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.want, m.DisplayName())
@@ -154,7 +151,7 @@ func TestMonitor_Check_Green(t *testing.T) {
 		},
 	}
 
-	m, err := NewMonitor("test", "web-app, api-server, worker", 10, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server, worker", 0, 10, "box", nil, mock)
 	require.NoError(t, err)
 
 	result := m.Check(context.Background())
@@ -175,7 +172,7 @@ func TestMonitor_Check_Amber(t *testing.T) {
 		},
 	}
 
-	m, err := NewMonitor("test", "web-app, api-server, worker", 10, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server, worker", 0, 10, "box", nil, mock)
 	require.NoError(t, err)
 
 	result := m.Check(context.Background())
@@ -193,7 +190,7 @@ func TestMonitor_Check_Red(t *testing.T) {
 		},
 	}
 
-	m, err := NewMonitor("test", "web-app, api-server, worker", 10, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server, worker", 0, 10, "box", nil, mock)
 	require.NoError(t, err)
 
 	result := m.Check(context.Background())
@@ -207,7 +204,7 @@ func TestMonitor_Check_Error(t *testing.T) {
 		GetCountsError: errors.New("Docker daemon not available"),
 	}
 
-	m, err := NewMonitor("test", "web-app", 10, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app", 10, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	result := m.Check(context.Background())
@@ -264,7 +261,7 @@ func TestMonitor_Check_ThresholdEdgeCases(t *testing.T) {
 				},
 			}
 
-			m, err := NewMonitor("test", "web-app", tt.threshold, "box", nil, mock)
+			m, err := NewMonitor("test", "web-app", tt.threshold, "box", 0, nil, mock)
 			require.NoError(t, err)
 
 			result := m.Check(context.Background())
@@ -275,7 +272,7 @@ func TestMonitor_Check_ThresholdEdgeCases(t *testing.T) {
 
 func TestMonitor_Save(t *testing.T) {
 	mock := &MockDockerProvider{}
-	m, err := NewMonitor("test", "web-app, api-server", 5, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server", 5, 0, "box", nil, mock)
 	require.NoError(t, err)
 
 	cfg := &config.Config{
@@ -295,7 +292,7 @@ func TestMonitor_Save(t *testing.T) {
 
 func TestMonitor_Restart(t *testing.T) {
 	mock := &MockDockerProvider{}
-	m, err := NewMonitor("test", "web-app, api-server, worker", 5, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app, api-server, worker", 0, 5, "box", nil, mock)
 	require.NoError(t, err)
 
 	err = m.Restart(context.Background())
@@ -308,7 +305,7 @@ func TestMonitor_Restart_Error(t *testing.T) {
 	mock := &MockDockerProvider{
 		RestartError: errors.New("permission denied"),
 	}
-	m, err := NewMonitor("test", "web-app", 5, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app", 5, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	err = m.Restart(context.Background())
@@ -374,7 +371,7 @@ func TestParseContainerList(t *testing.T) {
 
 func TestMonitor_Close(t *testing.T) {
 	mock := &MockDockerProvider{}
-	m, err := NewMonitor("test", "web-app", 5, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app", 5, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	err = m.Close()
@@ -386,7 +383,7 @@ func TestMonitor_Close_Error(t *testing.T) {
 	mock := &MockDockerProvider{
 		CloseError: errors.New("close failed"),
 	}
-	m, err := NewMonitor("test", "web-app", 5, "box", nil, mock)
+	m, err := NewMonitor("test", "web-app", 5, "box", 0, nil, mock)
 	require.NoError(t, err)
 
 	err = m.Close()

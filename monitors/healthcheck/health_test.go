@@ -19,7 +19,7 @@ import (
 // TestNewHealthcheck verifies that a Healthcheck can be created and added to a monitoring service.
 func TestNewHealthcheck(t *testing.T) {
 	push := monitors.NewMockPush()
-	h, err := NewHealthcheck("local", "http://localhost/health", 5, 0, "", "", nil, MockHealthcheckProvider{Result: atomic.NewInt32(http.StatusOK)}, nil)
+	h, err := NewHealthcheck("local", "http://localhost/health", 5, 0, "", "", nil, 0, MockHealthcheckProvider{Result: atomic.NewInt32(http.StatusOK)}, nil)
 	assert.NoError(t, err)
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
 	svc.Add(t.Context(), h)
@@ -46,7 +46,7 @@ func TestHealthcheck_DisplayName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := NewHealthcheck(tt.name, tt.url, tt.timeout, tt.respCode, tt.icon, "", nil, nil, nil)
+			c, err := NewHealthcheck(tt.name, tt.url, tt.timeout, tt.respCode, tt.icon, "", nil, nil, 0, nil)
 			if tt.wantErr {
 				assert.Error(t, err, "error expected")
 			} else {
@@ -71,7 +71,7 @@ func TestHealthcheck_HasRestartContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", tt.restartContainers, nil, nil, nil)
+			h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", tt.restartContainers, nil, nil, 0, nil)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expect, h.HasRestartContainers())
 		})
@@ -102,7 +102,7 @@ func TestParseContainerList(t *testing.T) {
 
 // TestHealthcheck_Save_WithRestartContainers verifies Save includes RestartContainers.
 func TestHealthcheck_Save_WithRestartContainers(t *testing.T) {
-	h, err := NewHealthcheck("test", "http://localhost", 5, 200, "icon", "app1,app2", nil, nil, nil)
+	h, err := NewHealthcheck("test", "http://localhost", 5, 200, "icon", "app1,app2", nil, nil, 0, nil)
 	assert.NoError(t, err)
 
 	cfg := &config.Config{
@@ -123,7 +123,7 @@ func TestHealthcheck_Save_WithRestartContainers(t *testing.T) {
 
 // TestHealthcheck_Save_WithoutRestartContainers verifies Save handles empty RestartContainers.
 func TestHealthcheck_Save_WithoutRestartContainers(t *testing.T) {
-	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "", nil, nil, nil)
+	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "", nil, nil, 0, nil)
 	assert.NoError(t, err)
 
 	cfg := &config.Config{
@@ -156,7 +156,7 @@ func TestHealthcheck_Group(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := NewHealthcheck(tt.name, tt.url, tt.timeout, tt.respCode, tt.icon, "", nil, nil, nil)
+			c, err := NewHealthcheck(tt.name, tt.url, tt.timeout, tt.respCode, tt.icon, "", nil, nil, 0, nil)
 			if tt.wantErr {
 				assert.Error(t, err, "error expected")
 			} else {
@@ -185,7 +185,7 @@ func TestHealthcheck_Name(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := NewHealthcheck(tt.name, tt.url, tt.timeout, tt.respCode, tt.icon, "", nil, nil, nil)
+			c, err := NewHealthcheck(tt.name, tt.url, tt.timeout, tt.respCode, tt.icon, "", nil, nil, 0, nil)
 			if tt.wantErr {
 				assert.Error(t, err, "error expected")
 			} else {
@@ -203,7 +203,7 @@ func TestHealthcheck_Save(t *testing.T) {
 	cfg, _ := l.Load()
 
 	// Arrange
-	c, err := NewHealthcheck("test", "http://localhost/health", 5, 401, "icon-test", "", nil, nil, nil)
+	c, err := NewHealthcheck("test", "http://localhost/health", 5, 401, "icon-test", "", nil, nil, 0, nil)
 	assert.NoError(t, err)
 	// Act
 	c.Save(cfg)
@@ -249,7 +249,7 @@ func TestHealthcheck_DefaultImplSmokeTest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ts.RespCode.Store(tt.resp)
 			ts.DelayMs.Store(tt.msDelay)
-			c, err := NewHealthcheck("test", ts.URL, 1, tt.expCode, "", "", nil, nil, nil)
+			c, err := NewHealthcheck("test", ts.URL, 1, tt.expCode, "", "", nil, nil, 0, nil)
 			assert.NoError(t, err)
 			r := c.Check(t.Context())
 			assert.Equal(t, tt.expect, r.Status, "status not %s: %s", tt.expect.String(), r.Status.String())
@@ -261,7 +261,7 @@ func TestHealthcheck_DefaultImplSmokeTest(t *testing.T) {
 // TestHealthcheck_RestartContainers_Success verifies successful container restart.
 func TestHealthcheck_RestartContainers_Success(t *testing.T) {
 	mockDocker := &docker.MockDockerProvider{}
-	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "app1,app2,app3", nil, nil, mockDocker)
+	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "app1,app2,app3", nil, nil, 0, mockDocker)
 	assert.NoError(t, err)
 
 	err = h.RestartContainers(t.Context())
@@ -276,7 +276,7 @@ func TestHealthcheck_RestartContainers_Error(t *testing.T) {
 	mockDocker := &docker.MockDockerProvider{
 		RestartError: assert.AnError,
 	}
-	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "app1", nil, nil, mockDocker)
+	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "app1", nil, nil, 0, mockDocker)
 	assert.NoError(t, err)
 
 	err = h.RestartContainers(t.Context())
@@ -286,7 +286,7 @@ func TestHealthcheck_RestartContainers_Error(t *testing.T) {
 
 // TestHealthcheck_RestartContainers_NoContainers verifies error when no containers configured.
 func TestHealthcheck_RestartContainers_NoContainers(t *testing.T) {
-	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "", nil, nil, nil)
+	h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", "", nil, nil, 0, nil)
 	assert.NoError(t, err)
 
 	err = h.RestartContainers(t.Context())

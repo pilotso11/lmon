@@ -68,6 +68,7 @@ type Monitor interface {
 	Group() string                    // Group/category of the monitor
 	Name() string                     // Unique name/ID of the monitor
 	Save(cfg *config.Config)          // Save monitor configuration to the provided config
+	AlertThreshold() int              // Number of consecutive failures before triggering alert (default: 1)
 }
 
 // PushFunc is a callback called when a monitor's result changes.
@@ -77,13 +78,14 @@ type PushFunc func(ctx context.Context, m Monitor, prev, result Result)
 // Service manages the lifecycle of monitors, periodic checks, and result storage.
 // It is safe for concurrent use.
 type Service struct {
-	period   *common.AtomicDuration
-	timeout  *common.AtomicDuration
-	monitors *xsync.Map[string, Monitor] // Map of monitor names to Monitor instances
-	result   *xsync.Map[string, Result]
-	cancel   context.CancelFunc
-	push     PushFunc
-	wg       sync.WaitGroup
+	period         *common.AtomicDuration
+	timeout        *common.AtomicDuration
+	monitors       *xsync.Map[string, Monitor] // Map of monitor names to Monitor instances
+	result         *xsync.Map[string, Result]
+	failureCount   *xsync.Map[string, int] // Track consecutive failures per monitor
+	cancel         context.CancelFunc
+	push           PushFunc
+	wg             sync.WaitGroup
 }
 
 // NewService creates a new monitoring Service.
@@ -92,11 +94,12 @@ type Service struct {
 // push: callback for result changes (may be nil).
 func NewService(ctx context.Context, period time.Duration, timeout time.Duration, push PushFunc) *Service {
 	s := Service{
-		period:   common.NewAtomicDuration(period),
-		timeout:  common.NewAtomicDuration(timeout),
-		monitors: xsync.NewMap[string, Monitor](),
-		result:   xsync.NewMap[string, Result](),
-		push:     push,
+		period:       common.NewAtomicDuration(period),
+		timeout:      common.NewAtomicDuration(timeout),
+		monitors:     xsync.NewMap[string, Monitor](),
+		result:       xsync.NewMap[string, Result](),
+		failureCount: xsync.NewMap[string, int](),
+		push:         push,
 	}
 	s.startMonitors(ctx)
 	return &s
@@ -130,7 +133,8 @@ func (s *Service) Remove(m Monitor) error {
 		return ErrNotFound{Name: name}
 	}
 	s.monitors.Delete(name)
-	s.result.Delete(name) // Remove any pending result immediately
+	s.result.Delete(name)         // Remove any pending result immediately
+	s.failureCount.Delete(name)   // Remove failure count
 	return nil
 }
 
@@ -219,14 +223,54 @@ func (s *Service) checkMonitors(ctx context.Context) {
 }
 
 // checkStoreAndPush updates the result map and triggers the push callback if needed.
+// It tracks consecutive failures and only triggers alerts when the alertThreshold is reached.
 func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Result) {
 	result.DisplayName = m.DisplayName()
 	result.Group = m.Group()
 	prev, ok := s.result.Load(m.Name()) // get previous result
 	s.result.Store(m.Name(), result)
-	switch {
-	case ok && prev.Status != result.Status && s.push != nil,
-		!ok && result.Status != RAGGreen && s.push != nil:
+	
+	// Determine if this is a failure (non-green status)
+	isFailure := result.Status != RAGGreen
+	
+	// Get current failure count
+	currentCount, _ := s.failureCount.Load(m.Name())
+	
+	if isFailure {
+		// Increment failure count
+		currentCount++
+		s.failureCount.Store(m.Name(), currentCount)
+	} else {
+		// Reset failure count on success
+		s.failureCount.Store(m.Name(), 0)
+	}
+	
+	// Get the alert threshold for this monitor
+	threshold := m.AlertThreshold()
+	
+	// Only push alert if:
+	// 1. There's a push function configured
+	// 2. Either:
+	//    a. Status changed AND we've reached the threshold, OR
+	//    b. First check AND it's not green AND we've reached the threshold
+	shouldAlert := false
+	if s.push != nil {
+		if ok && prev.Status != result.Status {
+			// Status changed - alert if we've reached threshold for failures
+			// or if transitioning back to healthy
+			if isFailure && currentCount >= threshold {
+				shouldAlert = true
+			} else if !isFailure {
+				// Always alert when recovering to healthy
+				shouldAlert = true
+			}
+		} else if !ok && isFailure && currentCount >= threshold {
+			// First check and it's unhealthy and reached threshold
+			shouldAlert = true
+		}
+	}
+	
+	if shouldAlert {
 		s.push(ctx, m, prev, result)
 	}
 }

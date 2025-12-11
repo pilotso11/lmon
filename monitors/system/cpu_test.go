@@ -16,7 +16,7 @@ import (
 // TestNewCpu verifies that a Cpu monitor can be created and added to a monitoring service.
 func TestNewCpu(t *testing.T) {
 	push := monitors.NewMockPush()
-	cpu := NewCpu(90, "", MockCpuProvider{Current: atomic.NewFloat64(0)})
+	cpu := NewCpu(90, "", 0, MockCpuProvider{Current: atomic.NewFloat64(0)})
 	svc := monitors.NewService(t.Context(), time.Second, time.Millisecond, push.Push)
 	svc.Add(t.Context(), cpu)
 	assert.Equal(t, 1, svc.Size(), "one monitor added")
@@ -71,7 +71,7 @@ func TestCpu_DefaultImpl(t *testing.T) {
 
 // TestCpu_DefaultImplSmokeTest verifies that the default implementation of Cpu.Check does not return an error status.
 func TestCpu_DefaultImplSmokeTest(t *testing.T) {
-	c := NewCpu(100, "", nil)
+	c := NewCpu(100, "", 0, nil)
 	r := c.Check(t.Context())
 	assert.NotEqual(t, monitors.RAGError, r.Status, "status not error")
 }
@@ -96,7 +96,7 @@ func TestCpu_Check_Mock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewCpu(tt.threshold, "", MockCpuProvider{Current: atomic.NewFloat64(tt.usage), err: tt.err})
+			c := NewCpu(tt.threshold, "", 0, MockCpuProvider{Current: atomic.NewFloat64(tt.usage), err: tt.err})
 			r := c.Check(t.Context())
 			assert.Equal(t, tt.want.Status, r.Status, "status")
 			assert.Equal(t, tt.want.Value, r.Value, "value")

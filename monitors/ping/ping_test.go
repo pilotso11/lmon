@@ -16,7 +16,7 @@ import (
 )
 
 func TestPingMonitor_SuccessGreen(t *testing.T) {
-	pm := NewPingMonitor("test-green", "127.0.0.1", 1000, "", 100, NewMockPingProvider(50, nil))
+	pm := NewPingMonitor("test-green", "127.0.0.1", 1000, "", 100, 0, NewMockPingProvider(50, nil))
 	result := pm.Check(t.Context())
 	if result.Status != monitors.RAGGreen {
 		t.Errorf("Expected RAGGreen, got %v", result.Status)
@@ -27,7 +27,7 @@ func TestPingMonitor_SuccessGreen(t *testing.T) {
 }
 
 func TestPingMonitor_SuccessAmber(t *testing.T) {
-	pm := NewPingMonitor("test-amber", "127.0.0.1", 1000, "", 100, NewMockPingProvider(150, nil))
+	pm := NewPingMonitor("test-amber", "127.0.0.1", 1000, "", 100, 0, NewMockPingProvider(150, nil))
 	result := pm.Check(t.Context())
 	if result.Status != monitors.RAGAmber {
 		t.Errorf("Expected RAGAmber, got %v", result.Status)
@@ -38,7 +38,7 @@ func TestPingMonitor_SuccessAmber(t *testing.T) {
 }
 
 func TestPingMonitor_FailureRed(t *testing.T) {
-	pm := NewPingMonitor("test-red", "127.0.0.1", 1000, "", 100, NewMockPingProvider(500, errors.New("timeout")))
+	pm := NewPingMonitor("test-red", "127.0.0.1", 1000, "", 100, 0, NewMockPingProvider(500, errors.New("timeout")))
 	result := pm.Check(t.Context())
 	assert.Equal(t, monitors.RAGRed.String(), result.Status.String(), "Status is red")
 	if result.Value == "" || result.Value == "0 ms" {
@@ -47,7 +47,7 @@ func TestPingMonitor_FailureRed(t *testing.T) {
 }
 
 func TestPingMonitor_DisplayNameAndGroup(t *testing.T) {
-	pm := NewPingMonitor("display", "localhost", 1000, "", 100, NewMockPingProvider(10, nil))
+	pm := NewPingMonitor("display", "localhost", 1000, "", 100, 0, NewMockPingProvider(10, nil))
 	assert.Equal(t, "Ping: display (localhost)", pm.DisplayName(), "DisplayName")
 	assert.Equal(t, "ping", pm.Group(), "Group")
 	assert.Equal(t, "ping_display", pm.Name(), "Name")
@@ -55,7 +55,7 @@ func TestPingMonitor_DisplayNameAndGroup(t *testing.T) {
 
 func TestPingMonitor_Save(t *testing.T) {
 	cfg := &config.Config{}
-	pm := NewPingMonitor("save-test", "1.2.3.4", 1234, "wifi", 200, NewMockPingProvider(10, nil))
+	pm := NewPingMonitor("save-test", "1.2.3.4", 1234, "wifi", 200, 0, NewMockPingProvider(10, nil))
 	pm.Save(cfg)
 	pc, ok := cfg.Monitoring.Ping["save-test"]
 	if !ok {
@@ -67,7 +67,7 @@ func TestPingMonitor_Save(t *testing.T) {
 }
 
 func TestPingMonitor_DefaultProvider(t *testing.T) {
-	pm := NewPingMonitor("default-provider", "localhost", 1000, "", 100, nil)
+	pm := NewPingMonitor("default-provider", "localhost", 1000, "", 100, 0, nil)
 	if pm.impl == nil {
 		t.Errorf("Default provider not set")
 	}
@@ -83,7 +83,7 @@ func TestDefaultPingProvider_Ping_Error(t *testing.T) {
 }
 
 func TestPingMonitor_Save_NilConfig(t *testing.T) {
-	pm := NewPingMonitor("nil-test", "127.0.0.1", 1000, "", 100, NewMockPingProvider(10, nil))
+	pm := NewPingMonitor("nil-test", "127.0.0.1", 1000, "", 100, 0, NewMockPingProvider(10, nil))
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("Expected panic when saving to nil config")
@@ -93,7 +93,7 @@ func TestPingMonitor_Save_NilConfig(t *testing.T) {
 }
 
 func TestPingMonitor_FallbackElapsedTime(t *testing.T) {
-	pm := NewPingMonitor("fallback-elapsed", "127.0.0.1", 1000, "", 100, NewMockPingProvider(0, nil))
+	pm := NewPingMonitor("fallback-elapsed", "127.0.0.1", 1000, "", 100, 0, NewMockPingProvider(0, nil))
 	result := pm.Check(t.Context())
 	if result.Value != "0 ms" {
 		t.Errorf("Expected fallback value '0 ms', got %s", result.Value)
@@ -137,7 +137,7 @@ func TestDefaultPingProvider_Ping_Unreachable(t *testing.T) {
 }
 
 func TestDefaultAmberValue(t *testing.T) {
-	pm := NewPingMonitor("amber-value-test", "localhost", 100, Icon, 0, &DefaultPingProvider{})
+	pm := NewPingMonitor("amber-value-test", "localhost", 100, Icon, 0, 0, &DefaultPingProvider{})
 	assert.Equal(t, 50, pm.amberThreshold, "Default amber threshold should be 50 ms")
 }
 
@@ -213,7 +213,7 @@ func TestNewPingMonitor_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pm := NewPingMonitor(tt.monitorName, tt.address, tt.timeout, tt.icon, tt.amberThreshold, tt.impl)
+			pm := NewPingMonitor(tt.monitorName, tt.address, tt.timeout, tt.icon, tt.amberThreshold, 0, tt.impl)
 			assert.Equal(t, tt.expectedIcon, pm.icon, "icon should match expected")
 			assert.Equal(t, tt.expectedAmber, pm.amberThreshold, "amber threshold should match expected")
 			assert.NotNil(t, pm.impl, "provider should not be nil")
@@ -236,7 +236,7 @@ func TestPingMonitor_Save_WithExistingConfig(t *testing.T) {
 		},
 	}
 
-	pm := NewPingMonitor("new-monitor", "new.com", 2000, "new-icon", 150, NewMockPingProvider(10, nil))
+	pm := NewPingMonitor("new-monitor", "new.com", 2000, "new-icon", 150, 0, NewMockPingProvider(10, nil))
 	pm.Save(cfg)
 
 	// Check that existing config is preserved
@@ -292,7 +292,7 @@ func TestPingMonitor_AmberThresholdBoundary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pm := NewPingMonitor("boundary-test", "127.0.0.1", 1000, "", tt.amberThreshold,
+			pm := NewPingMonitor("boundary-test", "127.0.0.1", 1000, "", tt.amberThreshold, 0,
 				NewMockPingProvider(tt.responseTime, nil))
 			result := pm.Check(context.Background())
 			assert.Equal(t, tt.expectedStatus, result.Status, "status should match expected")
@@ -344,7 +344,7 @@ func TestPingMonitor_Check_WithContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	pm := NewPingMonitor("context-test", "127.0.0.1", 1000, "", 100, NewMockPingProvider(50, nil))
+	pm := NewPingMonitor("context-test", "127.0.0.1", 1000, "", 100, 0, NewMockPingProvider(50, nil))
 	result := pm.Check(ctx)
 
 	// Mock provider doesn't respect context cancellation, so it should still work
@@ -355,7 +355,7 @@ func TestPingMonitor_Check_WithContext(t *testing.T) {
 
 // Test Monitor fields are properly set
 func TestPingMonitor_FieldAccess(t *testing.T) {
-	pm := NewPingMonitor("field-test", "test.example.com", 5000, "test-icon", 200, NewMockPingProvider(75, nil))
+	pm := NewPingMonitor("field-test", "test.example.com", 5000, "test-icon", 200, 0, NewMockPingProvider(75, nil))
 
 	assert.Equal(t, "ping_field-test", pm.Name())
 	assert.Equal(t, "Ping: field-test (test.example.com)", pm.DisplayName())

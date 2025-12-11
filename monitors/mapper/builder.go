@@ -51,18 +51,18 @@ func NewMapper(impls *Implementations) Mapper {
 // NewDisk constructs a disk monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewDisk(_ context.Context, name string, cfg config.DiskConfig) (disk.Disk, error) {
 	name, _ = config.SanitiseName(name)
-	return disk.NewDisk(name, cfg.Path, cfg.Threshold, cfg.Icon, d.Impls.Disk), nil
+	return disk.NewDisk(name, cfg.Path, cfg.Threshold, cfg.Icon, cfg.AlertThreshold, d.Impls.Disk), nil
 }
 
 // NewHealthcheck constructs a healthcheck monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewHealthcheck(_ context.Context, name string, cfg config.HealthcheckConfig) (healthcheck.Healthcheck, error) {
 	name, _ = config.SanitiseName(name)
-	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.RespCode, cfg.Icon, cfg.RestartContainers, d.AllowedRestartContainers, d.Impls.Health, d.Impls.Docker)
+	return healthcheck.NewHealthcheck(name, cfg.URL, cfg.Timeout, cfg.RespCode, cfg.Icon, cfg.RestartContainers, cfg.AlertThreshold, d.AllowedRestartContainers, d.Impls.Health, d.Impls.Docker)
 }
 
 // NewCpu constructs a CPU monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewCpu(_ context.Context, cfg config.SystemItem) (system.Cpu, error) {
-	return system.NewCpu(cfg.Threshold, cfg.Icon, d.Impls.Cpu), nil
+	return system.NewCpu(cfg.Threshold, cfg.Icon, cfg.AlertThreshold, d.Impls.Cpu), nil
 }
 
 // NewPing constructs a ping monitor using the provided configuration and optional mock provider.
@@ -75,12 +75,12 @@ func (d Mapper) NewPing(_ context.Context, name string, cfg config.PingConfig) (
 	} else {
 		provider = ping.NewDefaultPingProvider()
 	}
-	return ping.NewPingMonitor(name, cfg.Address, cfg.Timeout, cfg.Icon, cfg.AmberThreshold, provider), nil
+	return ping.NewPingMonitor(name, cfg.Address, cfg.Timeout, cfg.Icon, cfg.AmberThreshold, cfg.AlertThreshold, provider), nil
 }
 
 // NewMem constructs a memory monitor using the provided configuration and optional mock provider.
 func (d Mapper) NewMem(_ context.Context, cfg config.SystemItem) (system.Mem, error) {
-	return system.NewMem(cfg.Threshold, cfg.Icon, d.Impls.Mem), nil
+	return system.NewMem(cfg.Threshold, cfg.Icon, cfg.AlertThreshold, d.Impls.Mem), nil
 }
 
 // NewDocker constructs a Docker monitor using the provided configuration and optional mock provider.
@@ -90,5 +90,5 @@ func (d Mapper) NewDocker(_ context.Context, name string, cfg config.DockerConfi
 	if !common.IsNil(d.Impls.Docker) {
 		impl = d.Impls.Docker
 	}
-	return docker.NewMonitor(name, cfg.Containers, cfg.Threshold, cfg.Icon, d.AllowedRestartContainers, impl)
+	return docker.NewMonitor(name, cfg.Containers, cfg.Threshold, cfg.Icon, cfg.AlertThreshold, d.AllowedRestartContainers, impl)
 }

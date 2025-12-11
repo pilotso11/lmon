@@ -139,30 +139,36 @@ func calculateCPUPercentage(current, previous cpu.TimesStat) float64 {
 //   - icon: Icon for UI display.
 //   - impl: Implementation for usage statistics (defaults to defaultCpuProvider).
 type Cpu struct {
-	threshold int         // Usage percentage threshold for alerting
-	icon      string      // Icon for UI display
-	impl      CpuProvider // Implementation for usage statistics
+	threshold      int         // Usage percentage threshold for alerting
+	icon           string      // Icon for UI display
+	impl           CpuProvider // Implementation for usage statistics
+	alertThreshold int         // Number of consecutive failures before triggering alert
 }
 
 // NewCpu constructs a new Cpu monitor with the given parameters.
 //
 // If icon is empty, the default CpuIcon is used.
 // If provider is nil, the defaultCpuProvider is used.
+// If alertThreshold is 0, it defaults to 1.
 //
 // Example:
 //
-//	cpuMonitor := NewCpu(80, "", nil)
-func NewCpu(threshold int, icon string, provider CpuProvider) Cpu {
+//	cpuMonitor := NewCpu(80, "", 0, nil)
+func NewCpu(threshold int, icon string, alertThreshold int, provider CpuProvider) Cpu {
 	if icon == "" {
 		icon = CpuIcon
 	}
 	if common.IsNil(provider) {
 		provider = newDefaultCpuProvider()
 	}
+	if alertThreshold <= 0 {
+		alertThreshold = 1
+	}
 	return Cpu{
-		threshold: threshold,
-		icon:      icon,
-		impl:      provider,
+		threshold:      threshold,
+		icon:           icon,
+		alertThreshold: alertThreshold,
+		impl:           provider,
 	}
 }
 
@@ -189,6 +195,15 @@ func (c Cpu) Name() string {
 func (c Cpu) Save(cfg *config.Config) {
 	cfg.Monitoring.System.CPU.Threshold = c.threshold
 	cfg.Monitoring.System.CPU.Icon = c.icon
+	cfg.Monitoring.System.CPU.AlertThreshold = c.alertThreshold
+}
+
+// AlertThreshold returns the number of consecutive failures before triggering an alert
+func (c Cpu) AlertThreshold() int {
+	if c.alertThreshold <= 0 {
+		return 1
+	}
+	return c.alertThreshold
 }
 
 // Check performs a usage check on the CPU and returns a Result.

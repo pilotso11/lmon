@@ -78,6 +78,7 @@ type Monitor struct {
 	timeout        int
 	icon           string
 	amberThreshold int
+	alertThreshold int
 	impl           Provider
 }
 
@@ -86,12 +87,15 @@ func (pm Monitor) Name() string {
 }
 
 // NewPingMonitor constructs a new PingMonitor.
-func NewPingMonitor(name, address string, timeout int, icon string, amberThreshold int, impl Provider) Monitor {
+func NewPingMonitor(name, address string, timeout int, icon string, amberThreshold int, alertThreshold int, impl Provider) Monitor {
 	if icon == "" {
 		icon = Icon
 	}
 	if amberThreshold <= 0 {
 		amberThreshold = 50 // Default amber threshold if not specified
+	}
+	if alertThreshold <= 0 {
+		alertThreshold = 1
 	}
 	if impl == nil {
 		impl = NewDefaultPingProvider()
@@ -102,6 +106,7 @@ func NewPingMonitor(name, address string, timeout int, icon string, amberThresho
 		timeout:        timeout,
 		icon:           icon,
 		amberThreshold: amberThreshold,
+		alertThreshold: alertThreshold,
 		impl:           impl,
 	}
 }
@@ -150,5 +155,14 @@ func (pm Monitor) Save(cfg *config.Config) {
 		Timeout:        pm.timeout,
 		Icon:           pm.icon,
 		AmberThreshold: pm.amberThreshold,
+		AlertThreshold: pm.alertThreshold,
 	}
+}
+
+// AlertThreshold returns the number of consecutive failures before triggering an alert
+func (pm Monitor) AlertThreshold() int {
+	if pm.alertThreshold <= 0 {
+		return 1
+	}
+	return pm.alertThreshold
 }

@@ -57,7 +57,7 @@ func TestMonitor_Restart_WithWhitelist(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := &MockDockerProvider{}
-			m, err := NewMonitor("test", tt.containers, 5, "box", tt.allowedContainers, mock)
+			m, err := NewMonitor("test", tt.containers, 5, "box", 0, 0, tt.allowedContainers, mock)
 			require.NoError(t, err)
 
 			err = m.Restart(context.Background())

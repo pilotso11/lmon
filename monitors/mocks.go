@@ -94,3 +94,8 @@ func (m *MockMonitor) Name() string {
 func (m *MockMonitor) Save(_ *config.Config) {
 	// noop
 }
+
+// AlertThreshold implements Monitor. Returns 1 for the mock monitor.
+func (m *MockMonitor) AlertThreshold() int {
+	return 1
+}
