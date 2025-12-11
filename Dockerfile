@@ -1,9 +1,13 @@
-FROM golang:1.25-alpine AS builder
+# Use multi-stage build with cross-compilation
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+
+# Install CA certificates for downloads
+RUN apk add --no-cache ca-certificates && update-ca-certificates
 
 WORKDIR /app
 
 # Copy go.mod and go.sum
-COPY go.mod ./
+COPY go.mod go.sum ./
 
 # Download dependencies
 RUN go mod download
@@ -11,8 +15,16 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o lmon
+# Cross-compile for target platform
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -ldflags="-w -s" -o lmon
 
 # Use a minimal alpine image for the final image
 FROM alpine:latest
