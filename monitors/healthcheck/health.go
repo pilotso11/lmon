@@ -108,6 +108,7 @@ type Healthcheck struct {
 	impl                     UsageProvider   // Implementation for performing the check
 	dockerImpl               docker.Provider // Implementation for Docker restart operations
 	allowedRestartContainers []string        // Global whitelist of containers allowed for restart
+	alertThreshold           int             // Number of consecutive failures before triggering alert
 }
 
 // NewHealthcheck constructs a new Healthcheck monitor with the given parameters.
@@ -115,7 +116,8 @@ type Healthcheck struct {
 // If icon is empty, the default Icon is used.
 // If impl is nil, the DefaultHealthcheckProvider is used.
 // If dockerImpl is nil and restartContainers is set, a docker.DefaultDockerProvider is created.
-func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, restartContainers string, allowedRestartContainers []string, impl UsageProvider, dockerImpl docker.Provider) (Healthcheck, error) {
+// If alertThreshold is 0, it defaults to 1.
+func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon string, restartContainers string, alertThreshold int, allowedRestartContainers []string, impl UsageProvider, dockerImpl docker.Provider) (Healthcheck, error) {
 	if icon == "" {
 		icon = Icon
 	}
@@ -136,6 +138,9 @@ func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon 
 	if err != nil {
 		return Healthcheck{}, err
 	}
+	if alertThreshold <= 0 {
+		alertThreshold = 1
+	}
 	
 	return Healthcheck{
 		name:                     name,
@@ -146,6 +151,7 @@ func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon 
 		dockerImpl:               dockerImpl,
 		timeout:                  timeout,
 		respCode:                 respCode,
+		alertThreshold:           alertThreshold,
 		allowedRestartContainers: allowedRestartContainers,
 	}, nil
 }
@@ -185,7 +191,13 @@ func (d Healthcheck) Save(cfg *config.Config) {
 		RespCode:          d.respCode,
 		Icon:              d.icon,
 		RestartContainers: d.restartContainers,
+		AlertThreshold:    d.alertThreshold,
 	}
+}
+
+// AlertThreshold returns the number of consecutive failures before triggering an alert
+func (d Healthcheck) AlertThreshold() int {
+	return d.alertThreshold
 }
 
 // HasRestartContainers returns true if this healthcheck has containers configured for restart

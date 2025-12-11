@@ -24,7 +24,9 @@ document.addEventListener("DOMContentLoaded", function () {
     systemForm.addEventListener("submit", async function (e) {
       e.preventDefault();
       const cpuThreshold = document.getElementById("cpu-threshold").value;
+      const cpuAlertThreshold = document.getElementById("cpu-alert-threshold").value;
       const memoryThreshold = document.getElementById("memory-threshold").value;
+      const memoryAlertThreshold = document.getElementById("memory-alert-threshold").value;
       const intervalSeconds = document.getElementById("interval-seconds").value;
       const dashboardTitle = document.getElementById(
         "dashboard-title-inline",
@@ -32,8 +34,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // 1. Update system config
       const systemPayload = {
-        CPU: { Threshold: Number(cpuThreshold) },
-        Memory: { Threshold: Number(memoryThreshold) },
+        CPU: { 
+          Threshold: Number(cpuThreshold),
+          AlertThreshold: Number(cpuAlertThreshold)
+        },
+        Memory: { 
+          Threshold: Number(memoryThreshold),
+          AlertThreshold: Number(memoryAlertThreshold)
+        },
         Title: dashboardTitle,
       };
 
@@ -416,6 +424,9 @@ document.addEventListener("DOMContentLoaded", function () {
       const diskThreshold = parseInt(
         document.getElementById("disk-threshold").value,
       );
+      const diskAlertThreshold = parseInt(
+        document.getElementById("disk-alert-threshold").value,
+      );
 
       if (!diskName) {
         showToast("Error", "Disk name is required", true);
@@ -426,6 +437,7 @@ document.addEventListener("DOMContentLoaded", function () {
         path: diskPath,
         icon: diskIcon,
         threshold: diskThreshold,
+        alertthreshold: diskAlertThreshold,
       };
 
       try {
@@ -499,6 +511,8 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
           }
           const amberThreshold = parseInt(amberThresholdInput.value);
+          const alertThresholdInput = document.getElementById("monitor-alert-threshold");
+          const alertThreshold = alertThresholdInput ? parseInt(alertThresholdInput.value) : 1;
 
           await fetchJson(`/api/config/ping/${encodeURIComponent(name)}`, {
             method: "POST",
@@ -507,6 +521,7 @@ document.addEventListener("DOMContentLoaded", function () {
               address: target,
               timeout: timeout,
               amberThreshold: amberThreshold,
+              alertThreshold: alertThreshold,
               icon: icon,
             }),
           });
@@ -538,6 +553,9 @@ document.addEventListener("DOMContentLoaded", function () {
             ? restartContainersInput.value.trim()
             : "";
 
+          const alertThresholdInput = document.getElementById("monitor-alert-threshold");
+          const alertThreshold = alertThresholdInput ? parseInt(alertThresholdInput.value) : 1;
+
           // HTTP health check
           await fetchJson(`/api/config/health/${encodeURIComponent(name)}`, {
             method: "POST",
@@ -548,6 +566,7 @@ document.addEventListener("DOMContentLoaded", function () {
               respcode: respCode,
               icon: icon,
               restart_containers: restartContainers,
+              alertThreshold: alertThreshold,
             }),
           });
 
@@ -587,6 +606,9 @@ document.addEventListener("DOMContentLoaded", function () {
       const dockerThreshold = parseInt(
         document.getElementById("docker-threshold").value,
       );
+      const dockerAlertThreshold = parseInt(
+        document.getElementById("docker-alert-threshold").value,
+      );
 
       if (!dockerName) {
         showToast("Error", "Docker monitor name is required", "danger");
@@ -602,6 +624,7 @@ document.addEventListener("DOMContentLoaded", function () {
         containers: dockerContainers,
         icon: dockerIcon,
         threshold: dockerThreshold,
+        alertThreshold: dockerAlertThreshold,
       };
 
       try {

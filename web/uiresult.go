@@ -19,13 +19,14 @@ type UIResult struct {
 	TypeLabel            string       // Type of the monitor (e.g., disk, healthcheck)
 	DisplayName          string       // Display Name for UI
 	Threshold            int          // Threshold for the monitor, if applicable
+	FailureCount         int          // Current consecutive failure count
 	EvenRow              bool         // Flag to indicate if the row is even for styling purposes
 	StatusClass          string       // CSS class for the status, used for styling in the UI
 	HasRestartContainers bool         // Whether this healthcheck has restart containers configured
 }
 
 // Find icon and add it to the result.
-func newUIResult(id string, item monitors.Result, c *config.Config) UIResult {
+func newUIResult(id string, item monitors.Result, c *config.Config, failureCount int) UIResult {
 	icon := "folder" // default icon if no specific icon is found
 	threshold := 0   // default threshold if not set
 	typeLabel := ""
@@ -98,6 +99,7 @@ func newUIResult(id string, item monitors.Result, c *config.Config) UIResult {
 		Group:                item.Group,
 		DisplayName:          item.DisplayName,
 		Threshold:            threshold,
+		FailureCount:         failureCount,
 		TypeLabel:            typeLabel,
 		StatusClass:          statusClass,
 		HasRestartContainers: hasRestartContainers,

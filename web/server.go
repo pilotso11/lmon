@@ -475,7 +475,8 @@ func (s *Server) handleGetItems(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) joinConfigToResults(items map[string]monitors.Result) map[string]UIResult {
 	results := make(map[string]UIResult)
 	for id, item := range items {
-		results[id] = newUIResult(id, item, s.config)
+		failureCount := s.monitor.GetFailureCount(id)
+		results[id] = newUIResult(id, item, s.config, failureCount)
 	}
 	return results
 }
@@ -497,7 +498,8 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		log.Printf("handleGetItem: item not found: %s", id)
 		return
 	}
-	s.writeJson(w, newUIResult(name, item, s.config))
+	failureCount := s.monitor.GetFailureCount(name)
+	s.writeJson(w, newUIResult(name, item, s.config, failureCount))
 }
 
 // handleGetConfig responds with the current server configuration as JSON.

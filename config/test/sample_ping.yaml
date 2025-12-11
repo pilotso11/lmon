@@ -3,14 +3,17 @@ monitoring:
     ping:
         ping_sample:
             address: 8.8.8.8
+            alertthreshold: 1
             amberthreshold: 100
             icon: wifi
             timeout: 1000
     system:
         cpu:
+            alertthreshold: 1
             icon: cpu
             threshold: 90
         memory:
+            alertthreshold: 1
             icon: speedometer
             threshold: 90
         title: LMON Dashboard

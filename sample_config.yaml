@@ -11,15 +11,18 @@ monitoring:
       icon: hdd
       path: /
       threshold: 80
+      # alertthreshold: 1  # Optional: Number of consecutive failures before triggering alert (default: 1)
     home:
       icon: hdd
       path: /home
       threshold: 80
+      # alertthreshold: 3  # Example: Wait for 3 consecutive failures before alerting
   healthcheck:
     google:
       icon: activity
       timeout: 10
       url: https://google.com
+      # alertthreshold: 2  # Optional: Number of consecutive failures before triggering alert (default: 1)
     local:
       icon: heart-pulse
       timeout: 10
@@ -29,14 +32,17 @@ monitoring:
       icon: box
       containers: "web-app, api-server, worker"
       threshold: 5
+      # alertthreshold: 1  # Optional: Number of consecutive failures before triggering alert (default: 1)
   interval: 60
   system:
     cpu:
       icon: cpu
       threshold: 85
+      # alertthreshold: 1  # Optional: Number of consecutive failures before triggering alert (default: 1)
     memory:
       icon: speedometer
       threshold: 85
+      # alertthreshold: 2  # Example: Wait for 2 consecutive failures before alerting
     title: lmon Dashboard
 web:
   host: 0.0.0.0

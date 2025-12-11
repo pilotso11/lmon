@@ -35,7 +35,7 @@ func TestDisk_DisplayName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewDisk(tt.fields.name, tt.fields.path, tt.fields.threshold, "", tt.fields.impl)
+			d := NewDisk(tt.fields.name, tt.fields.path, tt.fields.threshold, "", 0, tt.fields.impl)
 			assert.Equalf(t, tt.want, d.DisplayName(), "DisplayName()")
 			assert.Equal(t, Icon, d.icon, "icon")
 		})
@@ -97,7 +97,7 @@ func TestDisk_Save(t *testing.T) {
 	l := config.NewLoader("", []string{t.TempDir()})
 	cfg, _ := l.Load()
 
-	d := NewDisk("test", "/test", 66, "", nil)
+	d := NewDisk("test", "/test", 66, "", 0, nil)
 	d.Save(cfg)
 	assert.Equal(t, 1, len(cfg.Monitoring.Disk), "len disk")
 	dc, ok := cfg.Monitoring.Disk["test"]
@@ -110,7 +110,7 @@ func TestDisk_Save(t *testing.T) {
 // TestDisk_Check_DefaultImpl verifies that the default implementation of Disk.Check does not panic and returns a valid status.
 func TestDisk_Check_DefaultImpl(t *testing.T) {
 	assert.NotPanics(t, func() {
-		d := NewDisk("local", t.TempDir(), 90, "", nil)
+		d := NewDisk("local", t.TempDir(), 90, "", 0, nil)
 		res := d.Check(t.Context())
 		assert.NotEqual(t, monitors.RAGError, res.Status, "status not error")
 	})
@@ -136,7 +136,7 @@ func TestDisk_Check_Mock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewDisk("test", "/test", tt.threshold, "", MockDiskProvider{Current: atomic.NewFloat64(tt.usage), total: tt.total, err: tt.err, path: "/test"})
+			d := NewDisk("test", "/test", tt.threshold, "", 0, MockDiskProvider{Current: atomic.NewFloat64(tt.usage), total: tt.total, err: tt.err, path: "/test"})
 			r := d.Check(t.Context())
 			assert.Equal(t, tt.want.Status, r.Status, "status")
 			assert.Equal(t, tt.want.Value, r.Value, "value")
@@ -151,7 +151,7 @@ func Test_Check_PushOnAddWithBreach(t *testing.T) {
 	push := monitors.NewMockPush()
 
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
-	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(90), total: 100 * common.Gigibyte, err: nil, path: "/test"})
+	d := NewDisk("test", "/test", 90, "", 0, MockDiskProvider{Current: atomic.NewFloat64(90), total: 100 * common.Gigibyte, err: nil, path: "/test"})
 	svc.Add(t.Context(), d)
 
 	assert.Eventually(t, func() bool {
@@ -168,7 +168,7 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 	push := monitors.NewMockPush()
 
 	svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
-	d := NewDisk("test", "/test", 90, "", MockDiskProvider{Current: atomic.NewFloat64(0), total: 100 * common.Gigibyte, err: os.ErrNotExist, path: "/test"})
+	d := NewDisk("test", "/test", 90, "", 0, MockDiskProvider{Current: atomic.NewFloat64(0), total: 100 * common.Gigibyte, err: os.ErrNotExist, path: "/test"})
 
 	svc.Add(t.Context(), d)
 
@@ -182,25 +182,30 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 }
 
 // Test_Check_PushOnChange verifies that push notifications are triggered when the disk usage status changes.
+// With alert thresholds, alerts are sent when:
+// 1. Failure count reaches the alert threshold for the first time
+// 2. Status recovers to green (from any non-green state)
+// Status changes between failure states (amber <-> red) do NOT trigger alerts.
 func Test_Check_PushOnChange(t *testing.T) {
 	tests := []struct {
-		name          string
-		initial       float64
-		initialStatus monitors.RAG
-		initialCnt    int
-		second        float64
-		secondStatus  monitors.RAG
-		secondCnt     int
+		name           string
+		initial        float64
+		initialStatus  monitors.RAG
+		initialCnt     int
+		second         float64
+		secondStatus   monitors.RAG
+		secondCnt      int
+		checkSecondStatus bool // Whether to check the second status in webhook
 	}{
-		{"green to red", 79, monitors.RAGGreen, 0, 90, monitors.RAGRed, 1},
-		{"green to amber", 79, monitors.RAGGreen, 0, 81, monitors.RAGAmber, 1},
-		{"amber to red", 81, monitors.RAGAmber, 1, 90, monitors.RAGRed, 2},
-		{"red to amber", 90, monitors.RAGRed, 1, 89, monitors.RAGAmber, 2},
-		{"amber to green", 81, monitors.RAGAmber, 1, 80, monitors.RAGGreen, 2},
-		{"red to green", 90, monitors.RAGRed, 1, 80, monitors.RAGGreen, 2},
-		{"green to green", 50, monitors.RAGGreen, 0, 60, monitors.RAGGreen, 0},
-		{"amber to amber", 85, monitors.RAGAmber, 1, 86, monitors.RAGAmber, 1},
-		{"red to red", 92, monitors.RAGRed, 1, 95, monitors.RAGRed, 1},
+		{"green to red", 79, monitors.RAGGreen, 0, 90, monitors.RAGRed, 1, true},
+		{"green to amber", 79, monitors.RAGGreen, 0, 81, monitors.RAGAmber, 1, true},
+		{"amber to red", 81, monitors.RAGAmber, 1, 90, monitors.RAGRed, 1, false},        // No new alert (both failures), check initial
+		{"red to amber", 90, monitors.RAGRed, 1, 89, monitors.RAGAmber, 1, false},        // No new alert (both failures), check initial
+		{"amber to green", 81, monitors.RAGAmber, 1, 80, monitors.RAGGreen, 2, true},     // Recovery alert
+		{"red to green", 90, monitors.RAGRed, 1, 80, monitors.RAGGreen, 2, true},         // Recovery alert
+		{"green to green", 50, monitors.RAGGreen, 0, 60, monitors.RAGGreen, 0, false},
+		{"amber to amber", 85, monitors.RAGAmber, 1, 86, monitors.RAGAmber, 1, false},
+		{"red to red", 92, monitors.RAGRed, 1, 95, monitors.RAGRed, 1, false},
 	}
 
 	for _, tt := range tests {
@@ -208,7 +213,7 @@ func Test_Check_PushOnChange(t *testing.T) {
 			push := monitors.NewMockPush()
 			svc := monitors.NewService(t.Context(), 10*time.Millisecond, time.Millisecond, push.Push)
 			impl := MockDiskProvider{Current: atomic.NewFloat64(tt.initial), total: 100 * common.Gigibyte, path: "/test"}
-			d := NewDisk("test", "/test", 90, "", &impl)
+			d := NewDisk("test", "/test", 90, "", 0, &impl)
 			svc.Add(t.Context(), d)
 
 			assert.Eventually(t, func() bool {
@@ -226,10 +231,10 @@ func Test_Check_PushOnChange(t *testing.T) {
 
 			time.Sleep(15 * time.Millisecond)
 			require.Equal(t, tt.secondCnt, push.Calls.Size(), "push cnt after toggle")
-			if tt.secondCnt > 0 {
+			if tt.checkSecondStatus && tt.secondCnt > 0 {
 				va, ok := push.Calls.Load(int32(tt.secondCnt))
 				assert.True(t, ok, "push exists")
-				assert.Equal(t, tt.secondStatus, va.Result.Status, "initial status")
+				assert.Equal(t, tt.secondStatus, va.Result.Status, "second status")
 			}
 		})
 	}

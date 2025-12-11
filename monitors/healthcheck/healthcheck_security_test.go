@@ -59,7 +59,7 @@ func TestHealthcheck_RestartContainers_WithWhitelist(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockDocker := &docker.MockDockerProvider{}
-			h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", tt.restartContainers, tt.allowedContainers, nil, mockDocker)
+			h, err := NewHealthcheck("test", "http://localhost", 5, 0, "", tt.restartContainers, 0, tt.allowedContainers, nil, mockDocker)
 			require.NoError(t, err)
 
 			err = h.RestartContainers(context.Background())
