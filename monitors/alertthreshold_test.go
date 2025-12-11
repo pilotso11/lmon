@@ -20,10 +20,7 @@ func TestService_AlertThreshold_DefaultBehavior(t *testing.T) {
 
 	// Create a monitor that will fail then succeed
 	m := NewMockMonitor("test1", "test")
-	m.SetStatuses([]struct {
-		rag RAG
-		msg string
-	}{
+	m.SetStatuses([]MockStatus{
 		{RAGRed, "fail 1"},
 		{RAGGreen, "success"},
 	})
@@ -51,10 +48,7 @@ func TestService_AlertThreshold_RecoveryResetsCount(t *testing.T) {
 	svc := NewService(ctx, 50*time.Millisecond, 10*time.Millisecond, push.Push)
 
 	m := NewMockMonitor("test1", "test")
-	m.SetStatuses([]struct {
-		rag RAG
-		msg string
-	}{
+	m.SetStatuses([]MockStatus{
 		{RAGRed, "fail 1"},
 		{RAGGreen, "success"}, // Recovery should reset count  
 		{RAGRed, "fail again"},
@@ -88,10 +82,7 @@ func TestService_AlertThreshold_ConsecutiveFailures(t *testing.T) {
 	// Create a monitor that stays red for multiple checks
 	m := NewMockMonitor("test1", "test")
 	m.SetAlertThreshold(3) // Require 3 consecutive failures before alerting
-	m.SetStatuses([]struct {
-		rag RAG
-		msg string
-	}{
+	m.SetStatuses([]MockStatus{
 		{RAGRed, "fail 1"},
 		{RAGRed, "fail 2"},
 		{RAGRed, "fail 3"},

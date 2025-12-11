@@ -19,6 +19,12 @@ type mockResult struct {
 	Result Result
 }
 
+// MockStatus represents a predefined status and message for MockMonitor test scenarios.
+type MockStatus struct {
+	Rag RAG
+	Msg string
+}
+
 // MockPush is a test double for PushFunc that records calls and their arguments.
 // It is safe for concurrent use in tests.
 type MockPush struct {
@@ -46,14 +52,11 @@ func (m *MockPush) ClearCalls() {
 // MockMonitor is a test double for the Monitor interface.
 // It allows simulation of status changes and tracks the number of checks.
 type MockMonitor struct {
-	name   string
-	status []struct {
-		rag RAG
-		msg string
-	}
-	group        string
-	Checks       atomic.Int32
-	mu           sync.Mutex // Protects status slice
+	name           string
+	status         []MockStatus
+	group          string
+	Checks         atomic.Int32
+	mu             sync.Mutex // Protects status slice
 	alertThreshold int
 }
 
@@ -75,8 +78,8 @@ func (m *MockMonitor) Check(_ context.Context) Result {
 	defer m.mu.Unlock()
 	
 	if len(m.status) > 0 {
-		rag := m.status[0].rag
-		msg := m.status[0].msg
+		rag := m.status[0].Rag
+		msg := m.status[0].Msg
 		m.status = m.status[1:]
 		return Result{Status: rag, Value: msg}
 	}
@@ -110,10 +113,7 @@ func (m *MockMonitor) AlertThreshold() int {
 
 // SetStatuses sets the status queue for the mock monitor in a thread-safe manner.
 // This is used in tests to configure expected status returns.
-func (m *MockMonitor) SetStatuses(statuses []struct {
-	rag RAG
-	msg string
-}) {
+func (m *MockMonitor) SetStatuses(statuses []MockStatus) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.status = statuses
