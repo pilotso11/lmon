@@ -20,13 +20,13 @@ func TestService_AlertThreshold_DefaultBehavior(t *testing.T) {
 
 	// Create a monitor that will fail then succeed
 	m := NewMockMonitor("test1", "test")
-	m.status = []struct {
+	m.SetStatuses([]struct {
 		rag RAG
 		msg string
 	}{
 		{RAGRed, "fail 1"},
 		{RAGGreen, "success"},
-	}
+	})
 
 	svc.Add(ctx, m)
 
@@ -51,14 +51,14 @@ func TestService_AlertThreshold_RecoveryResetsCount(t *testing.T) {
 	svc := NewService(ctx, 50*time.Millisecond, 10*time.Millisecond, push.Push)
 
 	m := NewMockMonitor("test1", "test")
-	m.status = []struct {
+	m.SetStatuses([]struct {
 		rag RAG
 		msg string
 	}{
 		{RAGRed, "fail 1"},
 		{RAGGreen, "success"}, // Recovery should reset count  
 		{RAGRed, "fail again"},
-	}
+	})
 
 	svc.Add(ctx, m)
 
@@ -87,14 +87,18 @@ func TestService_AlertThreshold_ConsecutiveFailures(t *testing.T) {
 
 	// Create a monitor that stays red for multiple checks
 	m := NewMockMonitor("test1", "test")
-	m.status = []struct {
+	m.SetAlertThreshold(3) // Require 3 consecutive failures before alerting
+	m.SetStatuses([]struct {
 		rag RAG
 		msg string
 	}{
 		{RAGRed, "fail 1"},
 		{RAGRed, "fail 2"},
 		{RAGRed, "fail 3"},
-	}
+		{RAGRed, "fail 4"},
+		{RAGRed, "fail 5"},
+		{RAGRed, "fail 6"},
+	})
 
 	svc.Add(ctx, m)
 
@@ -103,14 +107,9 @@ func TestService_AlertThreshold_ConsecutiveFailures(t *testing.T) {
 		return m.Checks.Load() >= 3
 	}, 300*time.Millisecond, 10*time.Millisecond, "expected at least 3 checks")
 
-	// The monitor will get checked once on Add() and then periodically
-	// We should get 1 push when it first goes to Red (from Unknown on the Add check or from the first periodic check)
-	// Subsequent checks that remain Red don't change status, so no new pushes
+	// With alert threshold of 3, we should get exactly 1 push when the 3rd failure occurs
 	time.Sleep(100 * time.Millisecond)
 	count := push.Calls.Size()
-	// Could be 1 or 2 depending on timing of Add vs periodic checks
-	// The key is it shouldn't keep growing with each check
-	assert.LessOrEqual(t, count, 2, "should have at most 2 pushes")
-	assert.GreaterOrEqual(t, count, 1, "should have at least 1 push")
+	assert.Equal(t, 1, count, "should have exactly 1 push when threshold of 3 is reached")
 }
 
