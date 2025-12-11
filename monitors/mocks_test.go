@@ -33,7 +33,7 @@ func TestMockMonitor_Check(t *testing.T) {
 	r = mon.Check(t.Context())
 	assert.Equal(t, RAGGreen, r.Status, "green")
 	assert.Equal(t, "ok check 2", r.Value, "value")
-	mon.status = []struct {
+	mon.SetStatuses([]struct {
 		rag RAG
 		msg string
 	}{
@@ -41,11 +41,11 @@ func TestMockMonitor_Check(t *testing.T) {
 		{rag: RAGRed, msg: "red"},
 		{rag: RAGGreen, msg: "green"},
 		{rag: RAGError, msg: "error"},
-	}
+	})
 	r = mon.Check(t.Context())
 	assert.Equal(t, RAGAmber, r.Status, "amber")
 	assert.Equal(t, "amber", r.Value, "value")
-	assert.Equal(t, 3, len(mon.status), "status len")
+	assert.Equal(t, 3, mon.StatusLen(), "status len")
 }
 
 // TestNewMockMonitor_NameGroup verifies that NewMockMonitor sets the name and group fields correctly

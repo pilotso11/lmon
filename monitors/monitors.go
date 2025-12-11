@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/puzpuzpuz/xsync/v4"
@@ -68,6 +69,7 @@ type Monitor interface {
 	Group() string                    // Group/category of the monitor
 	Name() string                     // Unique name/ID of the monitor
 	Save(cfg *config.Config)          // Save monitor configuration to the provided config
+	AlertThreshold() int              // Number of consecutive failures before triggering alert (default: 1)
 }
 
 // PushFunc is a callback called when a monitor's result changes.
@@ -77,13 +79,14 @@ type PushFunc func(ctx context.Context, m Monitor, prev, result Result)
 // Service manages the lifecycle of monitors, periodic checks, and result storage.
 // It is safe for concurrent use.
 type Service struct {
-	period   *common.AtomicDuration
-	timeout  *common.AtomicDuration
-	monitors *xsync.Map[string, Monitor] // Map of monitor names to Monitor instances
-	result   *xsync.Map[string, Result]
-	cancel   context.CancelFunc
-	push     PushFunc
-	wg       sync.WaitGroup
+	period         *common.AtomicDuration
+	timeout        *common.AtomicDuration
+	monitors       *xsync.Map[string, Monitor]      // Map of monitor names to Monitor instances
+	result         *xsync.Map[string, Result]
+	failureCount   *xsync.MapOf[string, *atomic.Int64] // Track consecutive failures per monitor (atomic to avoid races)
+	cancel         context.CancelFunc
+	push           PushFunc
+	wg             sync.WaitGroup
 }
 
 // NewService creates a new monitoring Service.
@@ -92,11 +95,12 @@ type Service struct {
 // push: callback for result changes (may be nil).
 func NewService(ctx context.Context, period time.Duration, timeout time.Duration, push PushFunc) *Service {
 	s := Service{
-		period:   common.NewAtomicDuration(period),
-		timeout:  common.NewAtomicDuration(timeout),
-		monitors: xsync.NewMap[string, Monitor](),
-		result:   xsync.NewMap[string, Result](),
-		push:     push,
+		period:       common.NewAtomicDuration(period),
+		timeout:      common.NewAtomicDuration(timeout),
+		monitors:     xsync.NewMap[string, Monitor](),
+		result:       xsync.NewMap[string, Result](),
+		failureCount: xsync.NewMapOf[string, *atomic.Int64](),
+		push:         push,
 	}
 	s.startMonitors(ctx)
 	return &s
@@ -130,7 +134,8 @@ func (s *Service) Remove(m Monitor) error {
 		return ErrNotFound{Name: name}
 	}
 	s.monitors.Delete(name)
-	s.result.Delete(name) // Remove any pending result immediately
+	s.result.Delete(name)         // Remove any pending result immediately
+	s.failureCount.Delete(name)   // Remove failure count
 	return nil
 }
 
@@ -219,14 +224,50 @@ func (s *Service) checkMonitors(ctx context.Context) {
 }
 
 // checkStoreAndPush updates the result map and triggers the push callback if needed.
+// It tracks consecutive failures and only triggers alerts when the alertThreshold is reached.
 func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Result) {
 	result.DisplayName = m.DisplayName()
 	result.Group = m.Group()
 	prev, ok := s.result.Load(m.Name()) // get previous result
 	s.result.Store(m.Name(), result)
-	switch {
-	case ok && prev.Status != result.Status && s.push != nil,
-		!ok && result.Status != RAGGreen && s.push != nil:
+	
+	// Determine if this is a failure (non-green status)
+	isFailure := result.Status != RAGGreen
+	
+	// Get or create atomic counter for this monitor
+	counter, _ := s.failureCount.LoadOrStore(m.Name(), &atomic.Int64{})
+	
+	// Get the alert threshold for this monitor
+	threshold := m.AlertThreshold()
+	
+	// Check current count before updating
+	prevCount := counter.Load()
+	
+	var currentCount int64
+	if isFailure {
+		// Atomically increment failure count
+		currentCount = counter.Add(1)
+	} else {
+		// Reset failure count on success
+		counter.Store(0)
+		currentCount = 0
+	}
+	
+	shouldAlert := false
+	if s.push != nil {
+		// Case 1: Recovery to Green. Alert if we had previously reached the alert threshold
+		if ok && prev.Status != RAGGreen && result.Status == RAGGreen {
+			if prevCount >= int64(threshold) {
+				shouldAlert = true
+			}
+		}
+		// Case 2: Failure threshold is met for the first time.
+		if isFailure && currentCount == int64(threshold) {
+			shouldAlert = true
+		}
+	}
+	
+	if shouldAlert {
 		s.push(ctx, m, prev, result)
 	}
 }
@@ -240,6 +281,15 @@ func (s *Service) Size() int {
 func (s *Service) Get(name string) Monitor {
 	m, _ := s.monitors.Load(name)
 	return m
+}
+
+// GetFailureCount retrieves the consecutive failure count for a monitor by its name.
+func (s *Service) GetFailureCount(name string) int {
+	counter, ok := s.failureCount.Load(name)
+	if !ok {
+		return 0
+	}
+	return int(counter.Load())
 }
 
 // Save persists the current monitor configuration to the provided config struct.

@@ -2,9 +2,11 @@ monitoring:
     interval: 15
     system:
         cpu:
+            alertthreshold: 1
             icon: cpuicon
             threshold: 99
         memory:
+            alertthreshold: 1
             icon: memicon
             threshold: 98
         title: Test Dashboard

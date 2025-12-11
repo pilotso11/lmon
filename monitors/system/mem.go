@@ -63,25 +63,31 @@ func (d defaultMemProvider) Usage() (*mem.VirtualMemoryStat, error) {
 //   - icon: Icon for UI display.
 //   - impl: Implementation for usage statistics (defaults to defaultMemProvider).
 type Mem struct {
-	threshold int         // Usage percentage threshold for alerting
-	icon      string      // Icon for UI display
-	impl      MemProvider // Implementation for usage statistics
+	threshold      int         // Usage percentage threshold for alerting
+	icon           string      // Icon for UI display
+	impl           MemProvider // Implementation for usage statistics
+	alertThreshold int         // Number of consecutive failures before triggering alert
 }
 
 // NewMem constructs a new Mem monitor with the given parameters.
 // If icon is empty, the default MemIcon is used.
 // If provider is nil, the defaultMemProvider is used.
-func NewMem(threshold int, icon string, provider MemProvider) Mem {
+// If alertThreshold is 0, it defaults to 1.
+func NewMem(threshold int, icon string, alertThreshold int, provider MemProvider) Mem {
 	if icon == "" {
 		icon = MemIcon
 	}
 	if common.IsNil(provider) {
 		provider = defaultMemProvider{}
 	}
+	if alertThreshold <= 0 {
+		alertThreshold = 1
+	}
 	return Mem{
-		threshold: threshold,
-		icon:      icon,
-		impl:      provider,
+		threshold:      threshold,
+		icon:           icon,
+		alertThreshold: alertThreshold,
+		impl:           provider,
 	}
 }
 
@@ -108,6 +114,12 @@ func (c Mem) Name() string {
 func (c Mem) Save(cfg *config.Config) {
 	cfg.Monitoring.System.Memory.Threshold = c.threshold
 	cfg.Monitoring.System.Memory.Icon = c.icon
+	cfg.Monitoring.System.Memory.AlertThreshold = c.alertThreshold
+}
+
+// AlertThreshold returns the number of consecutive failures before triggering an alert
+func (c Mem) AlertThreshold() int {
+	return c.alertThreshold
 }
 
 // Check performs a usage check on memory and returns a Result.

@@ -5,6 +5,7 @@ package monitors
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/puzpuzpuz/xsync/v4"
 	"go.uber.org/atomic"
@@ -50,8 +51,10 @@ type MockMonitor struct {
 		rag RAG
 		msg string
 	}
-	group  string
-	Checks atomic.Int32
+	group        string
+	Checks       atomic.Int32
+	mu           sync.Mutex // Protects status slice
+	alertThreshold int
 }
 
 // NewMockMonitor creates a new MockMonitor with the given name and group.
@@ -59,6 +62,7 @@ func NewMockMonitor(name string, group string) *MockMonitor {
 	return &MockMonitor{
 		name:  name,
 		group: group,
+		alertThreshold: 1, // Default alert threshold
 	}
 }
 
@@ -66,6 +70,10 @@ func NewMockMonitor(name string, group string) *MockMonitor {
 // Each call increments the Checks counter.
 func (m *MockMonitor) Check(_ context.Context) Result {
 	m.Checks.Inc()
+	
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	if len(m.status) > 0 {
 		rag := m.status[0].rag
 		msg := m.status[0].msg
@@ -93,4 +101,33 @@ func (m *MockMonitor) Name() string {
 // Save implements Monitor. No-op for the mock monitor.
 func (m *MockMonitor) Save(_ *config.Config) {
 	// noop
+}
+
+// AlertThreshold implements Monitor. Returns the configured alert threshold for the mock monitor.
+func (m *MockMonitor) AlertThreshold() int {
+	return m.alertThreshold
+}
+
+// SetStatuses sets the status queue for the mock monitor in a thread-safe manner.
+// This is used in tests to configure expected status returns.
+func (m *MockMonitor) SetStatuses(statuses []struct {
+	rag RAG
+	msg string
+}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.status = statuses
+}
+
+// SetAlertThreshold sets the alert threshold for the mock monitor.
+func (m *MockMonitor) SetAlertThreshold(threshold int) {
+	m.alertThreshold = threshold
+}
+
+// StatusLen returns the number of statuses remaining in the queue.
+// This is useful for tests to verify status consumption.
+func (m *MockMonitor) StatusLen() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.status)
 }

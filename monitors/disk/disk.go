@@ -69,22 +69,24 @@ func (p *DefaultDiskUsageProvider) Usage(path string) (*disk.UsageStat, error) {
 //   - icon: Icon for UI display.
 //   - impl: Implementation for usage statistics (can be mocked for testing).
 type Disk struct {
-	name      string        // Logical name for the disk monitor
-	path      string        // Filesystem path to monitor
-	threshold int           // Usage percentage threshold for alerting
-	icon      string        // Icon for UI display
-	impl      UsageProvider // Implementation for usage statistics
+	name           string        // Logical name for the disk monitor
+	path           string        // Filesystem path to monitor
+	threshold      int           // Usage percentage threshold for alerting
+	icon           string        // Icon for UI display
+	impl           UsageProvider // Implementation for usage statistics
+	alertThreshold int           // Number of consecutive failures before triggering alert
 }
 
 // NewDisk constructs a new Disk monitor with the given parameters.
 //
 // If icon is empty, the default Icon is used.
 // If impl is nil, the DefaultDiskUsageProvider is used.
+// If alertThreshold is 0, it defaults to 1.
 //
 // Example:
 //
-//	diskMonitor := NewDisk("root", "/", 80, "", nil)
-func NewDisk(name string, path string, threshold int, icon string, impl UsageProvider) Disk {
+//	diskMonitor := NewDisk("root", "/", 80, "", 0, nil)
+func NewDisk(name string, path string, threshold int, icon string, alertThreshold int, impl UsageProvider) Disk {
 	if icon == "" {
 		icon = Icon
 	}
@@ -92,12 +94,16 @@ func NewDisk(name string, path string, threshold int, icon string, impl UsagePro
 		// todo: is the filesystem zfs?
 		impl = &DefaultDiskUsageProvider{}
 	}
+	if alertThreshold <= 0 {
+		alertThreshold = 1
+	}
 	return Disk{
-		name:      name,
-		path:      path,
-		threshold: threshold,
-		icon:      icon,
-		impl:      impl,
+		name:           name,
+		path:           path,
+		threshold:      threshold,
+		icon:           icon,
+		alertThreshold: alertThreshold,
+		impl:           impl,
 	}
 }
 
@@ -124,10 +130,16 @@ func (d Disk) Name() string {
 // Save persists the disk monitor's configuration to the provided config struct.
 func (d Disk) Save(cfg *config.Config) {
 	cfg.Monitoring.Disk[d.name] = config.DiskConfig{
-		Path:      d.path,
-		Threshold: d.threshold,
-		Icon:      d.icon,
+		Path:           d.path,
+		Threshold:      d.threshold,
+		Icon:           d.icon,
+		AlertThreshold: d.alertThreshold,
 	}
+}
+
+// AlertThreshold returns the number of consecutive failures before triggering an alert
+func (d Disk) AlertThreshold() int {
+	return d.alertThreshold
 }
 
 // Check performs a usage check on the disk and returns a Result.

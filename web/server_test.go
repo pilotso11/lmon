@@ -103,12 +103,14 @@ func TestSetSystemConfig(t *testing.T) {
 
 	cfg := config.SystemConfig{
 		CPU: config.SystemItem{
-			Threshold: 55,
-			Icon:      "cpu-icon",
+			Threshold:      55,
+			Icon:           "cpu-icon",
+			AlertThreshold: 1, // Default value
 		},
 		Memory: config.SystemItem{
-			Threshold: 66,
-			Icon:      "mem-icon",
+			Threshold:      66,
+			Icon:           "mem-icon",
+			AlertThreshold: 1, // Default value
 		},
 		Title: "new title",
 	}
@@ -148,9 +150,10 @@ func TestAddDisk(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.DiskConfig{
-		Threshold: 77,
-		Icon:      "disk-icon",
-		Path:      ".",
+		Threshold:      77,
+		Icon:           "disk-icon",
+		Path:           ".",
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-disk"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/disk/"+id, data)
@@ -171,9 +174,10 @@ func TestDeleteDisk(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.DiskConfig{
-		Threshold: 77,
-		Icon:      "disk-icon",
-		Path:      ".",
+		Threshold:      77,
+		Icon:           "disk-icon",
+		Path:           ".",
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-disk"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/disk/"+id, data)
@@ -212,10 +216,11 @@ func TestAddHealthcheck(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.HealthcheckConfig{
-		Timeout:  77,
-		Icon:     "disk-icon",
-		URL:      s.ServerUrl + "/healthz",
-		RespCode: 200,
+		Timeout:        77,
+		Icon:           "disk-icon",
+		URL:            s.ServerUrl + "/healthz",
+		RespCode:       200,
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-health"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
@@ -236,10 +241,11 @@ func TestDeleteHealthcheck(t *testing.T) {
 	s.Start(ctx)
 
 	data := config.HealthcheckConfig{
-		Timeout:  77,
-		Icon:     "disk-icon",
-		URL:      s.ServerUrl + "/healthz",
-		RespCode: 200,
+		Timeout:        77,
+		Icon:           "disk-icon",
+		URL:            s.ServerUrl + "/healthz",
+		RespCode:       200,
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-health"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
@@ -336,6 +342,7 @@ func TestPingMonitorAPI(t *testing.T) {
 		Timeout:        1000,
 		Icon:           "wifi",
 		AmberThreshold: 50,
+		AlertThreshold: 1, // Default value
 	}
 	id := "test-ping"
 	resp, body := PostTestRequest(ctx, t, s, "/api/config/ping/"+id, data)
@@ -461,7 +468,8 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 			strings.Contains(hook.LastMessage.Load(), "Amber")
 	}, 50*time.Millisecond, 1*time.Millisecond, "webhook should contain Amber")
 
-	// Red status
+	// Red status - transition from Amber to Red
+	// With alert thresholds, this does NOT trigger a new webhook because both are failure states
 	s.mapper.Impls.Ping.Err.Store(&assert.AnError)
 	time.Sleep(20 * time.Millisecond)
 	_, body = GetTestRequest(ctx, t, s, "/api/items")
@@ -470,10 +478,23 @@ func TestPingMonitorStatusTransitionsAndWebhook(t *testing.T) {
 	assert.Equal(t, monitors.RAGRed.String(), stats["ping_"+id].Status.String(), "should see red status")
 	assert.Greater(t, len(stats["ping_"+id].Value), 0, "should see error value")
 
+	// No new webhook for Amber -> Red transition (both are failures)
+	// The last webhook message should still be "Amber"
+	assert.Contains(t, hook.LastMessage.Load(), "Amber", "webhook should still contain last Amber message")
+	
+	// Recovery to Green should trigger a webhook
+	s.mapper.Impls.Ping.ResponseMs.Store(50)
+	s.mapper.Impls.Ping.Err.Store(nil)
+	time.Sleep(20 * time.Millisecond)
+	_, body = GetTestRequest(ctx, t, s, "/api/items")
+	stats = map[string]monitors.Result{}
+	_ = json.Unmarshal([]byte(body), &stats)
+	assert.Equal(t, monitors.RAGGreen.String(), stats["ping_"+id].Status.String(), "should see green status")
+	
 	assert.Eventually(t, func() bool {
 		return hook.LastMessage.Load() != "" &&
-			strings.Contains(hook.LastMessage.Load(), "Red")
-	}, 50*time.Millisecond, 1*time.Millisecond, "webhook should contain Red")
+			strings.Contains(hook.LastMessage.Load(), "Green")
+	}, 50*time.Millisecond, 1*time.Millisecond, "webhook should contain Green for recovery")
 }
 
 // TestHandleGetItem tests the handleGetItem endpoint for both success and error cases

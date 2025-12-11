@@ -86,10 +86,11 @@ type Monitor struct {
 	icon                     string
 	impl                     Provider
 	allowedRestartContainers []string // Global whitelist of containers allowed for restart
+	alertThreshold           int      // Number of consecutive failures before triggering alert
 }
 
 // NewMonitor creates a new Docker monitor
-func NewMonitor(name string, containers string, threshold int, icon string, allowedRestartContainers []string, impl Provider) (Monitor, error) {
+func NewMonitor(name string, containers string, threshold int, icon string, alertThreshold int, allowedRestartContainers []string, impl Provider) (Monitor, error) {
 	if icon == "" {
 		icon = Icon
 	}
@@ -109,12 +110,17 @@ func NewMonitor(name string, containers string, threshold int, icon string, allo
 		}
 	}
 
+	if alertThreshold <= 0 {
+		alertThreshold = 1
+	}
+
 	return Monitor{
 		name:                     name,
 		containers:               containerList,
 		threshold:                threshold,
 		icon:                     icon,
 		impl:                     impl,
+		alertThreshold:           alertThreshold,
 		allowedRestartContainers: allowedRestartContainers,
 	}, nil
 }
@@ -206,10 +212,16 @@ func (m Monitor) Check(ctx context.Context) monitors.Result {
 // Save saves the monitor configuration
 func (m Monitor) Save(cfg *config.Config) {
 	cfg.Monitoring.Docker[m.name] = config.DockerConfig{
-		Containers: strings.Join(m.containers, ", "),
-		Threshold:  m.threshold,
-		Icon:       m.icon,
+		Containers:     strings.Join(m.containers, ", "),
+		Threshold:      m.threshold,
+		Icon:           m.icon,
+		AlertThreshold: m.alertThreshold,
 	}
+}
+
+// AlertThreshold returns the number of consecutive failures before triggering an alert
+func (m Monitor) AlertThreshold() int {
+	return m.alertThreshold
 }
 
 // Restart restarts all containers monitored by this monitor

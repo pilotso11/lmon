@@ -1,11 +1,13 @@
 monitoring:
     disk:
         test:
+            alertthreshold: 1
             icon: test
             path: /test
             threshold: 75
     healthcheck:
         self:
+            alertthreshold: 1
             icon: activity
             respcode: 200
             timeout: 5
@@ -13,9 +15,11 @@ monitoring:
     interval: 60
     system:
         cpu:
+            alertthreshold: 1
             icon: cpu
             threshold: 90
         memory:
+            alertthreshold: 1
             icon: speedometer
             threshold: 90
         title: LMON Dashboard
