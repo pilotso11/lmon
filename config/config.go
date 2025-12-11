@@ -246,12 +246,17 @@ func (l *Loader) Save(config *Config) error {
 	l.v.Set("monitoring.system.cpu.icon", config.Monitoring.System.CPU.Icon)
 	l.v.Set("monitoring.system.memory.icon", config.Monitoring.System.Memory.Icon)
 	l.v.Set("monitoring.system.title", config.Monitoring.System.Title)
-	if config.Monitoring.System.CPU.AlertThreshold > 0 {
-		l.v.Set("monitoring.system.cpu.alertthreshold", config.Monitoring.System.CPU.AlertThreshold)
+	// Always save alertthreshold, defaulting to 1 if not set
+	cpuAlert := config.Monitoring.System.CPU.AlertThreshold
+	if cpuAlert <= 0 {
+		cpuAlert = 1
 	}
-	if config.Monitoring.System.Memory.AlertThreshold > 0 {
-		l.v.Set("monitoring.system.memory.alertthreshold", config.Monitoring.System.Memory.AlertThreshold)
+	l.v.Set("monitoring.system.cpu.alertthreshold", cpuAlert)
+	memAlert := config.Monitoring.System.Memory.AlertThreshold
+	if memAlert <= 0 {
+		memAlert = 1
 	}
+	l.v.Set("monitoring.system.memory.alertthreshold", memAlert)
 
 	// Save the global allowed restart containers list
 	if len(config.Monitoring.AllowedRestartContainers) > 0 {
@@ -265,9 +270,12 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set(fmt.Sprintf("monitoring.disk.%s.path", name), disk.Path)
 		l.v.Set(fmt.Sprintf("monitoring.disk.%s.threshold", name), disk.Threshold)
 		l.v.Set(fmt.Sprintf("monitoring.disk.%s.icon", name), disk.Icon)
-		if disk.AlertThreshold > 0 {
-			l.v.Set(fmt.Sprintf("monitoring.disk.%s.alertthreshold", name), disk.AlertThreshold)
+		// Always save alertthreshold, defaulting to 1 if not set
+		alertThreshold := disk.AlertThreshold
+		if alertThreshold <= 0 {
+			alertThreshold = 1
 		}
+		l.v.Set(fmt.Sprintf("monitoring.disk.%s.alertthreshold", name), alertThreshold)
 	}
 
 	for name, healthcheck := range config.Monitoring.Healthcheck {
@@ -278,9 +286,12 @@ func (l *Loader) Save(config *Config) error {
 		if healthcheck.RestartContainers != "" {
 			l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.restartcontainers", name), healthcheck.RestartContainers)
 		}
-		if healthcheck.AlertThreshold > 0 {
-			l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.alertthreshold", name), healthcheck.AlertThreshold)
+		// Always save alertthreshold, defaulting to 1 if not set
+		alertThreshold := healthcheck.AlertThreshold
+		if alertThreshold <= 0 {
+			alertThreshold = 1
 		}
+		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.alertthreshold", name), alertThreshold)
 	}
 
 	for name, ping := range config.Monitoring.Ping {
@@ -288,18 +299,24 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.timeout", name), ping.Timeout)
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.icon", name), ping.Icon)
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.amberthreshold", name), ping.AmberThreshold)
-		if ping.AlertThreshold > 0 {
-			l.v.Set(fmt.Sprintf("monitoring.ping.%s.alertthreshold", name), ping.AlertThreshold)
+		// Always save alertthreshold, defaulting to 1 if not set
+		alertThreshold := ping.AlertThreshold
+		if alertThreshold <= 0 {
+			alertThreshold = 1
 		}
+		l.v.Set(fmt.Sprintf("monitoring.ping.%s.alertthreshold", name), alertThreshold)
 	}
 
 	for name, docker := range config.Monitoring.Docker {
 		l.v.Set(fmt.Sprintf("monitoring.docker.%s.containers", name), docker.Containers)
 		l.v.Set(fmt.Sprintf("monitoring.docker.%s.threshold", name), docker.Threshold)
 		l.v.Set(fmt.Sprintf("monitoring.docker.%s.icon", name), docker.Icon)
-		if docker.AlertThreshold > 0 {
-			l.v.Set(fmt.Sprintf("monitoring.docker.%s.alertthreshold", name), docker.AlertThreshold)
+		// Always save alertthreshold, defaulting to 1 if not set
+		alertThreshold := docker.AlertThreshold
+		if alertThreshold <= 0 {
+			alertThreshold = 1
 		}
+		l.v.Set(fmt.Sprintf("monitoring.docker.%s.alertthreshold", name), alertThreshold)
 	}
 
 	// overwrite the config file or create it if it doesn't exist

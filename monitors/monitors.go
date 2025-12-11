@@ -82,7 +82,8 @@ type Service struct {
 	timeout        *common.AtomicDuration
 	monitors       *xsync.Map[string, Monitor] // Map of monitor names to Monitor instances
 	result         *xsync.Map[string, Result]
-	failureCount   *xsync.Map[string, int] // Track consecutive failures per monitor
+	failureCount   *xsync.Map[string, int]  // Track consecutive failures per monitor
+	hasAlerted     *xsync.Map[string, bool] // Track whether we've sent an alert for non-green status
 	cancel         context.CancelFunc
 	push           PushFunc
 	wg             sync.WaitGroup
@@ -99,6 +100,7 @@ func NewService(ctx context.Context, period time.Duration, timeout time.Duration
 		monitors:     xsync.NewMap[string, Monitor](),
 		result:       xsync.NewMap[string, Result](),
 		failureCount: xsync.NewMap[string, int](),
+		hasAlerted:   xsync.NewMap[string, bool](),
 		push:         push,
 	}
 	s.startMonitors(ctx)
@@ -135,6 +137,7 @@ func (s *Service) Remove(m Monitor) error {
 	s.monitors.Delete(name)
 	s.result.Delete(name)         // Remove any pending result immediately
 	s.failureCount.Delete(name)   // Remove failure count
+	s.hasAlerted.Delete(name)     // Remove alert tracking
 	return nil
 }
 
@@ -248,6 +251,9 @@ func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Resul
 	// Get the alert threshold for this monitor
 	threshold := m.AlertThreshold()
 	
+	// Get whether we've already alerted
+	alerted, _ := s.hasAlerted.Load(m.Name())
+	
 	// Only push alert if:
 	// 1. There's a push function configured
 	// 2. Either:
@@ -257,16 +263,19 @@ func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Resul
 	if s.push != nil {
 		if ok && prev.Status != result.Status {
 			// Status changed - alert if we've reached threshold for failures
-			// or if transitioning back to healthy
+			// or if transitioning back to healthy AND we had previously alerted
 			if isFailure && currentCount >= threshold {
 				shouldAlert = true
-			} else if !isFailure {
-				// Always alert when recovering to healthy
+				s.hasAlerted.Store(m.Name(), true)
+			} else if !isFailure && alerted {
+				// Only alert recovery if we had previously alerted for failure
 				shouldAlert = true
+				s.hasAlerted.Store(m.Name(), false)
 			}
 		} else if !ok && isFailure && currentCount >= threshold {
 			// First check and it's unhealthy and reached threshold
 			shouldAlert = true
+			s.hasAlerted.Store(m.Name(), true)
 		}
 	}
 	

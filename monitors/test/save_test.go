@@ -24,12 +24,12 @@ func TestService_Save(t *testing.T) {
 
 	svc := monitors.NewService(ctx, time.Second, time.Second, nil)
 
-	// Add a Disk monitor
+	// Add a Disk monitor with default alertThreshold (0, which should become 1)
 	diskMon := disk.NewDisk("disk1", "/mnt/disk1", 75, "hdd", 0, nil)
 	svc.Add(ctx, diskMon)
 
-	// Add a Healthcheck monitor
-	healthMon, err := healthcheck.NewHealthcheck("health1", "http://localhost/health", 5, 401, "activity", "", 0, nil, nil, nil)
+	// Add a Healthcheck monitor with explicit alertThreshold
+	healthMon, err := healthcheck.NewHealthcheck("health1", "http://localhost/health", 5, 401, "activity", "", 3, nil, nil, nil)
 	require.NoError(t, err)
 	svc.Add(ctx, healthMon)
 
@@ -50,13 +50,18 @@ func TestService_Save(t *testing.T) {
 	assert.True(t, healthOk, "healthcheck monitor should be saved")
 	assert.True(t, pingOk, "ping monitor should be saved")
 
-	// Optionally, check some values
+	// Check values including alertthreshold
 	assert.Equal(t, "/mnt/disk1", diskCfg.Path)
 	assert.Equal(t, "hdd", diskCfg.Icon)
+	assert.Equal(t, 1, diskCfg.AlertThreshold, "disk alertthreshold should default to 1")
+	
 	assert.Equal(t, "http://localhost/health", healthCfg.URL)
 	assert.Equal(t, 401, healthCfg.RespCode)
 	assert.Equal(t, "activity", healthCfg.Icon)
+	assert.Equal(t, 3, healthCfg.AlertThreshold, "healthcheck alertthreshold should be 3")
+	
 	assert.Equal(t, "127.0.0.1", pingCfg.Address)
 	assert.Equal(t, "wifi", pingCfg.Icon)
 	assert.Equal(t, 100, pingCfg.AmberThreshold)
+	assert.Equal(t, 1, pingCfg.AlertThreshold, "ping alertthreshold should default to 1")
 }

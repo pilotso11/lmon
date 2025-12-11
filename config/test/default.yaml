@@ -2,9 +2,11 @@ monitoring:
     interval: 60
     system:
         cpu:
+            alertthreshold: 1
             icon: cpu
             threshold: 90
         memory:
+            alertthreshold: 1
             icon: speedometer
             threshold: 90
         title: LMON Dashboard
