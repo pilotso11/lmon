@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/puzpuzpuz/xsync/v4"
@@ -80,10 +81,10 @@ type PushFunc func(ctx context.Context, m Monitor, prev, result Result)
 type Service struct {
 	period         *common.AtomicDuration
 	timeout        *common.AtomicDuration
-	monitors       *xsync.Map[string, Monitor] // Map of monitor names to Monitor instances
+	monitors       *xsync.Map[string, Monitor]      // Map of monitor names to Monitor instances
 	result         *xsync.Map[string, Result]
-	failureCount   *xsync.Map[string, int]  // Track consecutive failures per monitor
-	hasAlerted     *xsync.Map[string, bool] // Track whether we've sent an alert for non-green status
+	failureCount   *xsync.MapOf[string, *atomic.Int64] // Track consecutive failures per monitor (atomic to avoid races)
+	hasAlerted     *xsync.Map[string, bool]         // Track whether we've sent an alert for non-green status
 	cancel         context.CancelFunc
 	push           PushFunc
 	wg             sync.WaitGroup
@@ -99,7 +100,7 @@ func NewService(ctx context.Context, period time.Duration, timeout time.Duration
 		timeout:      common.NewAtomicDuration(timeout),
 		monitors:     xsync.NewMap[string, Monitor](),
 		result:       xsync.NewMap[string, Result](),
-		failureCount: xsync.NewMap[string, int](),
+		failureCount: xsync.NewMapOf[string, *atomic.Int64](),
 		hasAlerted:   xsync.NewMap[string, bool](),
 		push:         push,
 	}
@@ -236,44 +237,31 @@ func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Resul
 	// Determine if this is a failure (non-green status)
 	isFailure := result.Status != RAGGreen
 	
-	// Get current failure count
-	currentCount, _ := s.failureCount.Load(m.Name())
+	// Get or create atomic counter for this monitor
+	counter, _ := s.failureCount.LoadOrStore(m.Name(), &atomic.Int64{})
 	
+	var currentCount int64
 	if isFailure {
-		// Increment failure count
-		currentCount++
-		s.failureCount.Store(m.Name(), currentCount)
+		// Atomically increment failure count
+		currentCount = counter.Add(1)
 	} else {
 		// Reset failure count on success
-		s.failureCount.Store(m.Name(), 0)
+		counter.Store(0)
+		currentCount = 0
 	}
 	
 	// Get the alert threshold for this monitor
 	threshold := m.AlertThreshold()
 	
-	// Get whether we've already alerted
-	alerted, _ := s.hasAlerted.Load(m.Name())
-	
-	// Only push alert if:
-	// 1. There's a push function configured
-	// 2. Either:
-	//    a. Status changed AND we've reached the threshold, OR
-	//    b. First check AND it's not green AND we've reached the threshold
 	shouldAlert := false
 	if s.push != nil {
-		if ok && prev.Status != result.Status {
-			// Status changed - alert if we've reached threshold for failures
-			// or if transitioning back to healthy AND we had previously alerted
-			if isFailure && currentCount >= threshold {
-				shouldAlert = true
-				s.hasAlerted.Store(m.Name(), true)
-			} else if !isFailure && alerted {
-				// Only alert recovery if we had previously alerted for failure
-				shouldAlert = true
-				s.hasAlerted.Store(m.Name(), false)
-			}
-		} else if !ok && isFailure && currentCount >= threshold {
-			// First check and it's unhealthy and reached threshold
+		// Case 1: Recovery to Green. Always alert if previous status was not green.
+		if ok && prev.Status != RAGGreen && result.Status == RAGGreen {
+			shouldAlert = true
+			s.hasAlerted.Store(m.Name(), false)
+		}
+		// Case 2: Failure threshold is met for the first time.
+		if isFailure && currentCount == int64(threshold) {
 			shouldAlert = true
 			s.hasAlerted.Store(m.Name(), true)
 		}
@@ -297,8 +285,11 @@ func (s *Service) Get(name string) Monitor {
 
 // GetFailureCount retrieves the consecutive failure count for a monitor by its name.
 func (s *Service) GetFailureCount(name string) int {
-	count, _ := s.failureCount.Load(name)
-	return count
+	counter, ok := s.failureCount.Load(name)
+	if !ok {
+		return 0
+	}
+	return int(counter.Load())
 }
 
 // Save persists the current monitor configuration to the provided config struct.

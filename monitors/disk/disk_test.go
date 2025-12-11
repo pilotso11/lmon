@@ -182,25 +182,30 @@ func Test_Check_PushOnAddWithErr(t *testing.T) {
 }
 
 // Test_Check_PushOnChange verifies that push notifications are triggered when the disk usage status changes.
+// With alert thresholds, alerts are sent when:
+// 1. Failure count reaches the alert threshold for the first time
+// 2. Status recovers to green (from any non-green state)
+// Status changes between failure states (amber <-> red) do NOT trigger alerts.
 func Test_Check_PushOnChange(t *testing.T) {
 	tests := []struct {
-		name          string
-		initial       float64
-		initialStatus monitors.RAG
-		initialCnt    int
-		second        float64
-		secondStatus  monitors.RAG
-		secondCnt     int
+		name           string
+		initial        float64
+		initialStatus  monitors.RAG
+		initialCnt     int
+		second         float64
+		secondStatus   monitors.RAG
+		secondCnt      int
+		checkSecondStatus bool // Whether to check the second status in webhook
 	}{
-		{"green to red", 79, monitors.RAGGreen, 0, 90, monitors.RAGRed, 1},
-		{"green to amber", 79, monitors.RAGGreen, 0, 81, monitors.RAGAmber, 1},
-		{"amber to red", 81, monitors.RAGAmber, 1, 90, monitors.RAGRed, 2},
-		{"red to amber", 90, monitors.RAGRed, 1, 89, monitors.RAGAmber, 2},
-		{"amber to green", 81, monitors.RAGAmber, 1, 80, monitors.RAGGreen, 2},
-		{"red to green", 90, monitors.RAGRed, 1, 80, monitors.RAGGreen, 2},
-		{"green to green", 50, monitors.RAGGreen, 0, 60, monitors.RAGGreen, 0},
-		{"amber to amber", 85, monitors.RAGAmber, 1, 86, monitors.RAGAmber, 1},
-		{"red to red", 92, monitors.RAGRed, 1, 95, monitors.RAGRed, 1},
+		{"green to red", 79, monitors.RAGGreen, 0, 90, monitors.RAGRed, 1, true},
+		{"green to amber", 79, monitors.RAGGreen, 0, 81, monitors.RAGAmber, 1, true},
+		{"amber to red", 81, monitors.RAGAmber, 1, 90, monitors.RAGRed, 1, false},        // No new alert (both failures), check initial
+		{"red to amber", 90, monitors.RAGRed, 1, 89, monitors.RAGAmber, 1, false},        // No new alert (both failures), check initial
+		{"amber to green", 81, monitors.RAGAmber, 1, 80, monitors.RAGGreen, 2, true},     // Recovery alert
+		{"red to green", 90, monitors.RAGRed, 1, 80, monitors.RAGGreen, 2, true},         // Recovery alert
+		{"green to green", 50, monitors.RAGGreen, 0, 60, monitors.RAGGreen, 0, false},
+		{"amber to amber", 85, monitors.RAGAmber, 1, 86, monitors.RAGAmber, 1, false},
+		{"red to red", 92, monitors.RAGRed, 1, 95, monitors.RAGRed, 1, false},
 	}
 
 	for _, tt := range tests {
@@ -226,10 +231,10 @@ func Test_Check_PushOnChange(t *testing.T) {
 
 			time.Sleep(15 * time.Millisecond)
 			require.Equal(t, tt.secondCnt, push.Calls.Size(), "push cnt after toggle")
-			if tt.secondCnt > 0 {
+			if tt.checkSecondStatus && tt.secondCnt > 0 {
 				va, ok := push.Calls.Load(int32(tt.secondCnt))
 				assert.True(t, ok, "push exists")
-				assert.Equal(t, tt.secondStatus, va.Result.Status, "initial status")
+				assert.Equal(t, tt.secondStatus, va.Result.Status, "second status")
 			}
 		})
 	}
