@@ -221,9 +221,6 @@ func (m Monitor) Save(cfg *config.Config) {
 
 // AlertThreshold returns the number of consecutive failures before triggering an alert
 func (m Monitor) AlertThreshold() int {
-	if m.alertThreshold <= 0 {
-		return 1
-	}
 	return m.alertThreshold
 }
 

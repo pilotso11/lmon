@@ -161,8 +161,5 @@ func (pm Monitor) Save(cfg *config.Config) {
 
 // AlertThreshold returns the number of consecutive failures before triggering an alert
 func (pm Monitor) AlertThreshold() int {
-	if pm.alertThreshold <= 0 {
-		return 1
-	}
 	return pm.alertThreshold
 }

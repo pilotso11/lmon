@@ -84,7 +84,6 @@ type Service struct {
 	monitors       *xsync.Map[string, Monitor]      // Map of monitor names to Monitor instances
 	result         *xsync.Map[string, Result]
 	failureCount   *xsync.MapOf[string, *atomic.Int64] // Track consecutive failures per monitor (atomic to avoid races)
-	hasAlerted     *xsync.Map[string, bool]         // Track whether we've sent an alert for non-green status
 	cancel         context.CancelFunc
 	push           PushFunc
 	wg             sync.WaitGroup
@@ -101,7 +100,6 @@ func NewService(ctx context.Context, period time.Duration, timeout time.Duration
 		monitors:     xsync.NewMap[string, Monitor](),
 		result:       xsync.NewMap[string, Result](),
 		failureCount: xsync.NewMapOf[string, *atomic.Int64](),
-		hasAlerted:   xsync.NewMap[string, bool](),
 		push:         push,
 	}
 	s.startMonitors(ctx)
@@ -138,7 +136,6 @@ func (s *Service) Remove(m Monitor) error {
 	s.monitors.Delete(name)
 	s.result.Delete(name)         // Remove any pending result immediately
 	s.failureCount.Delete(name)   // Remove failure count
-	s.hasAlerted.Delete(name)     // Remove alert tracking
 	return nil
 }
 
@@ -240,6 +237,12 @@ func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Resul
 	// Get or create atomic counter for this monitor
 	counter, _ := s.failureCount.LoadOrStore(m.Name(), &atomic.Int64{})
 	
+	// Get the alert threshold for this monitor
+	threshold := m.AlertThreshold()
+	
+	// Check current count before updating
+	prevCount := counter.Load()
+	
 	var currentCount int64
 	if isFailure {
 		// Atomically increment failure count
@@ -250,20 +253,17 @@ func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Resul
 		currentCount = 0
 	}
 	
-	// Get the alert threshold for this monitor
-	threshold := m.AlertThreshold()
-	
 	shouldAlert := false
 	if s.push != nil {
-		// Case 1: Recovery to Green. Always alert if previous status was not green.
+		// Case 1: Recovery to Green. Alert if we had previously reached the alert threshold
 		if ok && prev.Status != RAGGreen && result.Status == RAGGreen {
-			shouldAlert = true
-			s.hasAlerted.Store(m.Name(), false)
+			if prevCount >= int64(threshold) {
+				shouldAlert = true
+			}
 		}
 		// Case 2: Failure threshold is met for the first time.
 		if isFailure && currentCount == int64(threshold) {
 			shouldAlert = true
-			s.hasAlerted.Store(m.Name(), true)
 		}
 	}
 	

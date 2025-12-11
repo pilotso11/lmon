@@ -119,9 +119,6 @@ func (c Mem) Save(cfg *config.Config) {
 
 // AlertThreshold returns the number of consecutive failures before triggering an alert
 func (c Mem) AlertThreshold() int {
-	if c.alertThreshold <= 0 {
-		return 1
-	}
 	return c.alertThreshold
 }
 

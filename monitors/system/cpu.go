@@ -200,9 +200,6 @@ func (c Cpu) Save(cfg *config.Config) {
 
 // AlertThreshold returns the number of consecutive failures before triggering an alert
 func (c Cpu) AlertThreshold() int {
-	if c.alertThreshold <= 0 {
-		return 1
-	}
 	return c.alertThreshold
 }
 

@@ -139,9 +139,6 @@ func (d Disk) Save(cfg *config.Config) {
 
 // AlertThreshold returns the number of consecutive failures before triggering an alert
 func (d Disk) AlertThreshold() int {
-	if d.alertThreshold <= 0 {
-		return 1
-	}
 	return d.alertThreshold
 }
 
