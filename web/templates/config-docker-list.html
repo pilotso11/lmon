@@ -114,6 +114,9 @@
                     >({{ $docker.Containers }})</span
                 >
                 <span class="me-2">Threshold: {{ $docker.Threshold }}</span>
+                {{ if gt $docker.AlertThreshold 1 }}
+                <span class="me-2">Alert: {{ $docker.AlertThreshold }}</span>
+                {{ end }}
                 <button
                     type="button"
                     class="delete-docker-btn ms-auto p-0 btn btn-link"

@@ -5,37 +5,45 @@ monitoring:
       icon: hdd
       path: /
       threshold: 80
+      alertthreshold: 3
     home:
       icon: hdd
       path: /home
       threshold: 80
+      alertthreshold: 2
   healthcheck:
     google:
       icon: activity
       timeout: 10
       url: https://google.com
+      alertthreshold: 4
     local:
       icon: heart-pulse
       timeout: 10
       url: http://localhost:8080/healthz
+      alertthreshold: 1
   docker:
     apps:
       containers: web-server, api-server
       icon: box
       threshold: 5
+      alertthreshold: 2
   ping:
     cloudflare:
       url: 1.1.1.1
       icon: arrow-left-right
       timeout: 500
       amberthreshold: 200
+      alertthreshold: 3
   system:
     cpu:
       icon: cpu
       threshold: 85
+      alertthreshold: 5
     memory:
       icon: speedometer
       threshold: 85
+      alertthreshold: 3
     title: lmon Dashboard
 web:
   host: 0.0.0.0
