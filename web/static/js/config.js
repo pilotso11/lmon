@@ -342,6 +342,36 @@ document.addEventListener("DOMContentLoaded", function () {
       deleteMonitor("disk", id, detail);
     });
   });
+
+  // Add event listeners for edit buttons
+  document.querySelectorAll(".edit-disk-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const path = this.getAttribute("data-path");
+      const icon = this.getAttribute("data-icon");
+      const threshold = this.getAttribute("data-threshold");
+      const alertThreshold = this.getAttribute("data-alert-threshold");
+      
+      // Populate the form fields
+      document.getElementById("disk-name").value = id;
+      document.getElementById("disk-path").value = path;
+      document.getElementById("disk-threshold").value = threshold;
+      document.getElementById("disk-alert-threshold").value = alertThreshold;
+      
+      // Update the icon dropdown
+      const iconSelect = document.getElementById("disk-icon");
+      if (iconSelect) {
+        iconSelect.value = icon;
+        // Refresh the selectpicker if using bootstrap-select
+        if (window.$ && typeof window.$.fn.selectpicker === "function") {
+          window.$("#disk-icon").selectpicker("refresh");
+        }
+      }
+      
+      // Scroll to the form
+      document.getElementById("add-disk-form").scrollIntoView({ behavior: "smooth" });
+    });
+  });
 });
 
 // No longer rendering health check config items client-side; SSR handles this.
@@ -352,6 +382,51 @@ document.addEventListener("DOMContentLoaded", function () {
       const id = this.getAttribute("data-id");
       const detail = this.getAttribute("data-detail") || id;
       deleteMonitor("health", id, detail);
+    });
+  });
+
+  // Add event listeners for edit buttons
+  document.querySelectorAll(".edit-health-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const url = this.getAttribute("data-url");
+      const timeout = this.getAttribute("data-timeout");
+      const respcode = this.getAttribute("data-respcode");
+      const icon = this.getAttribute("data-icon");
+      const restartContainers = this.getAttribute("data-restart-containers") || "";
+      const alertThreshold = this.getAttribute("data-alert-threshold");
+      
+      // Switch to HTTP mode
+      const httpRadio = document.getElementById("monitor-type-http");
+      if (httpRadio) {
+        httpRadio.checked = true;
+        updateFormForType("http");
+      }
+      
+      // Populate the form fields
+      document.getElementById("monitor-name").value = id;
+      document.getElementById("monitor-target").value = url;
+      document.getElementById("monitor-timeout").value = timeout;
+      document.getElementById("monitor-respcode").value = respcode;
+      document.getElementById("monitor-alert-threshold").value = alertThreshold;
+      
+      const restartContainersInput = document.getElementById("monitor-restart-containers");
+      if (restartContainersInput) {
+        restartContainersInput.value = restartContainers;
+      }
+      
+      // Update the icon dropdown
+      const iconSelect = document.getElementById("monitor-icon-select");
+      if (iconSelect) {
+        iconSelect.value = icon;
+        // Refresh the selectpicker if using bootstrap-select
+        if (window.$ && typeof window.$.fn.selectpicker === "function") {
+          window.$("#monitor-icon-select").selectpicker("refresh");
+        }
+      }
+      
+      // Scroll to the form
+      document.getElementById("add-monitor-form").scrollIntoView({ behavior: "smooth" });
     });
   });
 });
@@ -366,6 +441,45 @@ document.addEventListener("DOMContentLoaded", function () {
       deleteMonitor("ping", id, detail);
     });
   });
+
+  // Add event listeners for edit buttons
+  document.querySelectorAll(".edit-ping-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const address = this.getAttribute("data-address");
+      const timeout = this.getAttribute("data-timeout");
+      const amberThreshold = this.getAttribute("data-amber-threshold");
+      const icon = this.getAttribute("data-icon");
+      const alertThreshold = this.getAttribute("data-alert-threshold");
+      
+      // Switch to Ping mode
+      const pingRadio = document.getElementById("monitor-type-ping");
+      if (pingRadio) {
+        pingRadio.checked = true;
+        updateFormForType("ping");
+      }
+      
+      // Populate the form fields
+      document.getElementById("monitor-name").value = id;
+      document.getElementById("monitor-target").value = address;
+      document.getElementById("monitor-timeout").value = timeout;
+      document.getElementById("monitor-amber-threshold").value = amberThreshold;
+      document.getElementById("monitor-alert-threshold").value = alertThreshold;
+      
+      // Update the icon dropdown
+      const iconSelect = document.getElementById("monitor-icon-select");
+      if (iconSelect) {
+        iconSelect.value = icon;
+        // Refresh the selectpicker if using bootstrap-select
+        if (window.$ && typeof window.$.fn.selectpicker === "function") {
+          window.$("#monitor-icon-select").selectpicker("refresh");
+        }
+      }
+      
+      // Scroll to the form
+      document.getElementById("add-monitor-form").scrollIntoView({ behavior: "smooth" });
+    });
+  });
 });
 
 // No longer rendering Docker config items client-side; SSR handles this.
@@ -376,6 +490,36 @@ document.addEventListener("DOMContentLoaded", function () {
       const id = this.getAttribute("data-id");
       const detail = this.getAttribute("data-detail") || id;
       deleteMonitor("docker", id, detail);
+    });
+  });
+
+  // Add event listeners for edit buttons
+  document.querySelectorAll(".edit-docker-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const containers = this.getAttribute("data-containers");
+      const icon = this.getAttribute("data-icon");
+      const threshold = this.getAttribute("data-threshold");
+      const alertThreshold = this.getAttribute("data-alert-threshold");
+      
+      // Populate the form fields
+      document.getElementById("docker-name").value = id;
+      document.getElementById("docker-containers").value = containers;
+      document.getElementById("docker-threshold").value = threshold;
+      document.getElementById("docker-alert-threshold").value = alertThreshold;
+      
+      // Update the icon dropdown
+      const iconSelect = document.getElementById("docker-icon");
+      if (iconSelect) {
+        iconSelect.value = icon;
+        // Refresh the selectpicker if using bootstrap-select
+        if (window.$ && typeof window.$.fn.selectpicker === "function") {
+          window.$("#docker-icon").selectpicker("refresh");
+        }
+      }
+      
+      // Scroll to the form
+      document.getElementById("add-docker-form").scrollIntoView({ behavior: "smooth" });
     });
   });
 });
