@@ -234,6 +234,11 @@
                 <span class="me-2 config-item-timeout"
                     >Timeout: {{ $health.Timeout }}s</span
                 >
+                {{ if gt $health.AlertThreshold 1 }}
+                <span class="me-2 config-item-alert"
+                    >Alert: {{ $health.AlertThreshold }}</span
+                >
+                {{ end }}
                 {{ if $health.RestartContainers }}
                 <span class="me-2 config-item-containers"
                     >Restart: <code>{{ $health.RestartContainers }}</code></span
@@ -276,6 +281,11 @@
                 <span class="me-2 config-item-threshold"
                     >Amber: {{ $ping.AmberThreshold }}ms</span
                 >
+                {{ if gt $ping.AlertThreshold 1 }}
+                <span class="me-2 config-item-alert"
+                    >Alert: {{ $ping.AlertThreshold }}</span
+                >
+                {{ end }}
                 <button
                     type="button"
                     class="delete-ping-btn ms-auto p-0 btn btn-link"

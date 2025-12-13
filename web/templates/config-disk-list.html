@@ -106,6 +106,9 @@
                     >(<code>{{ $disk.Path }}</code>)</span
                 >
                 <span class="me-2">Threshold: {{ $disk.Threshold }}%</span>
+                {{ if gt $disk.AlertThreshold 1 }}
+                <span class="me-2">Alert: {{ $disk.AlertThreshold }}</span>
+                {{ end }}
                 <button
                     type="button"
                     class="delete-disk-btn ms-auto p-0 btn btn-link"

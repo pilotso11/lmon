@@ -38,6 +38,14 @@
                         >Failures: {{ .FailureCount }}</span
                     >
                     {{ end }}
+                    {{ if gt .AlertThreshold 1 }}
+                    <span
+                        class="badge bg-info text-dark"
+                        aria-label="Alert threshold"
+                        title="Alert after this many consecutive failures"
+                        >Alert: {{ .AlertThreshold }}</span
+                    >
+                    {{ end }}
                     <span class="ms-2" aria-label="Value">{{ .Value }}</span>
                 </div>
                 <div class="item-detail2">

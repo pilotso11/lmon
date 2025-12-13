@@ -4,6 +4,7 @@ import (
 	"lmon/config"
 	"lmon/monitors"
 	"lmon/monitors/disk"
+	"lmon/monitors/docker"
 	"lmon/monitors/healthcheck"
 	"lmon/monitors/ping"
 	"lmon/monitors/system"
@@ -19,6 +20,7 @@ type UIResult struct {
 	TypeLabel            string       // Type of the monitor (e.g., disk, healthcheck)
 	DisplayName          string       // Display Name for UI
 	Threshold            int          // Threshold for the monitor, if applicable
+	AlertThreshold       int          // Number of consecutive failures before triggering alert
 	FailureCount         int          // Current consecutive failure count
 	EvenRow              bool         // Flag to indicate if the row is even for styling purposes
 	StatusClass          string       // CSS class for the status, used for styling in the UI
@@ -29,6 +31,7 @@ type UIResult struct {
 func newUIResult(id string, item monitors.Result, c *config.Config, failureCount int) UIResult {
 	icon := "folder" // default icon if no specific icon is found
 	threshold := 0   // default threshold if not set
+	alertThreshold := 1 // default alert threshold
 	typeLabel := ""
 	hasRestartContainers := false
 	switch item.Group {
@@ -39,6 +42,10 @@ func newUIResult(id string, item monitors.Result, c *config.Config, failureCount
 			if item.Group+"_"+k == id {
 				icon = d.Icon
 				threshold = d.Threshold
+				alertThreshold = d.AlertThreshold
+				if alertThreshold <= 0 {
+					alertThreshold = 1
+				}
 				break
 			}
 		}
@@ -49,6 +56,10 @@ func newUIResult(id string, item monitors.Result, c *config.Config, failureCount
 			if item.Group+"_"+k == id {
 				icon = h.Icon
 				hasRestartContainers = h.RestartContainers != ""
+				alertThreshold = h.AlertThreshold
+				if alertThreshold <= 0 {
+					alertThreshold = 1
+				}
 				break
 			}
 		}
@@ -59,6 +70,10 @@ func newUIResult(id string, item monitors.Result, c *config.Config, failureCount
 			if item.Group+"_"+k == id {
 				icon = p.Icon
 				threshold = p.AmberThreshold
+				alertThreshold = p.AlertThreshold
+				if alertThreshold <= 0 {
+					alertThreshold = 1
+				}
 				break
 			}
 		}
@@ -68,9 +83,31 @@ func newUIResult(id string, item monitors.Result, c *config.Config, failureCount
 		case system.CPUDisplayName:
 			icon = c.Monitoring.System.CPU.Icon
 			threshold = c.Monitoring.System.CPU.Threshold
+			alertThreshold = c.Monitoring.System.CPU.AlertThreshold
+			if alertThreshold <= 0 {
+				alertThreshold = 1
+			}
 		case system.MemDisplayName:
 			icon = c.Monitoring.System.Memory.Icon
 			threshold = c.Monitoring.System.Memory.Threshold
+			alertThreshold = c.Monitoring.System.Memory.AlertThreshold
+			if alertThreshold <= 0 {
+				alertThreshold = 1
+			}
+		}
+	case docker.Group:
+		typeLabel = "Docker"
+		icon = docker.Icon // fallback to the default docker icon
+		for k, d := range c.Monitoring.Docker {
+			if item.Group+"_"+k == id {
+				icon = d.Icon
+				threshold = d.Threshold
+				alertThreshold = d.AlertThreshold
+				if alertThreshold <= 0 {
+					alertThreshold = 1
+				}
+				break
+			}
 		}
 	default:
 		// fallback to a generic icon if no specific icon is found
@@ -99,6 +136,7 @@ func newUIResult(id string, item monitors.Result, c *config.Config, failureCount
 		Group:                item.Group,
 		DisplayName:          item.DisplayName,
 		Threshold:            threshold,
+		AlertThreshold:       alertThreshold,
 		FailureCount:         failureCount,
 		TypeLabel:            typeLabel,
 		StatusClass:          statusClass,
