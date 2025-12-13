@@ -277,11 +277,11 @@ func TestEditPingMonitorViaUI(t *testing.T) {
 	_, err = page.Timeout(1 * time.Second).Element(`#add-monitor-form`)
 	requireNoErrorWithScreenshot(t, page, err, "wait for add-monitor-form")
 
-	// Switch to Ping mode
-	pingRadio, err := page.Element(`#monitor-type-ping`)
-	requireNoErrorWithScreenshot(t, page, err, "find ping radio")
-	err = pingRadio.Click(proto.InputMouseButtonLeft, 1)
-	requireNoErrorWithScreenshot(t, page, err, "click ping radio")
+	// Switch to Ping mode by clicking the label (Bootstrap btn-check pattern)
+	pingLabel, err := page.Element(`label[for="monitor-type-ping"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find ping radio label")
+	err = pingLabel.Click(proto.InputMouseButtonLeft, 1)
+	requireNoErrorWithScreenshot(t, page, err, "click ping radio label")
 
 	time.Sleep(200 * time.Millisecond) // Wait for form to update
 
