@@ -111,7 +111,21 @@
                 {{ end }}
                 <button
                     type="button"
-                    class="delete-disk-btn ms-auto p-0 btn btn-link"
+                    class="edit-disk-btn ms-auto p-0 btn btn-link me-2"
+                    style="color: #0d6efd; border: none; background: none"
+                    data-id="{{ $id }}"
+                    data-path="{{ $disk.Path }}"
+                    data-icon="{{ $disk.Icon }}"
+                    data-threshold="{{ $disk.Threshold }}"
+                    data-alert-threshold="{{ $disk.AlertThreshold }}"
+                    title="Edit"
+                    aria-label="Edit disk monitor {{ $id }} at path {{ $disk.Path }}"
+                >
+                    <i class="bi bi-pencil" aria-hidden="true"></i>
+                </button>
+                <button
+                    type="button"
+                    class="delete-disk-btn p-0 btn btn-link"
                     style="color: #dc3545; border: none; background: none"
                     data-id="{{ $id }}"
                     data-group="disk"

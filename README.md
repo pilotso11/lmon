@@ -1,7 +1,7 @@
 # lmon - Lightweight Monitoring Service
 ![go](https://github.com/pilotso11/lmon/actions/workflows/go.yml/badge.svg)
 ![docker](https://github.com/pilotso11/lmon/actions/workflows/docker.yml/badge.svg)
-![Coverage](https://img.shields.io/badge/Coverage-87.7%25-brightgreen)
+![Coverage](https://img.shields.io/badge/Coverage-87.9%25-brightgreen)
 
 A lightweight, extensible monitoring service written in Go. lmon monitors system resources, disk usage, and application health, providing a modern web UI and flexible configuration.
 

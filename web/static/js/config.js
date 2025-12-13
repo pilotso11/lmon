@@ -207,7 +207,94 @@ function renderIconDropdown(containerId, selectId, defaultIcon) {
   }
 }
 
-// Render icon dropdowns on DOMContentLoaded
+/**
+ * Update the monitor form based on the selected type (http or ping).
+ * This function is in the global scope so it can be called from edit handlers.
+ */
+function updateFormForType(type) {
+  const httpRadio = document.getElementById("monitor-type-http");
+  const pingRadio = document.getElementById("monitor-type-ping");
+  const targetLabel = document.getElementById("monitor-target-label");
+  const targetField = document.getElementById("monitor-target");
+  const timeoutLabel = document.getElementById("monitor-timeout-label");
+  const timeoutField = document.getElementById("monitor-timeout");
+  const respCodeRow = document.getElementById("respcode-row");
+  const respCodeField = document.getElementById("monitor-respcode");
+  const restartContainersRow = document.getElementById(
+    "restart-containers-row",
+  );
+  const amberThresholdRow = document.getElementById("amber-threshold-row");
+  const amberThresholdField = document.getElementById(
+    "monitor-amber-threshold",
+  );
+  const submitButton = document.getElementById("add-monitor-button");
+
+  if (!targetLabel || !targetField || !timeoutLabel || !timeoutField || !submitButton) {
+    return; // Elements not found, likely not on the monitor form page
+  }
+
+  if (type === "ping") {
+    // Update labels and fields for ping
+    targetLabel.textContent = "Address";
+    targetField.type = "text";
+    targetField.placeholder = "e.g., google.com or 8.8.8.8";
+    targetField.setAttribute("aria-label", "Ping address (IP or hostname)");
+    timeoutLabel.textContent = "Timeout (ms)";
+    timeoutField.value = "100";
+    timeoutField.min = "100";
+    timeoutField.max = "30000";
+    timeoutField.setAttribute("aria-label", "Ping timeout in milliseconds");
+    if (respCodeRow) respCodeRow.style.display = "none";
+    if (restartContainersRow) restartContainersRow.style.display = "none";
+    if (amberThresholdRow) amberThresholdRow.style.display = "flex";
+    if (amberThresholdField) amberThresholdField.required = true;
+    submitButton.textContent = "Add Ping Monitor";
+
+    // Update icon dropdown to use ping icon if available
+    if (typeof default_ping_icon !== "undefined") {
+      renderIconDropdown(
+        "monitor-icon-dropdown",
+        "monitor-icon-select",
+        default_ping_icon,
+      );
+    }
+  } else {
+    // Update labels and fields for HTTP
+    targetLabel.textContent = "URL";
+    targetField.type = "url";
+    targetField.placeholder = "";
+    targetField.setAttribute("aria-label", "Health check URL");
+    timeoutLabel.textContent = "Timeout (seconds)";
+    timeoutField.value = "10";
+    timeoutField.min = "1";
+    timeoutField.removeAttribute("max");
+    timeoutField.setAttribute(
+      "aria-label",
+      "Health check timeout in seconds",
+    );
+    if (respCodeRow) respCodeRow.style.display = "flex";
+    if (respCodeField) {
+      respCodeField.value = "200";
+      respCodeField.min = "100";
+      respCodeField.max = "599";
+    }
+    if (restartContainersRow) restartContainersRow.style.display = "flex";
+    if (amberThresholdRow) amberThresholdRow.style.display = "none";
+    if (amberThresholdField) amberThresholdField.required = false;
+    submitButton.textContent = "Add Health Check";
+
+    // Update icon dropdown to use health icon if available
+    if (typeof default_health_icon !== "undefined") {
+      renderIconDropdown(
+        "monitor-icon-dropdown",
+        "monitor-icon-select",
+        default_health_icon,
+      );
+    }
+  }
+}
+
+// Render icon dropdowns and set up monitor form on DOMContentLoaded
 document.addEventListener("DOMContentLoaded", function () {
   if (typeof default_disk_icon !== "undefined") {
     renderIconDropdown("disk-icon-dropdown", "disk-icon", default_disk_icon);
@@ -227,83 +314,9 @@ document.addEventListener("DOMContentLoaded", function () {
     );
   }
 
-  // Handle monitor type toggle
+  // Get radio buttons
   const httpRadio = document.getElementById("monitor-type-http");
   const pingRadio = document.getElementById("monitor-type-ping");
-  const targetLabel = document.getElementById("monitor-target-label");
-  const targetField = document.getElementById("monitor-target");
-  const timeoutLabel = document.getElementById("monitor-timeout-label");
-  const timeoutField = document.getElementById("monitor-timeout");
-  const respCodeRow = document.getElementById("respcode-row");
-  const respCodeField = document.getElementById("monitor-respcode");
-  const restartContainersRow = document.getElementById(
-    "restart-containers-row",
-  );
-  const amberThresholdRow = document.getElementById("amber-threshold-row");
-  const amberThresholdField = document.getElementById(
-    "monitor-amber-threshold",
-  );
-  const submitButton = document.getElementById("add-monitor-button");
-
-  function updateFormForType(type) {
-    if (type === "ping") {
-      // Update labels and fields for ping
-      targetLabel.textContent = "Address";
-      targetField.type = "text";
-      targetField.placeholder = "e.g., google.com or 8.8.8.8";
-      targetField.setAttribute("aria-label", "Ping address (IP or hostname)");
-      timeoutLabel.textContent = "Timeout (ms)";
-      timeoutField.value = "100";
-      timeoutField.min = "100";
-      timeoutField.max = "30000";
-      timeoutField.setAttribute("aria-label", "Ping timeout in milliseconds");
-      respCodeRow.style.display = "none";
-      restartContainersRow.style.display = "none";
-      amberThresholdRow.style.display = "flex";
-      amberThresholdField.required = true;
-      submitButton.textContent = "Add Ping Monitor";
-
-      // Update icon dropdown to use ping icon if available
-      if (typeof default_ping_icon !== "undefined") {
-        renderIconDropdown(
-          "monitor-icon-dropdown",
-          "monitor-icon-select",
-          default_ping_icon,
-        );
-      }
-    } else {
-      // Update labels and fields for HTTP
-      targetLabel.textContent = "URL";
-      targetField.type = "url";
-      targetField.placeholder = "";
-      targetField.setAttribute("aria-label", "Health check URL");
-      timeoutLabel.textContent = "Timeout (seconds)";
-      timeoutField.value = "10";
-      timeoutField.min = "1";
-      timeoutField.removeAttribute("max");
-      timeoutField.setAttribute(
-        "aria-label",
-        "Health check timeout in seconds",
-      );
-      respCodeRow.style.display = "flex";
-      respCodeField.value = "200";
-      respCodeField.min = "100";
-      respCodeField.max = "599";
-      restartContainersRow.style.display = "flex";
-      amberThresholdRow.style.display = "none";
-      amberThresholdField.required = false;
-      submitButton.textContent = "Add Health Check";
-
-      // Update icon dropdown to use health icon if available
-      if (typeof default_health_icon !== "undefined") {
-        renderIconDropdown(
-          "monitor-icon-dropdown",
-          "monitor-icon-select",
-          default_health_icon,
-        );
-      }
-    }
-  }
 
   // Initialize form based on default selection
   if (httpRadio && httpRadio.checked) {
@@ -342,6 +355,36 @@ document.addEventListener("DOMContentLoaded", function () {
       deleteMonitor("disk", id, detail);
     });
   });
+
+  // Add event listeners for edit buttons
+  document.querySelectorAll(".edit-disk-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const path = this.getAttribute("data-path");
+      const icon = this.getAttribute("data-icon");
+      const threshold = this.getAttribute("data-threshold");
+      const alertThreshold = this.getAttribute("data-alert-threshold");
+      
+      // Populate the form fields
+      document.getElementById("disk-name").value = id;
+      document.getElementById("disk-path").value = path;
+      document.getElementById("disk-threshold").value = threshold;
+      document.getElementById("disk-alert-threshold").value = alertThreshold;
+      
+      // Update the icon dropdown
+      const iconSelect = document.getElementById("disk-icon");
+      if (iconSelect) {
+        iconSelect.value = icon;
+        // Refresh the selectpicker if using bootstrap-select
+        if (window.$ && typeof window.$.fn.selectpicker === "function") {
+          window.$("#disk-icon").selectpicker("refresh");
+        }
+      }
+      
+      // Scroll to the form
+      document.getElementById("add-disk-form").scrollIntoView({ behavior: "smooth" });
+    });
+  });
 });
 
 // No longer rendering health check config items client-side; SSR handles this.
@@ -352,6 +395,51 @@ document.addEventListener("DOMContentLoaded", function () {
       const id = this.getAttribute("data-id");
       const detail = this.getAttribute("data-detail") || id;
       deleteMonitor("health", id, detail);
+    });
+  });
+
+  // Add event listeners for edit buttons
+  document.querySelectorAll(".edit-health-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const url = this.getAttribute("data-url");
+      const timeout = this.getAttribute("data-timeout");
+      const respcode = this.getAttribute("data-respcode");
+      const icon = this.getAttribute("data-icon");
+      const restartContainers = this.getAttribute("data-restart-containers") || "";
+      const alertThreshold = this.getAttribute("data-alert-threshold");
+      
+      // Switch to HTTP mode
+      const httpRadio = document.getElementById("monitor-type-http");
+      if (httpRadio) {
+        httpRadio.checked = true;
+        updateFormForType("http");
+      }
+      
+      // Populate the form fields
+      document.getElementById("monitor-name").value = id;
+      document.getElementById("monitor-target").value = url;
+      document.getElementById("monitor-timeout").value = timeout;
+      document.getElementById("monitor-respcode").value = respcode;
+      document.getElementById("monitor-alert-threshold").value = alertThreshold;
+      
+      const restartContainersInput = document.getElementById("monitor-restart-containers");
+      if (restartContainersInput) {
+        restartContainersInput.value = restartContainers;
+      }
+      
+      // Update the icon dropdown
+      const iconSelect = document.getElementById("monitor-icon-select");
+      if (iconSelect) {
+        iconSelect.value = icon;
+        // Refresh the selectpicker if using bootstrap-select
+        if (window.$ && typeof window.$.fn.selectpicker === "function") {
+          window.$("#monitor-icon-select").selectpicker("refresh");
+        }
+      }
+      
+      // Scroll to the form
+      document.getElementById("add-monitor-form").scrollIntoView({ behavior: "smooth" });
     });
   });
 });
@@ -366,6 +454,45 @@ document.addEventListener("DOMContentLoaded", function () {
       deleteMonitor("ping", id, detail);
     });
   });
+
+  // Add event listeners for edit buttons
+  document.querySelectorAll(".edit-ping-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const address = this.getAttribute("data-address");
+      const timeout = this.getAttribute("data-timeout");
+      const amberThreshold = this.getAttribute("data-amber-threshold");
+      const icon = this.getAttribute("data-icon");
+      const alertThreshold = this.getAttribute("data-alert-threshold");
+      
+      // Switch to Ping mode
+      const pingRadio = document.getElementById("monitor-type-ping");
+      if (pingRadio) {
+        pingRadio.checked = true;
+        updateFormForType("ping");
+      }
+      
+      // Populate the form fields
+      document.getElementById("monitor-name").value = id;
+      document.getElementById("monitor-target").value = address;
+      document.getElementById("monitor-timeout").value = timeout;
+      document.getElementById("monitor-amber-threshold").value = amberThreshold;
+      document.getElementById("monitor-alert-threshold").value = alertThreshold;
+      
+      // Update the icon dropdown
+      const iconSelect = document.getElementById("monitor-icon-select");
+      if (iconSelect) {
+        iconSelect.value = icon;
+        // Refresh the selectpicker if using bootstrap-select
+        if (window.$ && typeof window.$.fn.selectpicker === "function") {
+          window.$("#monitor-icon-select").selectpicker("refresh");
+        }
+      }
+      
+      // Scroll to the form
+      document.getElementById("add-monitor-form").scrollIntoView({ behavior: "smooth" });
+    });
+  });
 });
 
 // No longer rendering Docker config items client-side; SSR handles this.
@@ -376,6 +503,36 @@ document.addEventListener("DOMContentLoaded", function () {
       const id = this.getAttribute("data-id");
       const detail = this.getAttribute("data-detail") || id;
       deleteMonitor("docker", id, detail);
+    });
+  });
+
+  // Add event listeners for edit buttons
+  document.querySelectorAll(".edit-docker-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const id = this.getAttribute("data-id");
+      const containers = this.getAttribute("data-containers");
+      const icon = this.getAttribute("data-icon");
+      const threshold = this.getAttribute("data-threshold");
+      const alertThreshold = this.getAttribute("data-alert-threshold");
+      
+      // Populate the form fields
+      document.getElementById("docker-name").value = id;
+      document.getElementById("docker-containers").value = containers;
+      document.getElementById("docker-threshold").value = threshold;
+      document.getElementById("docker-alert-threshold").value = alertThreshold;
+      
+      // Update the icon dropdown
+      const iconSelect = document.getElementById("docker-icon");
+      if (iconSelect) {
+        iconSelect.value = icon;
+        // Refresh the selectpicker if using bootstrap-select
+        if (window.$ && typeof window.$.fn.selectpicker === "function") {
+          window.$("#docker-icon").selectpicker("refresh");
+        }
+      }
+      
+      // Scroll to the form
+      document.getElementById("add-docker-form").scrollIntoView({ behavior: "smooth" });
     });
   });
 });
