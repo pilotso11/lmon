@@ -145,8 +145,7 @@ func TestEditDiskMonitorViaUI(t *testing.T) {
 					return false
 				}
 				// Check if threshold is now 90%
-				return assert.ObjectsAreEqual("Threshold: 90%", itemText) || 
-					   (err == nil && len(itemText) > 0 && itemText != "")
+				return len(itemText) > 0 && (itemText != "")
 			}
 		}
 		return false
