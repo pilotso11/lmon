@@ -255,11 +255,9 @@ func (s *Service) checkStoreAndPush(ctx context.Context, m Monitor, result Resul
 	
 	shouldAlert := false
 	if s.push != nil {
-		// Case 1: Recovery to Green. Only alert if the failure persisted beyond just reaching the threshold.
-		// For alertthreshold=1: only alert on recovery if it failed 2+ times (prevents noise from single blips)
-		// For alertthreshold=N: alert on recovery if it failed N+1 or more times (persisted beyond threshold)
+		// Case 1: Recovery to Green. Alert if we had previously reached the alert threshold
 		if ok && prev.Status != RAGGreen && result.Status == RAGGreen {
-			if prevCount >= int64(threshold)+1 {
+			if prevCount >= int64(threshold) {
 				shouldAlert = true
 			}
 		}
