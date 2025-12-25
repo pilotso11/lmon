@@ -280,7 +280,7 @@ func (s *Server) pushToWebhook(ctx context.Context, m monitors.Monitor, prev mon
 	wh := s.config.Webhook
 	s.mu.Unlock()
 	if wh.Enabled {
-		timestamp := time.Now().Format("15:04:05")
+timestamp := time.Now().UTC().Format("15:04:05 UTC")
 		msg := fmt.Sprintf("%s: %s %s [ %s ] (%s)", m.DisplayName(), result.Status.String(), getResultArrow(prev, result), result.Value, timestamp)
 		go func() {
 			err := webhook.Send(ctx, wh.URL, msg)
