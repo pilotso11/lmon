@@ -50,7 +50,7 @@ func TestService_AlertThreshold_RecoveryResetsCount(t *testing.T) {
 	m := NewMockMonitor("test1", "test")
 	m.SetStatuses([]MockStatus{
 		{RAGRed, "fail 1"},
-		{RAGGreen, "success"}, // Recovery should reset count  
+		{RAGGreen, "success"}, // Recovery should reset count
 		{RAGRed, "fail again"},
 	})
 
@@ -103,4 +103,3 @@ func TestService_AlertThreshold_ConsecutiveFailures(t *testing.T) {
 	count := push.Calls.Size()
 	assert.Equal(t, 1, count, "should have exactly 1 push when threshold of 3 is reached")
 }
-
