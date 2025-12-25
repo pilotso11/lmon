@@ -273,14 +273,15 @@ func getResultArrow(prev monitors.Result, result monitors.Result) any {
 }
 
 // pushToWebhook asynchronously sends a notification to the configured webhook URL
-// when a monitor's result changes. The payload includes a summary message.
+// when a monitor's result changes. The payload includes a summary message with timestamp.
 func (s *Server) pushToWebhook(ctx context.Context, m monitors.Monitor, prev monitors.Result, result monitors.Result) {
 	// Do this in a goroutine because we need to relock to access config.
 	s.mu.Lock()
 	wh := s.config.Webhook
 	s.mu.Unlock()
 	if wh.Enabled {
-		msg := fmt.Sprintf("%s: %s %s [ %s ]", m.DisplayName(), result.Status.String(), getResultArrow(prev, result), result.Value)
+timestamp := time.Now().UTC().Format("15:04:05 UTC")
+		msg := fmt.Sprintf("%s: %s %s [ %s ] (%s)", m.DisplayName(), result.Status.String(), getResultArrow(prev, result), result.Value, timestamp)
 		go func() {
 			err := webhook.Send(ctx, wh.URL, msg)
 			if err != nil {
