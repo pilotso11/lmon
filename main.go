@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"lmon/aggregator"
 	"lmon/common"
 	"lmon/config"
 	"lmon/monitors"
@@ -38,6 +39,19 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Resolve operating mode
+	mode := config.ResolveMode()
+	log.Printf("Operating mode: %s", mode)
+
+	switch mode {
+	case config.ModeAggregator:
+		startAggregator(ctx, cfg, l)
+	default:
+		startNode(ctx, cfg, l)
+	}
+}
+
+func startNode(ctx context.Context, cfg *config.Config, l *config.Loader) {
 	// startup monitoring
 	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, 10*time.Second, nil)
 
@@ -65,4 +79,54 @@ func main() {
 	_ = server.Stop()
 
 	log.Println("Shutdown complete")
+}
+
+func startAggregator(ctx context.Context, cfg *config.Config, l *config.Loader) {
+	log.Printf("Starting aggregator mode")
+
+	// startup monitoring service for local monitors (k8s events, nodes, etc.)
+	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, 10*time.Second, nil)
+
+	// Create mapper
+	m := mapper.NewMapper(nil)
+
+	// start server
+	server, err := web.NewServerWithContext(ctx, cfg, l, mon, m)
+	if err != nil {
+		log.Fatalf("Failed to create server: %v", err)
+	}
+
+	// apply config (will include k8s monitors if kubernetes.enabled)
+	err = server.SetConfig(ctx, cfg.Monitoring)
+	if err != nil {
+		log.Fatalf("Failed to set initial config: %v", err)
+	}
+
+	// Create aggregator with a mock provider for now
+	// In production with k8s, this would use aggregator.NewK8sProvider()
+	var provider aggregator.Provider
+	provider = aggregator.NewMockProvider(nil, nil)
+
+	agg := aggregator.NewAggregator(
+		provider,
+		cfg.Aggregator.NodeLabel,
+		cfg.Aggregator.NodePort,
+		cfg.Aggregator.NodeMetricsPath,
+		time.Duration(cfg.Aggregator.ScrapeInterval)*time.Second,
+		nil,
+	)
+
+	// Setup aggregator routes (overrides default dashboard with aggregator view)
+	server.SetupAggregatorRoutes(agg)
+
+	agg.Start(ctx)
+	server.Start(ctx)
+
+	// wait for interrupt
+	<-ctx.Done()
+
+	agg.Stop()
+	_ = server.Stop()
+
+	log.Println("Aggregator shutdown complete")
 }

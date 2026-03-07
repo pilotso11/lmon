@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lmon-aggregator
+  namespace: lmon
+  labels:
+    app.kubernetes.io/name: lmon
+    app.kubernetes.io/component: aggregator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lmon-aggregator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: lmon-aggregator
+        app.kubernetes.io/component: aggregator
+    spec:
+      serviceAccountName: lmon-aggregator
+      containers:
+        - name: lmon
+          image: lmon:latest
+          env:
+            - name: LMON_MODE
+              value: "aggregator"
+            - name: LMON_CONFIG_FILE
+              value: /etc/lmon/config.yaml
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/lmon
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: lmon-aggregator-config

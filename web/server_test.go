@@ -712,4 +712,238 @@ func TestSetConfig(t *testing.T) {
 		err := s.SetConfig(ctx, cfg)
 		assert.Error(t, err, "should fail with missing amber threshold")
 	})
+
+	t.Run("success_with_k8s_monitors", func(t *testing.T) {
+		s.config.Kubernetes.Enabled = true
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			K8sEvents: map[string]config.K8sEventsConfig{
+				"pod-events": {Namespaces: "default", Threshold: 5, Window: 300},
+			},
+			K8sNodes: map[string]config.K8sNodesConfig{
+				"cluster": {Icon: "server"},
+			},
+			K8sService: map[string]config.K8sServiceConfig{
+				"api": {Service: "api-svc", Namespace: "default", Threshold: 80, Port: 8080},
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err)
+
+		assert.Eventually(t, func() bool {
+			results := s.monitor.Results()
+			_, okEvents := results["k8sevents_pod-events"]
+			_, okNodes := results["k8snodes_cluster"]
+			_, okSvc := results["k8sservice_api"]
+			return okEvents && okNodes && okSvc
+		}, 500*time.Millisecond, 10*time.Millisecond, "k8s monitors should appear in results")
+	})
+
+	t.Run("k8s_monitors_skipped_when_disabled", func(t *testing.T) {
+		s.config.Kubernetes.Enabled = false
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			K8sEvents: map[string]config.K8sEventsConfig{
+				"should-not-exist": {Namespaces: "default", Threshold: 5},
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err)
+
+		time.Sleep(50 * time.Millisecond)
+		results := s.monitor.Results()
+		_, exists := results["k8sevents_should-not-exist"]
+		assert.False(t, exists, "k8s monitor should not be added when kubernetes is disabled")
+	})
+}
+
+// TestAddK8sEventsMonitor verifies adding a K8s events monitor via the API.
+func TestAddK8sEventsMonitor(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.K8sEventsConfig{
+		Namespaces:     "default",
+		Threshold:      5,
+		Window:         300,
+		Icon:           "zap",
+		AlertThreshold: 1,
+	}
+	id := "test-events"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/k8sevents/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	cfg, ok := s.config.Monitoring.K8sEvents[id]
+	assert.True(t, ok, "k8sevents entry exists")
+	assert.Equal(t, data.Namespaces, cfg.Namespaces)
+	assert.Equal(t, data.Threshold, cfg.Threshold)
+}
+
+// TestDeleteK8sEventsMonitor verifies deleting a K8s events monitor via the API.
+func TestDeleteK8sEventsMonitor(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.K8sEventsConfig{Namespaces: "default", Threshold: 5}
+	id := "test-events"
+	resp, _ := PostTestRequest(ctx, t, s, "/api/config/k8sevents/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, body := DeleteTestRequest(ctx, t, s, "/api/config/k8sevents/"+id)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "OK\n", body)
+	assert.Equal(t, 0, len(s.config.Monitoring.K8sEvents))
+}
+
+// TestAddK8sNodesMonitor verifies adding a K8s nodes monitor via the API.
+func TestAddK8sNodesMonitor(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.K8sNodesConfig{
+		Icon:           "server",
+		AlertThreshold: 2,
+	}
+	id := "test-nodes"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/k8snodes/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	cfg, ok := s.config.Monitoring.K8sNodes[id]
+	assert.True(t, ok, "k8snodes entry exists")
+	assert.Equal(t, data, cfg, "k8snodes entry applied")
+}
+
+// TestDeleteK8sNodesMonitor verifies deleting a K8s nodes monitor via the API.
+func TestDeleteK8sNodesMonitor(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.K8sNodesConfig{Icon: "server"}
+	id := "test-nodes"
+	resp, _ := PostTestRequest(ctx, t, s, "/api/config/k8snodes/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, body := DeleteTestRequest(ctx, t, s, "/api/config/k8snodes/"+id)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "OK\n", body)
+	assert.Equal(t, 0, len(s.config.Monitoring.K8sNodes))
+}
+
+// TestAddK8sServiceMonitor verifies adding a K8s service monitor via the API.
+func TestAddK8sServiceMonitor(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.K8sServiceConfig{
+		Namespace:      "default",
+		Service:        "api-svc",
+		HealthPath:     "/healthz",
+		Port:           8080,
+		Threshold:      80,
+		Icon:           "globe",
+		AlertThreshold: 1,
+	}
+	id := "test-service"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/k8sservice/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	cfg, ok := s.config.Monitoring.K8sService[id]
+	assert.True(t, ok, "k8sservice entry exists")
+	assert.Equal(t, data.Service, cfg.Service)
+	assert.Equal(t, data.Threshold, cfg.Threshold)
+}
+
+// TestDeleteK8sServiceMonitor verifies deleting a K8s service monitor via the API.
+func TestDeleteK8sServiceMonitor(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.K8sServiceConfig{Service: "svc", Threshold: 80}
+	id := "test-service"
+	resp, _ := PostTestRequest(ctx, t, s, "/api/config/k8sservice/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, body := DeleteTestRequest(ctx, t, s, "/api/config/k8sservice/"+id)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "OK\n", body)
+	assert.Equal(t, 0, len(s.config.Monitoring.K8sService))
+}
+
+// TestDeleteMonitorInvalidType verifies that deleting with an unknown type returns 400.
+func TestDeleteMonitorInvalidType(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	resp, _ := DeleteTestRequest(ctx, t, s, "/api/config/invalidtype/some-id")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+// TestAddDockerMonitor verifies adding a Docker monitor via the API.
+func TestAddDockerMonitor(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.DockerConfig{
+		Containers:     "nginx,redis",
+		Threshold:      2,
+		Icon:           "box",
+		AlertThreshold: 1,
+	}
+	id := "test-docker"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/docker/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	cfg, ok := s.config.Monitoring.Docker[id]
+	assert.True(t, ok, "docker entry exists")
+	assert.Contains(t, cfg.Containers, "nginx")
+	assert.Contains(t, cfg.Containers, "redis")
+	assert.Equal(t, data.Threshold, cfg.Threshold)
+}
+
+// TestDeleteDockerMonitor verifies deleting a Docker monitor via the API.
+func TestDeleteDockerMonitor(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.DockerConfig{Containers: "nginx", Threshold: 1}
+	id := "test-docker"
+	resp, _ := PostTestRequest(ctx, t, s, "/api/config/docker/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, body := DeleteTestRequest(ctx, t, s, "/api/config/docker/"+id)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "OK\n", body)
+	assert.Equal(t, 0, len(s.config.Monitoring.Docker))
 }

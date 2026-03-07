@@ -10,11 +10,34 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Mode represents the operating mode of the lmon instance.
+type Mode string
+
+const (
+	ModeNode       Mode = "node"
+	ModeAggregator Mode = "aggregator"
+)
+
+// ResolveMode reads the LMON_MODE environment variable and returns the operating mode.
+// Defaults to ModeNode if not set or unrecognized.
+func ResolveMode() Mode {
+	m := os.Getenv("LMON_MODE")
+	switch Mode(m) {
+	case ModeAggregator:
+		return ModeAggregator
+	default:
+		return ModeNode
+	}
+}
+
 // Config represents the application configuration
 type Config struct {
 	Web        WebConfig
 	Monitoring MonitoringConfig
 	Webhook    WebhookConfig
+	Kubernetes KubernetesConfig
+	Aggregator AggregatorConfig
+	Database   DatabaseConfig
 }
 
 func SanitiseName(name string) (string, bool) {
@@ -35,13 +58,16 @@ type WebConfig struct {
 
 // MonitoringConfig represents the monitoring configuration
 type MonitoringConfig struct {
-	Interval                  int
-	Disk                      map[string]DiskConfig
-	System                    SystemConfig
-	Healthcheck               map[string]HealthcheckConfig
-	Ping                      map[string]PingConfig
-	Docker                    map[string]DockerConfig
-	AllowedRestartContainers  []string // Global whitelist of container names/IDs allowed for restart operations
+	Interval                 int
+	Disk                     map[string]DiskConfig
+	System                   SystemConfig
+	Healthcheck              map[string]HealthcheckConfig
+	Ping                     map[string]PingConfig
+	Docker                   map[string]DockerConfig
+	K8sEvents                map[string]K8sEventsConfig  `mapstructure:"k8sevents"`
+	K8sNodes                 map[string]K8sNodesConfig   `mapstructure:"k8snodes"`
+	K8sService               map[string]K8sServiceConfig `mapstructure:"k8sservice"`
+	AllowedRestartContainers []string                    // Global whitelist of container names/IDs allowed for restart operations
 }
 
 // DiskConfig represents disk monitoring configuration.
@@ -97,6 +123,58 @@ type DockerConfig struct {
 type WebhookConfig struct {
 	Enabled bool
 	URL     string
+}
+
+// KubernetesConfig represents Kubernetes integration configuration
+type KubernetesConfig struct {
+	Enabled    bool
+	InCluster  bool   `mapstructure:"in_cluster"`
+	Kubeconfig string
+	Namespace  string
+}
+
+// AggregatorConfig represents aggregator mode configuration
+type AggregatorConfig struct {
+	NodeLabel       string `mapstructure:"node_label"`
+	NodePort        int    `mapstructure:"node_port"`
+	NodeMetricsPath string `mapstructure:"node_metrics_path"`
+	ScrapeInterval  int    `mapstructure:"scrape_interval"`
+}
+
+// DatabaseConfig represents optional PostgreSQL metrics recording configuration
+type DatabaseConfig struct {
+	URL           string
+	RetentionDays int `mapstructure:"retention_days"`
+	BatchSize     int `mapstructure:"batch_size"`
+	WriteInterval int `mapstructure:"write_interval"` // seconds between DB writes, 0 = every check
+	PruneInterval int `mapstructure:"prune_interval"` // minutes between prune runs, default 60
+}
+
+// K8sEventsConfig represents Kubernetes events monitoring configuration
+type K8sEventsConfig struct {
+	Namespaces     string
+	Threshold      int
+	Window         int
+	Icon           string
+	AlertThreshold int
+}
+
+// K8sNodesConfig represents Kubernetes nodes monitoring configuration
+type K8sNodesConfig struct {
+	Icon           string
+	AlertThreshold int
+}
+
+// K8sServiceConfig represents Kubernetes service pod health monitoring configuration
+type K8sServiceConfig struct {
+	Namespace      string
+	Service        string
+	HealthPath     string `mapstructure:"health_path"`
+	Port           int
+	Threshold      int // % healthy pods for green
+	Timeout        int
+	Icon           string
+	AlertThreshold int
 }
 
 type Loader struct {
@@ -212,8 +290,58 @@ func (l *Loader) Load() (*Config, error) {
 	if config.Monitoring.Docker == nil {
 		config.Monitoring.Docker = make(map[string]DockerConfig)
 	}
+	if config.Monitoring.K8sEvents == nil {
+		config.Monitoring.K8sEvents = make(map[string]K8sEventsConfig)
+	}
+	if config.Monitoring.K8sNodes == nil {
+		config.Monitoring.K8sNodes = make(map[string]K8sNodesConfig)
+	}
+	if config.Monitoring.K8sService == nil {
+		config.Monitoring.K8sService = make(map[string]K8sServiceConfig)
+	}
+
+	// Apply defaults for new config sections (not via viper to avoid polluting saved files)
+	applyKubernetesDefaults(&config.Kubernetes)
+	applyAggregatorDefaults(&config.Aggregator)
+	applyDatabaseDefaults(&config.Database)
 
 	return &config, nil
+}
+
+func applyKubernetesDefaults(cfg *KubernetesConfig) {
+	// InCluster defaults to true if kubernetes is enabled and no kubeconfig is set
+	if cfg.Enabled && cfg.Kubeconfig == "" {
+		cfg.InCluster = true
+	}
+	// If nothing is set at all, default InCluster to true for when it's eventually enabled
+	if !cfg.Enabled && cfg.Kubeconfig == "" && !cfg.InCluster {
+		cfg.InCluster = true
+	}
+}
+
+func applyAggregatorDefaults(cfg *AggregatorConfig) {
+	if cfg.NodePort == 0 {
+		cfg.NodePort = 8080
+	}
+	if cfg.NodeMetricsPath == "" {
+		cfg.NodeMetricsPath = "/metrics"
+	}
+	if cfg.ScrapeInterval == 0 {
+		cfg.ScrapeInterval = 30
+	}
+}
+
+func applyDatabaseDefaults(cfg *DatabaseConfig) {
+	if cfg.RetentionDays == 0 {
+		cfg.RetentionDays = 7
+	}
+	if cfg.BatchSize == 0 {
+		cfg.BatchSize = 1000
+	}
+	// WriteInterval 0 means "every check" - valid default, no action needed
+	if cfg.PruneInterval == 0 {
+		cfg.PruneInterval = 60
+	}
 }
 
 func (l *Loader) setDefaults() {
@@ -317,6 +445,72 @@ func (l *Loader) Save(config *Config) error {
 			alertThreshold = 1
 		}
 		l.v.Set(fmt.Sprintf("monitoring.docker.%s.alertthreshold", name), alertThreshold)
+	}
+
+	// Save Kubernetes config if enabled
+	if config.Kubernetes.Enabled {
+		l.v.Set("kubernetes.enabled", config.Kubernetes.Enabled)
+		l.v.Set("kubernetes.in_cluster", config.Kubernetes.InCluster)
+		if config.Kubernetes.Kubeconfig != "" {
+			l.v.Set("kubernetes.kubeconfig", config.Kubernetes.Kubeconfig)
+		}
+		if config.Kubernetes.Namespace != "" {
+			l.v.Set("kubernetes.namespace", config.Kubernetes.Namespace)
+		}
+	}
+
+	// Save Aggregator config if node_label is set
+	if config.Aggregator.NodeLabel != "" {
+		l.v.Set("aggregator.node_label", config.Aggregator.NodeLabel)
+		l.v.Set("aggregator.node_port", config.Aggregator.NodePort)
+		l.v.Set("aggregator.node_metrics_path", config.Aggregator.NodeMetricsPath)
+		l.v.Set("aggregator.scrape_interval", config.Aggregator.ScrapeInterval)
+	}
+
+	// Save Database config if URL is set
+	if config.Database.URL != "" {
+		l.v.Set("database.url", config.Database.URL)
+		l.v.Set("database.retention_days", config.Database.RetentionDays)
+		l.v.Set("database.batch_size", config.Database.BatchSize)
+		l.v.Set("database.write_interval", config.Database.WriteInterval)
+		l.v.Set("database.prune_interval", config.Database.PruneInterval)
+	}
+
+	// Save K8s monitors
+	for name, k8sEvents := range config.Monitoring.K8sEvents {
+		l.v.Set(fmt.Sprintf("monitoring.k8sevents.%s.namespaces", name), k8sEvents.Namespaces)
+		l.v.Set(fmt.Sprintf("monitoring.k8sevents.%s.threshold", name), k8sEvents.Threshold)
+		l.v.Set(fmt.Sprintf("monitoring.k8sevents.%s.window", name), k8sEvents.Window)
+		l.v.Set(fmt.Sprintf("monitoring.k8sevents.%s.icon", name), k8sEvents.Icon)
+		alertThreshold := k8sEvents.AlertThreshold
+		if alertThreshold <= 0 {
+			alertThreshold = 1
+		}
+		l.v.Set(fmt.Sprintf("monitoring.k8sevents.%s.alertthreshold", name), alertThreshold)
+	}
+
+	for name, k8sNodes := range config.Monitoring.K8sNodes {
+		l.v.Set(fmt.Sprintf("monitoring.k8snodes.%s.icon", name), k8sNodes.Icon)
+		alertThreshold := k8sNodes.AlertThreshold
+		if alertThreshold <= 0 {
+			alertThreshold = 1
+		}
+		l.v.Set(fmt.Sprintf("monitoring.k8snodes.%s.alertthreshold", name), alertThreshold)
+	}
+
+	for name, k8sSvc := range config.Monitoring.K8sService {
+		l.v.Set(fmt.Sprintf("monitoring.k8sservice.%s.namespace", name), k8sSvc.Namespace)
+		l.v.Set(fmt.Sprintf("monitoring.k8sservice.%s.service", name), k8sSvc.Service)
+		l.v.Set(fmt.Sprintf("monitoring.k8sservice.%s.health_path", name), k8sSvc.HealthPath)
+		l.v.Set(fmt.Sprintf("monitoring.k8sservice.%s.port", name), k8sSvc.Port)
+		l.v.Set(fmt.Sprintf("monitoring.k8sservice.%s.threshold", name), k8sSvc.Threshold)
+		l.v.Set(fmt.Sprintf("monitoring.k8sservice.%s.timeout", name), k8sSvc.Timeout)
+		l.v.Set(fmt.Sprintf("monitoring.k8sservice.%s.icon", name), k8sSvc.Icon)
+		alertThreshold := k8sSvc.AlertThreshold
+		if alertThreshold <= 0 {
+			alertThreshold = 1
+		}
+		l.v.Set(fmt.Sprintf("monitoring.k8sservice.%s.alertthreshold", name), alertThreshold)
 	}
 
 	// overwrite the config file or create it if it doesn't exist

@@ -1,0 +1,80 @@
+---
+# ServiceAccount for lmon node agents (DaemonSet)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lmon-node
+  namespace: lmon
+  labels:
+    app.kubernetes.io/name: lmon
+    app.kubernetes.io/component: node
+---
+# ServiceAccount for lmon aggregator
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lmon-aggregator
+  namespace: lmon
+  labels:
+    app.kubernetes.io/name: lmon
+    app.kubernetes.io/component: aggregator
+---
+# ClusterRole for aggregator - needs read access to pods, events, nodes, endpoints
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lmon-aggregator
+  labels:
+    app.kubernetes.io/name: lmon
+    app.kubernetes.io/component: aggregator
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "events", "endpoints", "services"]
+    verbs: ["get", "list", "watch"]
+---
+# ClusterRoleBinding for aggregator
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lmon-aggregator
+  labels:
+    app.kubernetes.io/name: lmon
+    app.kubernetes.io/component: aggregator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: lmon-aggregator
+subjects:
+  - kind: ServiceAccount
+    name: lmon-aggregator
+    namespace: lmon
+---
+# ClusterRole for node agents - minimal permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lmon-node
+  labels:
+    app.kubernetes.io/name: lmon
+    app.kubernetes.io/component: node
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get"]
+---
+# ClusterRoleBinding for node agents
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lmon-node
+  labels:
+    app.kubernetes.io/name: lmon
+    app.kubernetes.io/component: node
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: lmon-node
+subjects:
+  - kind: ServiceAccount
+    name: lmon-node
+    namespace: lmon

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+    {{ template "header" . }}
+    <body>
+        {{ template "nav" . }}
+
+        <div class="container mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>{{ .dashboard_title }} - Cluster View</h1>
+                <button
+                    id="refresh-btn"
+                    class="btn btn-primary"
+                    data-refresh-interval="{{ .refresh_interval }}"
+                    aria-label="Refresh dashboard"
+                >
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    Refresh
+                    <span id="refresh-countdown"></span>
+                </button>
+            </div>
+
+            {{ if not .Nodes }}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> No nodes discovered yet. Waiting for node agents to come online...
+            </div>
+            {{ end }}
+
+            {{ range .Nodes }}
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-hdd-rack"></i>
+                        <strong>{{ .Name }}</strong>
+                        {{ if .Available }}
+                            <span class="badge bg-success ms-2">Online</span>
+                        {{ else }}
+                            <span class="badge bg-danger ms-2">Offline</span>
+                        {{ end }}
+                    </div>
+                    <small class="text-muted">{{ .Timestamp }}</small>
+                </div>
+                <div class="card-body">
+                    {{ if not .Available }}
+                        <div class="alert alert-danger mb-0">
+                            <i class="bi bi-exclamation-triangle"></i> {{ .Error }}
+                        </div>
+                    {{ else if not .Monitors }}
+                        <p class="text-muted mb-0">No monitors reporting</p>
+                    {{ else }}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Monitor</th>
+                                        <th>Type</th>
+                                        <th>Status</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{ range .Monitors }}
+                                    <tr>
+                                        <td>{{ .ID }}</td>
+                                        <td><span class="badge bg-secondary">{{ .Type }}</span></td>
+                                        <td>
+                                            {{ if eq .Status "Green" }}
+                                                <span class="badge bg-success">{{ .Status }}</span>
+                                            {{ else if eq .Status "Amber" }}
+                                                <span class="badge bg-warning text-dark">{{ .Status }}</span>
+                                            {{ else if eq .Status "Red" }}
+                                                <span class="badge bg-danger">{{ .Status }}</span>
+                                            {{ else }}
+                                                <span class="badge bg-secondary">{{ .Status }}</span>
+                                            {{ end }}
+                                        </td>
+                                        <td>{{ .Value }}</td>
+                                    </tr>
+                                    {{ end }}
+                                </tbody>
+                            </table>
+                        </div>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
+        </div>
+
+        {{ template "footer" . }}
+    </body>
+</html>
