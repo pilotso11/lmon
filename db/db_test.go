@@ -477,3 +477,30 @@ func TestStoreClose(t *testing.T) {
 	err := store.Close()
 	assert.NoError(t, err, "Close should not error on a functioning store")
 }
+
+// TestBufferedWriterDoubleClose verifies that Close is idempotent (no panic on double close).
+func TestBufferedWriterDoubleClose(t *testing.T) {
+	store := newTestStore(t)
+	writer := NewBufferedWriter(store, 10, 0)
+	assert.NotPanics(t, func() {
+		writer.Close()
+		writer.Close()
+	})
+}
+
+// TestRetentionManagerDoubleStart verifies that Start is safe to call twice.
+func TestRetentionManagerDoubleStart(t *testing.T) {
+	store := newTestStore(t)
+	rm := &RetentionManager{
+		store:         store,
+		retentionDays: 7,
+		batchSize:     100,
+		pruneInterval: time.Hour,
+	}
+	ctx := t.Context()
+	assert.NotPanics(t, func() {
+		rm.Start(ctx)
+		rm.Start(ctx) // second call should be a no-op
+	})
+	rm.Stop()
+}

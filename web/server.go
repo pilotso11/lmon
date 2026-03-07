@@ -153,8 +153,12 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 	server.listener = ln
 
 	server.httpServer = &http.Server{
-		Addr:    ln.Addr().String(),
-		Handler: LoggingHandler(router),
+		Addr:              ln.Addr().String(),
+		Handler:           LoggingHandler(router),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Setup push to webhook callback
@@ -231,11 +235,15 @@ func (s *Server) Stop() error {
 
 // SetStore sets the optional database store for metrics persistence.
 func (s *Server) SetStore(store db.Store) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.store = store
 }
 
 // SetWriter sets the optional buffered writer for async database writes.
 func (s *Server) SetWriter(writer *db.BufferedWriter) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.writer = writer
 }
 
@@ -498,14 +506,13 @@ func (s *Server) writeJson(w http.ResponseWriter, data any) {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		log.Printf("writeJson %v: %v", reflect.TypeOf(data), err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(payload)
 	if err != nil {
 		log.Printf("writeJson %v: %v", reflect.TypeOf(data), err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -550,27 +557,38 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetConfig responds with the current server configuration as JSON.
+// Sensitive fields (database URL) are redacted in the response.
 // Route: GET /api/config
 func (s *Server) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.writeJson(w, s.config)
+
+	// Copy config and redact sensitive fields
+	redacted := *s.config
+	if redacted.Database.URL != "" {
+		redacted.Database.URL = "***"
+	}
+	s.writeJson(w, redacted)
 }
 
 // unmarshallBody reads and unmarshals the JSON request body into the provided data structure.
 // Returns true on success, or writes an error response and returns false on failure.
+// Request bodies are limited to 1MB to prevent abuse.
 func (s *Server) unmarshallBody(w http.ResponseWriter, r *http.Request, data any) bool {
+	const maxBodySize = 1 << 20 // 1MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("unmarshallBody %s: %v", r.URL, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "request body too large or unreadable", http.StatusBadRequest)
 		return false
 	}
 
 	err = json.Unmarshal(body, data)
 	if err != nil {
 		log.Printf("unmarshallBody %s: %v", r.URL, err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return false
 	}
 	return true

@@ -102,9 +102,12 @@ func startAggregator(ctx context.Context, cfg *config.Config, l *config.Loader) 
 		log.Fatalf("Failed to set initial config: %v", err)
 	}
 
-	// Create aggregator with a mock provider for now
-	// In production with k8s, this would use aggregator.NewK8sProvider()
+	// Create aggregator provider.
+	// TODO: When running in a real Kubernetes cluster, use aggregator.NewK8sProvider()
+	// with a real PodLister backed by client-go. The mock provider is a no-op placeholder.
 	var provider aggregator.Provider
+	log.Printf("WARNING: Aggregator using mock provider. For Kubernetes cluster discovery, " +
+		"configure a K8sProvider with client-go PodLister.")
 	provider = aggregator.NewMockProvider(nil, nil)
 
 	agg := aggregator.NewAggregator(

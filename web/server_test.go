@@ -552,6 +552,22 @@ func TestHandleGetConfig(t *testing.T) {
 	assert.Contains(t, config, "Web")
 }
 
+// TestHandleGetConfigRedactsDatabaseURL verifies that the database URL is redacted in config responses.
+func TestHandleGetConfigRedactsDatabaseURL(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.config.Database.URL = "postgres://user:secret@host:5432/db"
+	s.Start(ctx)
+	defer s.Stop()
+
+	r, body := GetTestRequest(ctx, t, s, "/api/config")
+	assert.Equal(t, http.StatusOK, r.StatusCode)
+	assert.NotContains(t, body, "secret", "database URL should be redacted")
+	assert.NotContains(t, body, "postgres://", "database URL should be redacted")
+	assert.Contains(t, body, "***")
+}
+
 // TestWriteJson tests the writeJson function with various data types and error conditions
 func TestWriteJson(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())

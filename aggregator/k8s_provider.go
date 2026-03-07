@@ -50,7 +50,8 @@ func (p *K8sProvider) ScrapeMetrics(ctx context.Context, endpoint string) (*Scra
 		return nil, fmt.Errorf("scrape %s: status %d", endpoint, resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	const maxResponseSize = 10 << 20 // 10MB
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 	if err != nil {
 		return nil, fmt.Errorf("read response %s: %w", endpoint, err)
 	}

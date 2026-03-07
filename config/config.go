@@ -309,12 +309,8 @@ func (l *Loader) Load() (*Config, error) {
 }
 
 func applyKubernetesDefaults(cfg *KubernetesConfig) {
-	// InCluster defaults to true if kubernetes is enabled and no kubeconfig is set
-	if cfg.Enabled && cfg.Kubeconfig == "" {
-		cfg.InCluster = true
-	}
-	// If nothing is set at all, default InCluster to true for when it's eventually enabled
-	if !cfg.Enabled && cfg.Kubeconfig == "" && !cfg.InCluster {
+	// InCluster defaults to true when no explicit kubeconfig is provided
+	if cfg.Kubeconfig == "" {
 		cfg.InCluster = true
 	}
 }

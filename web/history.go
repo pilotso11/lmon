@@ -5,10 +5,24 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"lmon/db"
 )
+
+var (
+	historyTmplOnce sync.Once
+	historyTmpl     *template.Template
+	historyTmplErr  error
+)
+
+func getHistoryTemplate() (*template.Template, error) {
+	historyTmplOnce.Do(func() {
+		historyTmpl, historyTmplErr = template.ParseFS(templateFS, "templates/history.html", "templates/header.html", "templates/nav.html", "templates/footer.html")
+	})
+	return historyTmpl, historyTmplErr
+}
 
 // handleGetHistory responds with JSON containing monitor snapshots for the given query params.
 // Query parameters: node, monitor, from (RFC3339), to (RFC3339), limit (int).
@@ -43,10 +57,15 @@ func (s *Server) handleGetHistory(w http.ResponseWriter, r *http.Request) {
 			limit = l
 		}
 	}
+	// Cap limit to prevent excessive queries
+	if limit > 10000 {
+		limit = 10000
+	}
 
 	snapshots, err := s.store.GetHistory(r.Context(), node, monitor, from, to, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("handleGetHistory: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	s.writeJson(w, snapshots)
@@ -79,7 +98,8 @@ func (s *Server) handleGetSummary(w http.ResponseWriter, r *http.Request) {
 
 	summary, err := s.store.GetSummary(r.Context(), from, to)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("handleGetSummary: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	s.writeJson(w, summary)
@@ -93,7 +113,7 @@ func (s *Server) handleHistoryPage(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	tmpl, err := template.ParseFS(templateFS, "templates/history.html", "templates/header.html", "templates/nav.html", "templates/footer.html")
+	tmpl, err := getHistoryTemplate()
 	if err != nil {
 		log.Printf("handleHistoryPage template parse error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

@@ -17,6 +17,7 @@ type BufferedWriter struct {
 	writeInterval time.Duration
 	lastWrite     time.Time
 	mu            sync.Mutex
+	closeOnce     sync.Once
 }
 
 // NewBufferedWriter creates a new BufferedWriter with the given buffer size and write interval.
@@ -68,7 +69,10 @@ func (w *BufferedWriter) flushLoop() {
 }
 
 // Close closes the channel and waits for all pending writes to complete.
+// Safe to call multiple times.
 func (w *BufferedWriter) Close() {
-	close(w.ch)
+	w.closeOnce.Do(func() {
+		close(w.ch)
+	})
 	w.wg.Wait()
 }

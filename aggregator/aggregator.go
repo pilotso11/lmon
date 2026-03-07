@@ -64,6 +64,7 @@ type Aggregator struct {
 	push           PushFunc
 	cancel         context.CancelFunc
 	wg             sync.WaitGroup
+	started        bool
 }
 
 // NewAggregator creates a new Aggregator with the given configuration.
@@ -86,7 +87,12 @@ func NewAggregator(provider Provider, nodeLabel string, nodePort int, metricsPat
 }
 
 // Start begins the aggregator's discovery and scrape loop.
+// Safe to call only once; subsequent calls are no-ops.
 func (a *Aggregator) Start(ctx context.Context) {
+	if a.started {
+		return
+	}
+	a.started = true
 	ctx, a.cancel = context.WithCancel(ctx)
 	a.wg.Add(1)
 	go a.loop(ctx)

@@ -44,6 +44,14 @@ func NewPostgresStore(ctx context.Context, dsn string) (*PostgresStore, error) {
 	select {
 	case <-connectCtx.Done():
 		log.Printf("PostgresStore: connection timeout, database unavailable")
+		// Drain the goroutine in the background and close any leaked connection
+		go func() {
+			if r := <-ch; r.db != nil {
+				if sqlDB, err := r.db.DB(); err == nil {
+					sqlDB.Close()
+				}
+			}
+		}()
 		return store, nil // Non-fatal
 	case r := <-ch:
 		if r.err != nil {
@@ -114,6 +122,7 @@ func (s *PostgresStore) GetSummary(ctx context.Context, from, to time.Time) ([]M
 }
 
 // PurgeOlderThan deletes snapshots older than the cutoff time in batches.
+// Uses a subquery approach for PostgreSQL compatibility (DELETE...LIMIT is not standard SQL).
 // Returns the total number of deleted rows.
 func (s *PostgresStore) PurgeOlderThan(ctx context.Context, cutoff time.Time, batchSize int) (int64, error) {
 	if !s.available.Load() {
@@ -124,7 +133,14 @@ func (s *PostgresStore) PurgeOlderThan(ctx context.Context, cutoff time.Time, ba
 		if ctx.Err() != nil {
 			return totalDeleted, ctx.Err()
 		}
-		result := s.db.WithContext(ctx).Where("recorded_at < ?", cutoff).Limit(batchSize).Delete(&MonitorSnapshot{})
+		// Use subquery for PostgreSQL compatibility: DELETE WHERE id IN (SELECT id ... LIMIT N)
+		subQuery := s.db.WithContext(ctx).Model(&MonitorSnapshot{}).
+			Select("id").
+			Where("recorded_at < ?", cutoff).
+			Limit(batchSize)
+		result := s.db.WithContext(ctx).
+			Where("id IN (?)", subQuery).
+			Delete(&MonitorSnapshot{})
 		if result.Error != nil {
 			return totalDeleted, result.Error
 		}
