@@ -8,11 +8,17 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"lmon/aggregator"
 	"lmon/common"
 	"lmon/config"
 	"lmon/db"
+	"lmon/k8s"
 	"lmon/monitors"
+	"lmon/monitors/k8sevents"
+	"lmon/monitors/k8snodes"
+	"lmon/monitors/k8sservice"
 	"lmon/monitors/mapper"
 	"lmon/web"
 )
@@ -52,12 +58,40 @@ func main() {
 	}
 }
 
+// createK8sClientset creates a Kubernetes clientset if kubernetes is enabled.
+// Returns nil if kubernetes is not enabled or if creation fails (non-fatal).
+func createK8sClientset(cfg *config.Config) kubernetes.Interface {
+	if !cfg.Kubernetes.Enabled {
+		return nil
+	}
+	cs, err := k8s.NewClientset(cfg.Kubernetes.InCluster, cfg.Kubernetes.Kubeconfig)
+	if err != nil {
+		log.Printf("WARNING: Failed to create Kubernetes clientset: %v", err)
+		return nil
+	}
+	log.Printf("Kubernetes clientset created successfully")
+	return cs
+}
+
+// k8sMapperImpls returns mapper Implementations with real K8s providers if a clientset is available.
+func k8sMapperImpls(cs kubernetes.Interface) *mapper.Implementations {
+	if cs == nil {
+		return nil
+	}
+	return &mapper.Implementations{
+		K8sEvents:  k8sevents.NewK8sProvider(cs),
+		K8sNodes:   k8snodes.NewK8sProvider(cs),
+		K8sService: k8sservice.NewK8sProvider(cs),
+	}
+}
+
 func startNode(ctx context.Context, cfg *config.Config, l *config.Loader) {
 	// startup monitoring
 	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, 10*time.Second, nil)
 
-	// Create mapper with allowed restart containers
-	m := mapper.NewMapper(nil)
+	// Create K8s clientset and mapper with allowed restart containers
+	cs := createK8sClientset(cfg)
+	m := mapper.NewMapper(k8sMapperImpls(cs))
 	m.AllowedRestartContainers = cfg.Monitoring.AllowedRestartContainers
 
 	// start server
@@ -135,8 +169,9 @@ func startAggregator(ctx context.Context, cfg *config.Config, l *config.Loader) 
 	// startup monitoring service for local monitors (k8s events, nodes, etc.)
 	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, 10*time.Second, nil)
 
-	// Create mapper
-	m := mapper.NewMapper(nil)
+	// Create K8s clientset and mapper
+	cs := createK8sClientset(cfg)
+	m := mapper.NewMapper(k8sMapperImpls(cs))
 
 	// start server
 	server, err := web.NewServerWithContext(ctx, cfg, l, mon, m)
@@ -161,18 +196,13 @@ func startAggregator(ctx context.Context, cfg *config.Config, l *config.Loader) 
 
 	// Create aggregator provider.
 	var provider aggregator.Provider
-	if cfg.Kubernetes.InCluster {
-		lister, k8sErr := aggregator.NewK8sPodLister(cfg.Kubernetes.Namespace)
-		if k8sErr != nil {
-			log.Printf("WARNING: Failed to create Kubernetes pod lister, falling back to mock provider: %v", k8sErr)
-			provider = aggregator.NewMockProvider(nil, nil)
-		} else {
-			provider = aggregator.NewK8sProvider(lister)
-			log.Printf("Aggregator using Kubernetes provider (namespace=%q, label=%s)",
-				cfg.Kubernetes.Namespace, cfg.Aggregator.NodeLabel)
-		}
+	if cs != nil {
+		lister := aggregator.NewK8sPodLister(cs, cfg.Kubernetes.Namespace)
+		provider = aggregator.NewK8sProvider(lister)
+		log.Printf("Aggregator using Kubernetes provider (namespace=%q, label=%s)",
+			cfg.Kubernetes.Namespace, cfg.Aggregator.NodeLabel)
 	} else {
-		log.Printf("Aggregator not running in-cluster; using mock provider (no node discovery)")
+		log.Printf("Aggregator: no Kubernetes clientset; using mock provider (no node discovery)")
 		provider = aggregator.NewMockProvider(nil, nil)
 	}
 
