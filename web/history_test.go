@@ -73,16 +73,6 @@ func TestHistoryPageWithNoopStore(t *testing.T) {
 	assert.Contains(t, body, "Database is not configured")
 }
 
-// newTestStoreForWeb creates an in-memory SQLite store for web tests.
-// This is a helper that creates a store directly without going through NewPostgresStore.
-func newTestStoreForWeb(t *testing.T) db.Store {
-	t.Helper()
-	// Use the noop store for basic unavailable tests.
-	// For store-with-data tests, we need a real in-memory store.
-	// Since PostgresStore fields are unexported, we'll use a mock.
-	return &mockStore{}
-}
-
 // mockStore implements db.Store for web handler testing.
 type mockStore struct {
 	snapshots []db.MonitorSnapshot

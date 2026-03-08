@@ -789,6 +789,7 @@ func TestAddK8sEventsMonitor(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s, _ := StartTestServer(ctx, t, "")
+	s.config.Kubernetes.Enabled = true
 	s.Start(ctx)
 
 	data := config.K8sEventsConfig{
@@ -814,6 +815,7 @@ func TestDeleteK8sEventsMonitor(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s, _ := StartTestServer(ctx, t, "")
+	s.config.Kubernetes.Enabled = true
 	s.Start(ctx)
 
 	data := config.K8sEventsConfig{Namespaces: "default", Threshold: 5}
@@ -832,6 +834,7 @@ func TestAddK8sNodesMonitor(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s, _ := StartTestServer(ctx, t, "")
+	s.config.Kubernetes.Enabled = true
 	s.Start(ctx)
 
 	data := config.K8sNodesConfig{
@@ -853,6 +856,7 @@ func TestDeleteK8sNodesMonitor(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s, _ := StartTestServer(ctx, t, "")
+	s.config.Kubernetes.Enabled = true
 	s.Start(ctx)
 
 	data := config.K8sNodesConfig{Icon: "server"}
@@ -871,6 +875,7 @@ func TestAddK8sServiceMonitor(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s, _ := StartTestServer(ctx, t, "")
+	s.config.Kubernetes.Enabled = true
 	s.Start(ctx)
 
 	data := config.K8sServiceConfig{
@@ -898,6 +903,7 @@ func TestDeleteK8sServiceMonitor(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s, _ := StartTestServer(ctx, t, "")
+	s.config.Kubernetes.Enabled = true
 	s.Start(ctx)
 
 	data := config.K8sServiceConfig{Service: "svc", Threshold: 80}

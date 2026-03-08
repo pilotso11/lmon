@@ -18,13 +18,20 @@ func GenerateSparklineSVG(snapshots []db.MonitorSnapshot) template.HTML {
 
 	width := 100
 	height := 20
-	barWidth := float64(width) / float64(len(snapshots))
+
+	// Cap displayed snapshots to SVG width to prevent bars overflowing
+	displayed := snapshots
+	if len(displayed) > width {
+		displayed = displayed[len(displayed)-width:]
+	}
+
+	barWidth := float64(width) / float64(len(displayed))
 	if barWidth < 1 {
 		barWidth = 1
 	}
 
 	var bars strings.Builder
-	for i, snap := range snapshots {
+	for i, snap := range displayed {
 		var barHeight float64
 		var color string
 		switch snap.Status {
@@ -43,7 +50,7 @@ func GenerateSparklineSVG(snapshots []db.MonitorSnapshot) template.HTML {
 		}
 		x := float64(i) * barWidth
 		y := float64(height) - barHeight
-		bars.WriteString(fmt.Sprintf(`<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="%s"/>`, x, y, barWidth, barHeight, color))
+		fmt.Fprintf(&bars, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="%s"/>`, x, y, barWidth, barHeight, color)
 	}
 
 	svg := fmt.Sprintf(`<svg width="%d" height="%d" xmlns="http://www.w3.org/2000/svg">%s</svg>`, width, height, bars.String())

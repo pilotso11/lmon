@@ -62,9 +62,9 @@ type Aggregator struct {
 	metricsPath    string
 	scrapeInterval time.Duration
 	push           PushFunc
-	cancel         context.CancelFunc
-	wg             sync.WaitGroup
-	started        bool
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	startOnce sync.Once
 }
 
 // NewAggregator creates a new Aggregator with the given configuration.
@@ -87,15 +87,13 @@ func NewAggregator(provider Provider, nodeLabel string, nodePort int, metricsPat
 }
 
 // Start begins the aggregator's discovery and scrape loop.
-// Safe to call only once; subsequent calls are no-ops.
+// Safe to call only once; subsequent calls are no-ops. Thread-safe.
 func (a *Aggregator) Start(ctx context.Context) {
-	if a.started {
-		return
-	}
-	a.started = true
-	ctx, a.cancel = context.WithCancel(ctx)
-	a.wg.Add(1)
-	go a.loop(ctx)
+	a.startOnce.Do(func() {
+		ctx, a.cancel = context.WithCancel(ctx)
+		a.wg.Add(1)
+		go a.loop(ctx)
+	})
 }
 
 // Stop stops the aggregator and waits for the loop to finish.

@@ -944,6 +944,11 @@ func (s *Server) handleAddK8sEventsMonitor(ctx context.Context) http.HandlerFunc
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
+		if !s.config.Kubernetes.Enabled {
+			http.Error(w, "Kubernetes monitoring is not enabled", http.StatusBadRequest)
+			return
+		}
+
 		id := r.PathValue("id")
 		var cfg config.K8sEventsConfig
 		ok := s.unmarshallBody(w, r, &cfg)
@@ -972,6 +977,11 @@ func (s *Server) handleAddK8sNodesMonitor(ctx context.Context) http.HandlerFunc 
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
+		if !s.config.Kubernetes.Enabled {
+			http.Error(w, "Kubernetes monitoring is not enabled", http.StatusBadRequest)
+			return
+		}
+
 		id := r.PathValue("id")
 		var cfg config.K8sNodesConfig
 		ok := s.unmarshallBody(w, r, &cfg)
@@ -999,6 +1009,11 @@ func (s *Server) handleAddK8sServiceMonitor(ctx context.Context) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+
+		if !s.config.Kubernetes.Enabled {
+			http.Error(w, "Kubernetes monitoring is not enabled", http.StatusBadRequest)
+			return
+		}
 
 		id := r.PathValue("id")
 		var cfg config.K8sServiceConfig

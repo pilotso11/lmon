@@ -110,8 +110,11 @@ func (s *Server) handleGetSummary(w http.ResponseWriter, r *http.Request) {
 // Uses map[string]any for template data to match existing template conventions.
 // Route: GET /history
 func (s *Server) handleHistoryPage(w http.ResponseWriter, r *http.Request) {
+	// Copy config values under lock, then release before DB query and template rendering
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	title := s.config.Monitoring.System.Title
+	store := s.store
+	s.mu.Unlock()
 
 	tmpl, err := getHistoryTemplate()
 	if err != nil {
@@ -120,17 +123,16 @@ func (s *Server) handleHistoryPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbAvailable := s.store != nil && s.store.IsAvailable()
+	dbAvailable := store != nil && store.IsAvailable()
 	node := r.URL.Query().Get("node")
 	monitor := r.URL.Query().Get("monitor")
 
 	data := map[string]any{
-		"title":               s.config.Monitoring.System.Title,
+		"title":               title,
 		"ActivePage":          "history",
 		"DBAvailable":         dbAvailable,
 		"Node":                node,
 		"Monitor":             monitor,
-		"Config":              s.config,
 		"UpdateAt":            time.Now().Format("2006-01-02 15:04:05Z"),
 		"default_health_icon": "",
 		"default_disk_icon":   "",
@@ -153,7 +155,7 @@ func (s *Server) handleHistoryPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		snapshots, queryErr := s.store.GetHistory(r.Context(), node, monitor, from, to, 200)
+		snapshots, queryErr := store.GetHistory(r.Context(), node, monitor, from, to, 200)
 		if queryErr != nil {
 			log.Printf("handleHistoryPage query error: %v", queryErr)
 		} else {

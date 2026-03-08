@@ -71,8 +71,8 @@ func TestGenerateSparklineSVG_ManyPoints(t *testing.T) {
 	svgStr := string(svg)
 	assert.Contains(t, svgStr, "<svg")
 	assert.Contains(t, svgStr, "</svg>")
-	// Bar width should be at minimum 1 even with many points
-	assert.Equal(t, 200, strings.Count(svgStr, "<rect"), "should have 200 bars")
+	// Sparkline caps displayed snapshots to SVG width (100), so only the last 100 are shown
+	assert.Equal(t, 100, strings.Count(svgStr, "<rect"), "should have 100 bars (capped to SVG width)")
 }
 
 // TestGenerateSparklineSVG_SVGDimensions verifies the SVG has correct dimensions.

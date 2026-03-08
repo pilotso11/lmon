@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync/atomic"
 	"time"
@@ -175,11 +176,13 @@ func (s *PostgresStore) CompactOlderThan(ctx context.Context, olderThan, notBefo
 			SELECT MAX(id) FROM monitor_snapshots
 			WHERE recorded_at >= ? AND recorded_at < ?
 			GROUP BY node, monitor_id, CAST(strftime('%s', recorded_at) AS INTEGER) / ?`
-	default: // postgres
+	case "postgres":
 		keepQuery = `
 			SELECT MAX(id) FROM monitor_snapshots
 			WHERE recorded_at >= ? AND recorded_at < ?
 			GROUP BY node, monitor_id, (EXTRACT(EPOCH FROM recorded_at)::bigint / ?)`
+	default:
+		return 0, fmt.Errorf("unsupported dialect for compaction: %s", s.db.Dialector.Name())
 	}
 
 	// Step 1: Find the IDs to keep (max ID per bucket group)

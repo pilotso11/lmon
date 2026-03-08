@@ -106,11 +106,11 @@ func (m Monitor) Check(ctx context.Context) monitors.Result {
 		}
 	}
 
-	// Deduplicate by pod+reason
+	// Deduplicate by namespace/pod+reason
 	seen := make(map[string]bool)
 	unique := make([]PodEvent, 0)
 	for _, e := range events {
-		key := e.Pod + ":" + e.Reason
+		key := e.Namespace + "/" + e.Pod + ":" + e.Reason
 		if !seen[key] {
 			seen[key] = true
 			unique = append(unique, e)

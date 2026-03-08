@@ -30,8 +30,11 @@ func (s *Server) handleAggregator(agg *aggregator.Aggregator) http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, _ *http.Request) {
+		// Copy config values under lock, then release before I/O
 		s.mu.Lock()
-		defer s.mu.Unlock()
+		title := s.config.Monitoring.System.Title
+		interval := s.config.Monitoring.Interval
+		s.mu.Unlock()
 
 		results := agg.Results()
 		nodes := make([]AggregatorNodeData, 0, len(results))
@@ -55,9 +58,9 @@ func (s *Server) handleAggregator(agg *aggregator.Aggregator) http.HandlerFunc {
 		})
 
 		data := map[string]any{
-			"title":            s.config.Monitoring.System.Title,
-			"dashboard_title":  s.config.Monitoring.System.Title,
-			"refresh_interval": s.config.Monitoring.Interval,
+			"title":            title,
+			"dashboard_title":  title,
+			"refresh_interval": interval,
 			"Nodes":            nodes,
 			"ActivePage":       "aggregator",
 		}

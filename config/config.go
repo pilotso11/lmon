@@ -303,16 +303,16 @@ func (l *Loader) Load() (*Config, error) {
 	}
 
 	// Apply defaults for new config sections (not via viper to avoid polluting saved files)
-	applyKubernetesDefaults(&config.Kubernetes)
+	applyKubernetesDefaults(&config.Kubernetes, l.v)
 	applyAggregatorDefaults(&config.Aggregator)
 	applyDatabaseDefaults(&config.Database)
 
 	return &config, nil
 }
 
-func applyKubernetesDefaults(cfg *KubernetesConfig) {
-	// InCluster defaults to true when no explicit kubeconfig is provided
-	if cfg.Kubeconfig == "" {
+func applyKubernetesDefaults(cfg *KubernetesConfig, v *viper.Viper) {
+	// InCluster defaults to true only when neither in_cluster nor kubeconfig was explicitly set
+	if !v.IsSet("kubernetes.in_cluster") && cfg.Kubeconfig == "" {
 		cfg.InCluster = true
 	}
 }
