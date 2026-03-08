@@ -19,7 +19,7 @@ type RetentionManager struct {
 	compactInterval int           // bucket size in minutes (e.g. 15)
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
-	started         bool
+	startOnce       sync.Once
 }
 
 // NewRetentionManager creates a new RetentionManager.
@@ -40,15 +40,13 @@ func NewRetentionManager(store Store, retentionDays, batchSize int, pruneInterva
 }
 
 // Start begins the periodic purge loop in a background goroutine.
-// Safe to call only once; subsequent calls are no-ops.
+// Safe to call only once; subsequent calls are no-ops. Thread-safe.
 func (r *RetentionManager) Start(ctx context.Context) {
-	if r.started {
-		return
-	}
-	r.started = true
-	ctx, r.cancel = context.WithCancel(ctx)
-	r.wg.Add(1)
-	go r.loop(ctx)
+	r.startOnce.Do(func() {
+		ctx, r.cancel = context.WithCancel(ctx)
+		r.wg.Add(1)
+		go r.loop(ctx)
+	})
 }
 
 // loop runs the purge cycle at the configured interval.

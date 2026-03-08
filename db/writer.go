@@ -18,6 +18,7 @@ type BufferedWriter struct {
 	lastWrite     time.Time
 	mu            sync.Mutex
 	closeOnce     sync.Once
+	closed        bool // guarded by mu; prevents send on closed channel
 }
 
 // NewBufferedWriter creates a new BufferedWriter with the given buffer size and write interval.
@@ -36,18 +37,22 @@ func NewBufferedWriter(store Store, bufferSize int, writeInterval time.Duration)
 
 // Write pushes snapshots to the channel in a non-blocking fashion.
 // If the write interval has not elapsed since the last accepted write, the snapshots are dropped.
-// If the channel is full, the snapshots are silently dropped.
+// If the channel is full or closed, the snapshots are silently dropped.
 func (w *BufferedWriter) Write(snapshots []MonitorSnapshot) {
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return
+	}
 	// Check write interval
 	if w.writeInterval > 0 {
-		w.mu.Lock()
 		if time.Since(w.lastWrite) < w.writeInterval {
 			w.mu.Unlock()
 			return
 		}
 		w.lastWrite = time.Now()
-		w.mu.Unlock()
 	}
+	w.mu.Unlock()
 
 	select {
 	case w.ch <- snapshots:
@@ -68,10 +73,13 @@ func (w *BufferedWriter) flushLoop() {
 	}
 }
 
-// Close closes the channel and waits for all pending writes to complete.
-// Safe to call multiple times.
+// Close marks the writer as closed, closes the channel, and waits for all
+// pending writes to complete. Safe to call multiple times.
 func (w *BufferedWriter) Close() {
 	w.closeOnce.Do(func() {
+		w.mu.Lock()
+		w.closed = true
+		w.mu.Unlock()
 		close(w.ch)
 	})
 	w.wg.Wait()

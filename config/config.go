@@ -330,20 +330,23 @@ func applyAggregatorDefaults(cfg *AggregatorConfig) {
 }
 
 func applyDatabaseDefaults(cfg *DatabaseConfig) {
-	if cfg.RetentionDays == 0 {
+	if cfg.RetentionDays <= 0 {
 		cfg.RetentionDays = 7
 	}
-	if cfg.BatchSize == 0 {
+	if cfg.BatchSize <= 0 {
 		cfg.BatchSize = 1000
 	}
-	// WriteInterval 0 means "every check" - valid default, no action needed
-	if cfg.PruneInterval == 0 {
+	// WriteInterval 0 means "every check" - valid default; only fix negative
+	if cfg.WriteInterval < 0 {
+		cfg.WriteInterval = 0
+	}
+	if cfg.PruneInterval <= 0 {
 		cfg.PruneInterval = 60
 	}
-	if cfg.CompactAfter == 0 {
+	if cfg.CompactAfter <= 0 {
 		cfg.CompactAfter = 180
 	}
-	if cfg.CompactInterval == 0 {
+	if cfg.CompactInterval <= 0 {
 		cfg.CompactInterval = 15
 	}
 }

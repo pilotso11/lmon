@@ -113,18 +113,20 @@ func (w *customResponseWriter) Header() http.Header {
 // Server encapsulates the HTTP server, configuration, and monitoring services.
 // It manages the lifecycle of the web server, routes, and provides thread-safe access to configuration.
 type Server struct {
-	mu         sync.Mutex        // Mutex to protect concurrent access to config.
-	config     *config.Config    // Application configuration.
-	loader     *config.Loader    // Configuration loader for persisting config changes.
-	monitor    *monitors.Service // Monitoring service for system and custom checks.
-	httpServer *http.Server      // Underlying HTTP server instance.
-	ctx        context.Context   // Context for server lifecycle and cancellation.
-	router     *http.ServeMux    // HTTP request router.
-	ServerUrl  string            // URL where the server is accessible.
-	mapper     mapper.Mapper     // Mapper for creating monitor implementations from config.
-	listener   net.Listener      // Network listener for incoming connections.
-	store      db.Store          // Optional database store for metrics persistence.
-	writer     *db.BufferedWriter // Optional buffered writer for async DB writes.
+	mu              sync.Mutex        // Mutex to protect concurrent access to config.
+	config          *config.Config    // Application configuration.
+	loader          *config.Loader    // Configuration loader for persisting config changes.
+	monitor         *monitors.Service // Monitoring service for system and custom checks.
+	httpServer      *http.Server      // Underlying HTTP server instance.
+	ctx             context.Context   // Context for server lifecycle and cancellation.
+	router          *http.ServeMux    // HTTP request router.
+	ServerUrl       string            // URL where the server is accessible.
+	mapper          mapper.Mapper     // Mapper for creating monitor implementations from config.
+	listener        net.Listener      // Network listener for incoming connections.
+	store           db.Store          // Optional database store for metrics persistence.
+	writer          *db.BufferedWriter // Optional buffered writer for async DB writes.
+	snapshotStarted bool              // Guards against multiple startSnapshotWriter calls.
+	wg              sync.WaitGroup    // Tracks background goroutines for clean shutdown.
 }
 
 // NewServerWithContext creates a new Server instance using the provided context, configuration,
@@ -226,20 +228,29 @@ func (s *Server) Start(ctx context.Context) {
 
 // startSnapshotWriter starts a background goroutine that periodically writes
 // monitor results to the database via the buffered writer.
+// Safe to call only once; subsequent calls are no-ops.
 func (s *Server) startSnapshotWriter(ctx context.Context) {
 	s.mu.Lock()
-	writer := s.writer
-	interval := s.config.Monitoring.Interval
-	s.mu.Unlock()
-
-	if writer == nil {
+	if s.snapshotStarted {
+		s.mu.Unlock()
 		return
 	}
+	writer := s.writer
+	interval := s.config.Monitoring.Interval
+	if writer == nil {
+		s.mu.Unlock()
+		return
+	}
+	s.snapshotStarted = true
+	s.mu.Unlock()
+
 	if interval <= 0 {
 		interval = 60
 	}
 
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		hostname, _ := os.Hostname()
 		ticker := time.NewTicker(time.Duration(interval) * time.Second)
 		defer ticker.Stop()
@@ -277,7 +288,8 @@ func resultsToSnapshots(node string, results map[string]monitors.Result) []db.Mo
 	return snapshots
 }
 
-// Stop gracefully shuts down the web server, waiting up to 5 seconds for active connections to close.
+// Stop gracefully shuts down the web server, waits for background goroutines
+// (including the snapshot writer) to finish, then returns.
 // Returns an error if shutdown fails.
 func (s *Server) Stop() error {
 	if s.httpServer != nil {
@@ -285,7 +297,10 @@ func (s *Server) Stop() error {
 		// Create a timeout context for shutdown
 		ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
 		defer cancel()
-		return s.httpServer.Shutdown(ctx)
+		err := s.httpServer.Shutdown(ctx)
+		// Wait for background goroutines (snapshot writer) to exit
+		s.wg.Wait()
+		return err
 	}
 	return nil
 }

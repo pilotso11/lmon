@@ -160,37 +160,33 @@ func (s *PostgresStore) CompactOlderThan(ctx context.Context, olderThan, notBefo
 	if !s.available.Load() {
 		return 0, nil
 	}
-	if bucketMinutes <= 0 {
+	if bucketMinutes <= 0 || batchSize <= 0 {
 		return 0, nil
 	}
 
 	bucketSeconds := bucketMinutes * 60
 
-	// Find IDs to keep: the max(id) per (node, monitor_id, time_bucket).
-	// time_bucket = cast(strftime('%s', recorded_at) as integer) / bucketSeconds  (SQLite)
-	// time_bucket = extract(epoch from recorded_at)::bigint / bucketSeconds       (PostgreSQL)
-	// GORM raw SQL approach that works with both via unixepoch or epoch extraction:
-	// We use a portable approach: select IDs to DELETE rather than IDs to KEEP.
+	// Select the correct SQL for epoch extraction based on the database dialect.
+	// SQLite uses strftime('%s', ...), PostgreSQL uses EXTRACT(EPOCH FROM ...).
+	var keepQuery string
+	switch s.db.Dialector.Name() {
+	case "sqlite":
+		keepQuery = `
+			SELECT MAX(id) FROM monitor_snapshots
+			WHERE recorded_at >= ? AND recorded_at < ?
+			GROUP BY node, monitor_id, CAST(strftime('%s', recorded_at) AS INTEGER) / ?`
+	default: // postgres
+		keepQuery = `
+			SELECT MAX(id) FROM monitor_snapshots
+			WHERE recorded_at >= ? AND recorded_at < ?
+			GROUP BY node, monitor_id, (EXTRACT(EPOCH FROM recorded_at)::bigint / ?)`
+	}
 
 	// Step 1: Find the IDs to keep (max ID per bucket group)
-	keepQuery := `
-		SELECT MAX(id) FROM monitor_snapshots
-		WHERE recorded_at >= ? AND recorded_at < ?
-		GROUP BY node, monitor_id, CAST(strftime('%s', recorded_at) AS INTEGER) / ?`
-
-	// Try SQLite-style first; if it fails, fall back to PostgreSQL-style
 	var keepIDs []uint
 	err := s.db.WithContext(ctx).Raw(keepQuery, notBefore, olderThan, bucketSeconds).Scan(&keepIDs).Error
 	if err != nil {
-		// Fallback to PostgreSQL syntax
-		keepQuery = `
-			SELECT MAX(id) FROM monitor_snapshots
-			WHERE recorded_at >= $1 AND recorded_at < $2
-			GROUP BY node, monitor_id, (EXTRACT(EPOCH FROM recorded_at)::bigint / $3)`
-		err = s.db.WithContext(ctx).Raw(keepQuery, notBefore, olderThan, bucketSeconds).Scan(&keepIDs).Error
-		if err != nil {
-			return 0, err
-		}
+		return 0, err
 	}
 
 	if len(keepIDs) == 0 {

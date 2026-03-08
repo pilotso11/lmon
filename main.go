@@ -107,11 +107,8 @@ func setupDatabase(ctx context.Context, cfg *config.Config) (db.Store, *db.Buffe
 		return nil, nil, nil
 	}
 
-	store, err := db.NewPostgresStore(ctx, cfg.Database.URL)
-	if err != nil {
-		log.Printf("Database setup failed: %v", err)
-		return nil, nil, nil
-	}
+	// NewPostgresStore handles connection failure gracefully (non-fatal, store.IsAvailable() == false).
+	store, _ := db.NewPostgresStore(ctx, cfg.Database.URL)
 
 	writeInterval := time.Duration(cfg.Database.WriteInterval) * time.Second
 	writer := db.NewBufferedWriter(store, cfg.Database.BatchSize, writeInterval)
