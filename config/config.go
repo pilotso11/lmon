@@ -143,11 +143,13 @@ type AggregatorConfig struct {
 
 // DatabaseConfig represents optional PostgreSQL metrics recording configuration
 type DatabaseConfig struct {
-	URL           string
-	RetentionDays int `mapstructure:"retention_days"`
-	BatchSize     int `mapstructure:"batch_size"`
-	WriteInterval int `mapstructure:"write_interval"` // seconds between DB writes, 0 = every check
-	PruneInterval int `mapstructure:"prune_interval"` // minutes between prune runs, default 60
+	URL             string
+	RetentionDays   int `mapstructure:"retention_days"`
+	BatchSize       int `mapstructure:"batch_size"`
+	WriteInterval   int `mapstructure:"write_interval"`   // seconds between DB writes, 0 = every check
+	PruneInterval   int `mapstructure:"prune_interval"`   // minutes between prune runs, default 60
+	CompactAfter    int `mapstructure:"compact_after"`    // minutes of full-res data to keep (default: 180 = 3h)
+	CompactInterval int `mapstructure:"compact_interval"` // target bucket size in minutes for compaction (default: 15)
 }
 
 // K8sEventsConfig represents Kubernetes events monitoring configuration
@@ -322,7 +324,7 @@ func applyAggregatorDefaults(cfg *AggregatorConfig) {
 	if cfg.NodeMetricsPath == "" {
 		cfg.NodeMetricsPath = "/metrics"
 	}
-	if cfg.ScrapeInterval == 0 {
+	if cfg.ScrapeInterval <= 0 {
 		cfg.ScrapeInterval = 30
 	}
 }
@@ -337,6 +339,12 @@ func applyDatabaseDefaults(cfg *DatabaseConfig) {
 	// WriteInterval 0 means "every check" - valid default, no action needed
 	if cfg.PruneInterval == 0 {
 		cfg.PruneInterval = 60
+	}
+	if cfg.CompactAfter == 0 {
+		cfg.CompactAfter = 180
+	}
+	if cfg.CompactInterval == 0 {
+		cfg.CompactInterval = 15
 	}
 }
 
@@ -470,6 +478,8 @@ func (l *Loader) Save(config *Config) error {
 		l.v.Set("database.batch_size", config.Database.BatchSize)
 		l.v.Set("database.write_interval", config.Database.WriteInterval)
 		l.v.Set("database.prune_interval", config.Database.PruneInterval)
+		l.v.Set("database.compact_after", config.Database.CompactAfter)
+		l.v.Set("database.compact_interval", config.Database.CompactInterval)
 	}
 
 	// Save K8s monitors

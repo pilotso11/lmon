@@ -211,7 +211,11 @@ database:
   batch_size: 1000        # Rows per purge batch (default: 1000)
   write_interval: 0       # Seconds between DB writes, 0 = every check (default: 0)
   prune_interval: 60      # Minutes between retention purge runs (default: 60)
+  compact_after: 180      # Minutes of full-resolution data to keep (default: 180 = 3h)
+  compact_interval: 15    # Downsampled bucket size in minutes (default: 15)
 ```
+
+Data older than `compact_after` minutes is downsampled to one snapshot per `compact_interval`-minute bucket per monitor. Data older than `retention_days` is deleted entirely.
 
 The database is always optional. When unavailable:
 - The `/history` page shows a friendly message

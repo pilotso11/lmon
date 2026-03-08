@@ -11,6 +11,7 @@ import (
 	"lmon/aggregator"
 	"lmon/common"
 	"lmon/config"
+	"lmon/db"
 	"lmon/monitors"
 	"lmon/monitors/mapper"
 	"lmon/web"
@@ -65,6 +66,15 @@ func startNode(ctx context.Context, cfg *config.Config, l *config.Loader) {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 
+	// Wire up database if configured
+	store, writer, retention := setupDatabase(ctx, cfg)
+	if store != nil {
+		server.SetStore(store)
+	}
+	if writer != nil {
+		server.SetWriter(writer)
+	}
+
 	// apply config
 	err = server.SetConfig(ctx, cfg.Monitoring)
 	if err != nil {
@@ -77,8 +87,49 @@ func startNode(ctx context.Context, cfg *config.Config, l *config.Loader) {
 	<-ctx.Done()
 
 	_ = server.Stop()
+	if retention != nil {
+		retention.Stop()
+	}
+	if writer != nil {
+		writer.Close()
+	}
+	if store != nil {
+		_ = store.Close()
+	}
 
 	log.Println("Shutdown complete")
+}
+
+// setupDatabase creates the database store, buffered writer, and retention manager
+// if a database URL is configured. Returns nil values if no database is configured.
+func setupDatabase(ctx context.Context, cfg *config.Config) (db.Store, *db.BufferedWriter, *db.RetentionManager) {
+	if cfg.Database.URL == "" {
+		return nil, nil, nil
+	}
+
+	store, err := db.NewPostgresStore(ctx, cfg.Database.URL)
+	if err != nil {
+		log.Printf("Database setup failed: %v", err)
+		return nil, nil, nil
+	}
+
+	writeInterval := time.Duration(cfg.Database.WriteInterval) * time.Second
+	writer := db.NewBufferedWriter(store, cfg.Database.BatchSize, writeInterval)
+
+	retention := db.NewRetentionManager(
+		store,
+		cfg.Database.RetentionDays,
+		cfg.Database.BatchSize,
+		cfg.Database.PruneInterval,
+		cfg.Database.CompactAfter,
+		cfg.Database.CompactInterval,
+	)
+	retention.Start(ctx)
+
+	log.Printf("Database persistence enabled (retention=%dd, compact_after=%dm, compact_interval=%dm)",
+		cfg.Database.RetentionDays, cfg.Database.CompactAfter, cfg.Database.CompactInterval)
+
+	return store, writer, retention
 }
 
 func startAggregator(ctx context.Context, cfg *config.Config, l *config.Loader) {
@@ -94,6 +145,15 @@ func startAggregator(ctx context.Context, cfg *config.Config, l *config.Loader) 
 	server, err := web.NewServerWithContext(ctx, cfg, l, mon, m)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Wire up database if configured
+	store, writer, retention := setupDatabase(ctx, cfg)
+	if store != nil {
+		server.SetStore(store)
+	}
+	if writer != nil {
+		server.SetWriter(writer)
 	}
 
 	// apply config (will include k8s monitors if kubernetes.enabled)
@@ -130,6 +190,15 @@ func startAggregator(ctx context.Context, cfg *config.Config, l *config.Loader) 
 
 	agg.Stop()
 	_ = server.Stop()
+	if retention != nil {
+		retention.Stop()
+	}
+	if writer != nil {
+		writer.Close()
+	}
+	if store != nil {
+		_ = store.Close()
+	}
 
 	log.Println("Aggregator shutdown complete")
 }

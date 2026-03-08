@@ -15,6 +15,7 @@ import (
 	"go.uber.org/goleak"
 
 	"lmon/config"
+	"lmon/db"
 	"lmon/monitors"
 )
 
@@ -908,6 +909,65 @@ func TestDeleteK8sServiceMonitor(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "OK\n", body)
 	assert.Equal(t, 0, len(s.config.Monitoring.K8sService))
+}
+
+// TestResultsToSnapshots verifies conversion from monitor results to DB snapshots.
+func TestResultsToSnapshots(t *testing.T) {
+	results := map[string]monitors.Result{
+		"disk_root": {
+			Status:      monitors.RAGGreen,
+			Value:       "42%",
+			Group:       "disk",
+			DisplayName: "Root",
+		},
+		"system_cpu": {
+			Status:      monitors.RAGAmber,
+			Value:       "85.5%",
+			Group:       "system",
+			DisplayName: "CPU",
+		},
+		"ping_test": {
+			Status:      monitors.RAGRed,
+			Value:       "timeout",
+			Group:       "ping",
+			DisplayName: "Test",
+		},
+	}
+
+	snapshots := resultsToSnapshots("test-node", results)
+	assert.Len(t, snapshots, 3)
+
+	// Build a map for easy lookup
+	byID := make(map[string]db.MonitorSnapshot)
+	for _, s := range snapshots {
+		byID[s.MonitorID] = s
+	}
+
+	assert.Equal(t, "test-node", byID["disk_root"].Node)
+	assert.Equal(t, "Green", byID["disk_root"].Status)
+	assert.Equal(t, "disk", byID["disk_root"].MonitorType)
+	assert.NotNil(t, byID["disk_root"].Value, "numeric value should be parsed")
+	assert.InDelta(t, 42.0, *byID["disk_root"].Value, 0.01)
+
+	assert.Equal(t, "Amber", byID["system_cpu"].Status)
+	assert.NotNil(t, byID["system_cpu"].Value)
+	assert.InDelta(t, 85.5, *byID["system_cpu"].Value, 0.01)
+
+	assert.Equal(t, "Red", byID["ping_test"].Status)
+	assert.Nil(t, byID["ping_test"].Value, "non-numeric value should be nil")
+	assert.Equal(t, "timeout", byID["ping_test"].Message)
+}
+
+// TestStartSnapshotWriterNilWriter verifies that startSnapshotWriter is a no-op with nil writer.
+func TestStartSnapshotWriterNilWriter(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+
+	// writer is nil by default, so this should not panic
+	assert.NotPanics(t, func() {
+		s.startSnapshotWriter(ctx)
+	})
 }
 
 // TestDeleteMonitorInvalidType verifies that deleting with an unknown type returns 400.

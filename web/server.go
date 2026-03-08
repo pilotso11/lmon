@@ -14,8 +14,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -211,6 +213,8 @@ func (s *Server) Start(ctx context.Context) {
 		_ = s.httpServer.Serve(s.listener)
 	}()
 
+	s.startSnapshotWriter(ctx)
+
 	go func() {
 		<-ctx.Done()
 		log.Printf("Webserver stopping")
@@ -218,6 +222,59 @@ func (s *Server) Start(ctx context.Context) {
 			log.Printf("Error stopping webserver: %v", err)
 		}
 	}()
+}
+
+// startSnapshotWriter starts a background goroutine that periodically writes
+// monitor results to the database via the buffered writer.
+func (s *Server) startSnapshotWriter(ctx context.Context) {
+	s.mu.Lock()
+	writer := s.writer
+	interval := s.config.Monitoring.Interval
+	s.mu.Unlock()
+
+	if writer == nil {
+		return
+	}
+	if interval <= 0 {
+		interval = 60
+	}
+
+	go func() {
+		hostname, _ := os.Hostname()
+		ticker := time.NewTicker(time.Duration(interval) * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				results := s.monitor.Results()
+				writer.Write(resultsToSnapshots(hostname, results))
+			}
+		}
+	}()
+}
+
+// resultsToSnapshots converts monitor results to database snapshots.
+func resultsToSnapshots(node string, results map[string]monitors.Result) []db.MonitorSnapshot {
+	now := time.Now().UTC()
+	snapshots := make([]db.MonitorSnapshot, 0, len(results))
+	for id, r := range results {
+		var val *float64
+		if v, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSuffix(r.Value, "%"), " ms"), 64); err == nil {
+			val = &v
+		}
+		snapshots = append(snapshots, db.MonitorSnapshot{
+			RecordedAt:  now,
+			Node:        node,
+			MonitorID:   id,
+			MonitorType: r.Group,
+			Status:      r.Status.String(),
+			Value:       val,
+			Message:     r.Value,
+		})
+	}
+	return snapshots
 }
 
 // Stop gracefully shuts down the web server, waiting up to 5 seconds for active connections to close.

@@ -393,6 +393,8 @@ database:
   retention_days: 7
   batch_size: 1000
   prune_interval: 60
+  compact_after: 180      # Minutes of full-resolution data to keep (default: 180 = 3h)
+  compact_interval: 15    # Downsampled bucket size in minutes (default: 15)
 ```
 
 ### Quick PostgreSQL Deployment

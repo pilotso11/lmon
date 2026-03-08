@@ -509,6 +509,8 @@ func TestDatabaseConfigLoad(t *testing.T) {
 	assert.Equal(t, 500, cfg.Database.BatchSize)
 	assert.Equal(t, 10, cfg.Database.WriteInterval)
 	assert.Equal(t, 30, cfg.Database.PruneInterval)
+	assert.Equal(t, 180, cfg.Database.CompactAfter)
+	assert.Equal(t, 15, cfg.Database.CompactInterval)
 }
 
 func TestDatabaseConfigSave(t *testing.T) {
@@ -520,11 +522,13 @@ func TestDatabaseConfigSave(t *testing.T) {
 	require.NoError(t, err, "no error loading config")
 
 	cfg.Database = DatabaseConfig{
-		URL:           "postgres://user:pass@localhost:5432/lmon",
-		RetentionDays: 14,
-		BatchSize:     500,
-		WriteInterval: 10,
-		PruneInterval: 30,
+		URL:             "postgres://user:pass@localhost:5432/lmon",
+		RetentionDays:   14,
+		BatchSize:       500,
+		WriteInterval:   10,
+		PruneInterval:   30,
+		CompactAfter:    180,
+		CompactInterval: 15,
 	}
 
 	saveAndCheckContent(t, loader, cfg, testFile, sampleDatabaseYaml)

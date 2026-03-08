@@ -34,6 +34,11 @@ func (n *NoopStore) PurgeOlderThan(_ context.Context, _ time.Time, _ int) (int64
 	return 0, nil
 }
 
+// CompactOlderThan is a no-op that always returns 0 and nil.
+func (n *NoopStore) CompactOlderThan(_ context.Context, _, _ time.Time, _, _ int) (int64, error) {
+	return 0, nil
+}
+
 // Close is a no-op that always returns nil.
 func (n *NoopStore) Close() error {
 	return nil

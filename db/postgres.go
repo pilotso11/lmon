@@ -152,6 +152,76 @@ func (s *PostgresStore) PurgeOlderThan(ctx context.Context, cutoff time.Time, ba
 	return totalDeleted, nil
 }
 
+// CompactOlderThan thins out snapshots in the window [notBefore, olderThan) by keeping
+// only the latest snapshot per (node, monitor_id, time_bucket) and deleting the rest.
+// Bucketing uses integer division on unix epoch seconds for cross-DB compatibility.
+// Returns the total number of deleted rows.
+func (s *PostgresStore) CompactOlderThan(ctx context.Context, olderThan, notBefore time.Time, bucketMinutes, batchSize int) (int64, error) {
+	if !s.available.Load() {
+		return 0, nil
+	}
+	if bucketMinutes <= 0 {
+		return 0, nil
+	}
+
+	bucketSeconds := bucketMinutes * 60
+
+	// Find IDs to keep: the max(id) per (node, monitor_id, time_bucket).
+	// time_bucket = cast(strftime('%s', recorded_at) as integer) / bucketSeconds  (SQLite)
+	// time_bucket = extract(epoch from recorded_at)::bigint / bucketSeconds       (PostgreSQL)
+	// GORM raw SQL approach that works with both via unixepoch or epoch extraction:
+	// We use a portable approach: select IDs to DELETE rather than IDs to KEEP.
+
+	// Step 1: Find the IDs to keep (max ID per bucket group)
+	keepQuery := `
+		SELECT MAX(id) FROM monitor_snapshots
+		WHERE recorded_at >= ? AND recorded_at < ?
+		GROUP BY node, monitor_id, CAST(strftime('%s', recorded_at) AS INTEGER) / ?`
+
+	// Try SQLite-style first; if it fails, fall back to PostgreSQL-style
+	var keepIDs []uint
+	err := s.db.WithContext(ctx).Raw(keepQuery, notBefore, olderThan, bucketSeconds).Scan(&keepIDs).Error
+	if err != nil {
+		// Fallback to PostgreSQL syntax
+		keepQuery = `
+			SELECT MAX(id) FROM monitor_snapshots
+			WHERE recorded_at >= $1 AND recorded_at < $2
+			GROUP BY node, monitor_id, (EXTRACT(EPOCH FROM recorded_at)::bigint / $3)`
+		err = s.db.WithContext(ctx).Raw(keepQuery, notBefore, olderThan, bucketSeconds).Scan(&keepIDs).Error
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if len(keepIDs) == 0 {
+		return 0, nil
+	}
+
+	// Step 2: Delete rows in the window that are NOT in the keep set, in batches
+	var totalDeleted int64
+	for {
+		if ctx.Err() != nil {
+			return totalDeleted, ctx.Err()
+		}
+		subQuery := s.db.WithContext(ctx).Model(&MonitorSnapshot{}).
+			Select("id").
+			Where("recorded_at >= ? AND recorded_at < ?", notBefore, olderThan).
+			Where("id NOT IN ?", keepIDs).
+			Limit(batchSize)
+		result := s.db.WithContext(ctx).
+			Where("id IN (?)", subQuery).
+			Delete(&MonitorSnapshot{})
+		if result.Error != nil {
+			return totalDeleted, result.Error
+		}
+		totalDeleted += result.RowsAffected
+		if result.RowsAffected < int64(batchSize) {
+			break
+		}
+	}
+	return totalDeleted, nil
+}
+
 // Close closes the underlying database connection.
 func (s *PostgresStore) Close() error {
 	if !s.available.Load() {

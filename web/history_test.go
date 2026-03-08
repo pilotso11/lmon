@@ -110,6 +110,10 @@ func (m *mockStore) PurgeOlderThan(_ context.Context, _ time.Time, _ int) (int64
 	return 0, nil
 }
 
+func (m *mockStore) CompactOlderThan(_ context.Context, _, _ time.Time, _, _ int) (int64, error) {
+	return 0, nil
+}
+
 func (m *mockStore) Close() error {
 	return nil
 }

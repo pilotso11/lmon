@@ -41,6 +41,7 @@ type Store interface {
 	GetHistory(ctx context.Context, node, monitorID string, from, to time.Time, limit int) ([]MonitorSnapshot, error)
 	GetSummary(ctx context.Context, from, to time.Time) ([]MonitorSummary, error)
 	PurgeOlderThan(ctx context.Context, cutoff time.Time, batchSize int) (int64, error)
+	CompactOlderThan(ctx context.Context, olderThan, notBefore time.Time, bucketMinutes, batchSize int) (int64, error)
 	Close() error
 	IsAvailable() bool
 }

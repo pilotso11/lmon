@@ -458,7 +458,7 @@ func TestRetentionManager(t *testing.T) {
 // TestRetentionManagerStop verifies that Stop is safe to call even if Start was not called.
 func TestRetentionManagerStop(t *testing.T) {
 	store := newTestStore(t)
-	rm := NewRetentionManager(store, 7, 1000, 60)
+	rm := NewRetentionManager(store, 7, 1000, 60, 180, 15)
 	// Stop without Start should not panic
 	assert.NotPanics(t, func() {
 		rm.Stop()
@@ -486,6 +486,210 @@ func TestBufferedWriterDoubleClose(t *testing.T) {
 		writer.Close()
 		writer.Close()
 	})
+}
+
+// TestCompactOlderThan verifies that compaction keeps 1 snapshot per bucket and deletes the rest.
+func TestCompactOlderThan(t *testing.T) {
+	store := newTestStore(t)
+	ctx := t.Context()
+
+	// Use a fixed base time aligned to a 15-min boundary to get predictable bucket counts
+	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	// Create snapshots: exactly 120 snapshots, 1 per minute, starting at base
+	// This spans 2h = 8 exact fifteen-minute buckets (12:00-12:14, 12:15-12:29, ..., 13:45-13:59)
+	snapshots := make([]MonitorSnapshot, 0)
+	for i := 0; i < 120; i++ {
+		ts := base.Add(time.Duration(i) * time.Minute)
+		snapshots = append(snapshots, MonitorSnapshot{
+			RecordedAt:  ts,
+			Node:        "node1",
+			MonitorID:   "disk_root",
+			MonitorType: "disk",
+			Status:      "Green",
+			Message:     "ok",
+		})
+	}
+	// Also add a snapshot outside the compact window (should NOT be compacted)
+	recentTS := base.Add(5 * time.Hour)
+	snapshots = append(snapshots, MonitorSnapshot{
+		RecordedAt:  recentTS,
+		Node:        "node1",
+		MonitorID:   "disk_root",
+		MonitorType: "disk",
+		Status:      "Green",
+		Message:     "recent",
+	})
+
+	err := store.SaveSnapshots(ctx, snapshots)
+	require.NoError(t, err)
+
+	// Compact window: [base - 1h, base + 3h) covers all 120 snapshots but not the recent one
+	notBefore := base.Add(-1 * time.Hour)
+	olderThan := base.Add(3 * time.Hour)
+	deleted, err := store.CompactOlderThan(ctx, olderThan, notBefore, 15, 1000)
+	require.NoError(t, err)
+
+	// 120 snapshots in exactly 8 fifteen-minute buckets, keep 1 per bucket = keep 8, delete 112
+	assert.Equal(t, int64(112), deleted, "should delete all but 1 per 15-min bucket")
+
+	// Verify remaining: 8 compacted + 1 recent = 9
+	results, err := store.GetHistory(ctx, "", "", time.Time{}, recentTS.Add(time.Hour), 1000)
+	require.NoError(t, err)
+	assert.Equal(t, 9, len(results), "should have 8 compacted + 1 recent snapshot")
+}
+
+// TestCompactOlderThanMultipleMonitors verifies compaction groups by (node, monitor_id).
+func TestCompactOlderThanMultipleMonitors(t *testing.T) {
+	store := newTestStore(t)
+	ctx := t.Context()
+
+	now := time.Now().UTC()
+	snapshots := make([]MonitorSnapshot, 0)
+	// Two monitors, 30 snapshots each in a single 15-min bucket
+	for i := 0; i < 30; i++ {
+		ts := now.Add(-5*time.Hour + time.Duration(i)*time.Minute)
+		snapshots = append(snapshots, MonitorSnapshot{
+			RecordedAt: ts, Node: "node1", MonitorID: "disk_root", MonitorType: "disk", Status: "Green",
+		})
+		snapshots = append(snapshots, MonitorSnapshot{
+			RecordedAt: ts, Node: "node1", MonitorID: "cpu", MonitorType: "system", Status: "Green",
+		})
+	}
+
+	err := store.SaveSnapshots(ctx, snapshots)
+	require.NoError(t, err)
+
+	olderThan := now.Add(-3 * time.Hour)
+	notBefore := now.Add(-7 * 24 * time.Hour)
+	deleted, err := store.CompactOlderThan(ctx, olderThan, notBefore, 15, 1000)
+	require.NoError(t, err)
+
+	// 30 snapshots per monitor in 30 minutes = 2-3 buckets per monitor, keep 1 each
+	assert.Greater(t, deleted, int64(0))
+
+	results, err := store.GetHistory(ctx, "", "", time.Time{}, now.Add(time.Hour), 1000)
+	require.NoError(t, err)
+	// 2 monitors × (2 or 3 buckets) = 4-6 remaining
+	assert.LessOrEqual(t, len(results), 6)
+	assert.GreaterOrEqual(t, len(results), 4)
+}
+
+// TestCompactOlderThanEmptyWindow verifies compaction with no rows in the window.
+func TestCompactOlderThanEmptyWindow(t *testing.T) {
+	store := newTestStore(t)
+	ctx := t.Context()
+
+	now := time.Now().UTC()
+	olderThan := now.Add(-3 * time.Hour)
+	notBefore := now.Add(-7 * 24 * time.Hour)
+	deleted, err := store.CompactOlderThan(ctx, olderThan, notBefore, 15, 1000)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), deleted)
+}
+
+// TestCompactOlderThanBatchLimit verifies batched deletion during compaction.
+func TestCompactOlderThanBatchLimit(t *testing.T) {
+	store := newTestStore(t)
+	ctx := t.Context()
+
+	now := time.Now().UTC()
+	snapshots := make([]MonitorSnapshot, 0)
+	// 20 snapshots in a single 15-min bucket
+	for i := 0; i < 20; i++ {
+		ts := now.Add(-5*time.Hour + time.Duration(i)*time.Minute)
+		snapshots = append(snapshots, MonitorSnapshot{
+			RecordedAt: ts, Node: "node1", MonitorID: "disk_root", MonitorType: "disk", Status: "Green",
+		})
+	}
+
+	err := store.SaveSnapshots(ctx, snapshots)
+	require.NoError(t, err)
+
+	// Use small batch size to force multiple iterations
+	olderThan := now.Add(-3 * time.Hour)
+	notBefore := now.Add(-7 * 24 * time.Hour)
+	deleted, err := store.CompactOlderThan(ctx, olderThan, notBefore, 15, 5)
+	require.NoError(t, err)
+
+	// 20 snapshots in 2-3 buckets, keep 1 each
+	assert.Greater(t, deleted, int64(0))
+}
+
+// TestCompactOlderThanZeroBucketMinutes verifies that zero bucket minutes is a no-op.
+func TestCompactOlderThanZeroBucketMinutes(t *testing.T) {
+	store := newTestStore(t)
+	ctx := t.Context()
+
+	now := time.Now().UTC()
+	deleted, err := store.CompactOlderThan(ctx, now, now.Add(-time.Hour), 0, 1000)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), deleted)
+}
+
+// TestNoopStoreCompactOlderThan verifies that CompactOlderThan is a no-op on NoopStore.
+func TestNoopStoreCompactOlderThan(t *testing.T) {
+	store := NewNoopStore()
+	ctx := t.Context()
+	deleted, err := store.CompactOlderThan(ctx, time.Now(), time.Now().Add(-time.Hour), 15, 1000)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), deleted)
+}
+
+// TestCompactOlderThanUnavailableStore verifies that CompactOlderThan returns 0 when store is unavailable.
+func TestCompactOlderThanUnavailableStore(t *testing.T) {
+	store := &PostgresStore{} // db is nil, available is false
+	ctx := t.Context()
+	deleted, err := store.CompactOlderThan(ctx, time.Now(), time.Now().Add(-time.Hour), 15, 1000)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), deleted)
+}
+
+// TestRetentionManagerWithCompaction verifies that purge and compaction work together.
+// Uses direct calls instead of the loop to avoid SQLite concurrency issues in tests.
+func TestRetentionManagerWithCompaction(t *testing.T) {
+	store := newTestStore(t)
+	ctx := t.Context()
+
+	now := time.Now().UTC()
+	snapshots := make([]MonitorSnapshot, 0)
+	// Old data (should be purged): 48h ago
+	snapshots = append(snapshots, MonitorSnapshot{
+		RecordedAt: now.Add(-48 * time.Hour), Node: "node1", MonitorID: "disk_root", MonitorType: "disk", Status: "Green",
+	})
+	// Data to compact: 4-5h ago, 30 snapshots in 30 min
+	for i := 0; i < 30; i++ {
+		ts := now.Add(-5*time.Hour + time.Duration(i)*time.Minute)
+		snapshots = append(snapshots, MonitorSnapshot{
+			RecordedAt: ts, Node: "node1", MonitorID: "disk_root", MonitorType: "disk", Status: "Green",
+		})
+	}
+	// Recent data (should stay): 1h ago
+	snapshots = append(snapshots, MonitorSnapshot{
+		RecordedAt: now.Add(-1 * time.Hour), Node: "node1", MonitorID: "disk_root", MonitorType: "disk", Status: "Green",
+	})
+
+	err := store.SaveSnapshots(ctx, snapshots)
+	require.NoError(t, err)
+
+	// Step 1: Purge (retentionDays=1)
+	cutoff := now.Add(-24 * time.Hour)
+	deleted, err := store.PurgeOlderThan(ctx, cutoff, 100)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deleted, "should purge the 48h old snapshot")
+
+	// Step 2: Compact (compactAfter=3h, compactInterval=15min)
+	compactBefore := now.Add(-3 * time.Hour)
+	compacted, err := store.CompactOlderThan(ctx, compactBefore, cutoff, 15, 100)
+	require.NoError(t, err)
+	// 30 snapshots spanning 30 min may land in 2-3 fifteen-minute buckets depending on alignment
+	assert.Greater(t, compacted, int64(0), "should compact some snapshots")
+
+	// Verify remaining: compacted buckets + 1 recent
+	results, err := store.GetHistory(ctx, "", "", time.Time{}, now.Add(time.Hour), 1000)
+	require.NoError(t, err)
+	// Should have kept 1 per bucket (2-3 buckets) + 1 recent
+	assert.LessOrEqual(t, len(results), 4, "should have at most 3 compacted + 1 recent")
+	assert.GreaterOrEqual(t, len(results), 3, "should have at least 2 compacted + 1 recent")
 }
 
 // TestRetentionManagerDoubleStart verifies that Start is safe to call twice.
