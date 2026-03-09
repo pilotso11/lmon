@@ -1,0 +1,38 @@
+---
+# ClusterIP service for the aggregator dashboard
+apiVersion: v1
+kind: Service
+metadata:
+  name: lmon-aggregator
+  namespace: lmon
+  labels:
+    app.kubernetes.io/name: lmon
+    app.kubernetes.io/component: aggregator
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: lmon-aggregator
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+---
+# Headless service for node discovery by the aggregator
+apiVersion: v1
+kind: Service
+metadata:
+  name: lmon-node
+  namespace: lmon
+  labels:
+    app.kubernetes.io/name: lmon
+    app.kubernetes.io/component: node
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: lmon-node
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http

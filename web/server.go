@@ -14,17 +14,23 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"lmon/config"
+	"lmon/db"
 	"lmon/monitors"
 	"lmon/monitors/disk"
 	"lmon/monitors/docker"
 	"lmon/monitors/healthcheck"
+	"lmon/monitors/k8sevents"
+	"lmon/monitors/k8snodes"
+	"lmon/monitors/k8sservice"
 	"lmon/monitors/mapper"
 	"lmon/monitors/ping"
 	"lmon/monitors/system"
@@ -107,16 +113,20 @@ func (w *customResponseWriter) Header() http.Header {
 // Server encapsulates the HTTP server, configuration, and monitoring services.
 // It manages the lifecycle of the web server, routes, and provides thread-safe access to configuration.
 type Server struct {
-	mu         sync.Mutex        // Mutex to protect concurrent access to config.
-	config     *config.Config    // Application configuration.
-	loader     *config.Loader    // Configuration loader for persisting config changes.
-	monitor    *monitors.Service // Monitoring service for system and custom checks.
-	httpServer *http.Server      // Underlying HTTP server instance.
-	ctx        context.Context   // Context for server lifecycle and cancellation.
-	router     *http.ServeMux    // HTTP request router.
-	ServerUrl  string            // URL where the server is accessible.
-	mapper     mapper.Mapper     // Mapper for creating monitor implementations from config.
-	listener   net.Listener      // Network listener for incoming connections.
+	mu              sync.Mutex        // Mutex to protect concurrent access to config.
+	config          *config.Config    // Application configuration.
+	loader          *config.Loader    // Configuration loader for persisting config changes.
+	monitor         *monitors.Service // Monitoring service for system and custom checks.
+	httpServer      *http.Server      // Underlying HTTP server instance.
+	ctx             context.Context   // Context for server lifecycle and cancellation.
+	router          *http.ServeMux    // HTTP request router.
+	ServerUrl       string            // URL where the server is accessible.
+	mapper          mapper.Mapper     // Mapper for creating monitor implementations from config.
+	listener        net.Listener      // Network listener for incoming connections.
+	store           db.Store          // Optional database store for metrics persistence.
+	writer          *db.BufferedWriter // Optional buffered writer for async DB writes.
+	snapshotStarted bool              // Guards against multiple startSnapshotWriter calls.
+	wg              sync.WaitGroup    // Tracks background goroutines for clean shutdown.
 }
 
 // NewServerWithContext creates a new Server instance using the provided context, configuration,
@@ -147,8 +157,12 @@ func NewServerWithContext(ctx context.Context, cfg *config.Config, loader *confi
 	server.listener = ln
 
 	server.httpServer = &http.Server{
-		Addr:    ln.Addr().String(),
-		Handler: LoggingHandler(router),
+		Addr:              ln.Addr().String(),
+		Handler:           LoggingHandler(router),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Setup push to webhook callback
@@ -201,6 +215,8 @@ func (s *Server) Start(ctx context.Context) {
 		_ = s.httpServer.Serve(s.listener)
 	}()
 
+	s.startSnapshotWriter(ctx)
+
 	go func() {
 		<-ctx.Done()
 		log.Printf("Webserver stopping")
@@ -210,7 +226,70 @@ func (s *Server) Start(ctx context.Context) {
 	}()
 }
 
-// Stop gracefully shuts down the web server, waiting up to 5 seconds for active connections to close.
+// startSnapshotWriter starts a background goroutine that periodically writes
+// monitor results to the database via the buffered writer.
+// Safe to call only once; subsequent calls are no-ops.
+func (s *Server) startSnapshotWriter(ctx context.Context) {
+	s.mu.Lock()
+	if s.snapshotStarted {
+		s.mu.Unlock()
+		return
+	}
+	writer := s.writer
+	interval := s.config.Monitoring.Interval
+	if writer == nil {
+		s.mu.Unlock()
+		return
+	}
+	s.snapshotStarted = true
+	s.mu.Unlock()
+
+	if interval <= 0 {
+		interval = 60
+	}
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		hostname, _ := os.Hostname()
+		ticker := time.NewTicker(time.Duration(interval) * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				results := s.monitor.Results()
+				writer.Write(resultsToSnapshots(hostname, results))
+			}
+		}
+	}()
+}
+
+// resultsToSnapshots converts monitor results to database snapshots.
+func resultsToSnapshots(node string, results map[string]monitors.Result) []db.MonitorSnapshot {
+	now := time.Now().UTC()
+	snapshots := make([]db.MonitorSnapshot, 0, len(results))
+	for id, r := range results {
+		var val *float64
+		if v, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSuffix(r.Value, "%"), " ms"), 64); err == nil {
+			val = &v
+		}
+		snapshots = append(snapshots, db.MonitorSnapshot{
+			RecordedAt:  now,
+			Node:        node,
+			MonitorID:   id,
+			MonitorType: r.Group,
+			Status:      r.Status.String(),
+			Value:       val,
+			Message:     r.Value,
+		})
+	}
+	return snapshots
+}
+
+// Stop gracefully shuts down the web server, waits for background goroutines
+// (including the snapshot writer) to finish, then returns.
 // Returns an error if shutdown fails.
 func (s *Server) Stop() error {
 	if s.httpServer != nil {
@@ -218,9 +297,26 @@ func (s *Server) Stop() error {
 		// Create a timeout context for shutdown
 		ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
 		defer cancel()
-		return s.httpServer.Shutdown(ctx)
+		err := s.httpServer.Shutdown(ctx)
+		// Wait for background goroutines (snapshot writer) to exit
+		s.wg.Wait()
+		return err
 	}
 	return nil
+}
+
+// SetStore sets the optional database store for metrics persistence.
+func (s *Server) SetStore(store db.Store) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.store = store
+}
+
+// SetWriter sets the optional buffered writer for async database writes.
+func (s *Server) SetWriter(writer *db.BufferedWriter) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.writer = writer
 }
 
 // setupRoutes registers all HTTP endpoints and their handlers for the web server.
@@ -234,6 +330,9 @@ func (s *Server) setupRoutes(ctx context.Context) {
 
 	// Health check endpoint for liveness/readiness probes
 	s.router.HandleFunc("GET /healthz", s.handleHealthCheck)
+
+	// Metrics endpoint for aggregator scraping
+	s.router.HandleFunc("GET /metrics", s.handleMetrics)
 
 	// Endpoint to test webhook integration
 	s.router.HandleFunc("POST /testhook", s.handleTestWebhook(ctx))
@@ -254,10 +353,20 @@ func (s *Server) setupRoutes(ctx context.Context) {
 	s.router.HandleFunc("POST /api/config/health/{id}", s.handleAddHealthCheck(ctx))
 	s.router.HandleFunc("POST /api/config/ping/{id}", s.handleAddPingMonitor(ctx))
 	s.router.HandleFunc("POST /api/config/docker/{id}", s.handleAddDockerMonitor(ctx))
+	s.router.HandleFunc("POST /api/config/k8sevents/{id}", s.handleAddK8sEventsMonitor(ctx))
+	s.router.HandleFunc("POST /api/config/k8snodes/{id}", s.handleAddK8sNodesMonitor(ctx))
+	s.router.HandleFunc("POST /api/config/k8sservice/{id}", s.handleAddK8sServiceMonitor(ctx))
 	s.router.HandleFunc("POST /api/config/webhook", s.handleUpdateWebhook(ctx))
 	s.router.HandleFunc("POST /api/action/docker/{id}/restart", s.handleRestartDockerContainers(ctx))
 	s.router.HandleFunc("POST /api/action/healthcheck/{id}/restart", s.handleRestartHealthcheckContainers(ctx))
 	s.router.HandleFunc("DELETE /api/config/{type}/{id}", s.handleDeleteMonitor(ctx))
+
+	// Database history and summary API endpoints (optional, require database)
+	s.router.HandleFunc("GET /api/history", s.handleGetHistory)
+	s.router.HandleFunc("GET /api/summary", s.handleGetSummary)
+
+	// History page (template-rendered)
+	s.router.HandleFunc("GET /history", s.handleHistoryPage)
 }
 
 // getResultArrow returns a unicode arrow indicating the trend of a monitor's status change.
@@ -368,6 +477,9 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 		mobileItems := make([]UIResult, 0, len(items))
 		pingItems := make([]UIResult, 0, len(items))
 		dockerItems := make([]UIResult, 0, len(items))
+		k8sEventsItems := make([]UIResult, 0)
+		k8sNodesItems := make([]UIResult, 0)
+		k8sServiceItems := make([]UIResult, 0)
 		for _, item := range items {
 			switch item.Group {
 			case system.Group:
@@ -378,8 +490,14 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 				healthItems = append(healthItems, item)
 			case docker.Group:
 				dockerItems = append(dockerItems, item)
-			case "ping":
+			case ping.Group:
 				pingItems = append(pingItems, item)
+			case k8sevents.Group:
+				k8sEventsItems = append(k8sEventsItems, item)
+			case k8snodes.Group:
+				k8sNodesItems = append(k8sNodesItems, item)
+			case k8sservice.Group:
+				k8sServiceItems = append(k8sServiceItems, item)
 			}
 			mobileItems = append(mobileItems, item)
 		}
@@ -398,6 +516,10 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 		slices.SortFunc(dockerItems, displayNameSorter)
 		// sort pingItems by display Name
 		slices.SortFunc(pingItems, displayNameSorter)
+		// sort k8s items by display Name
+		slices.SortFunc(k8sEventsItems, displayNameSorter)
+		slices.SortFunc(k8sNodesItems, displayNameSorter)
+		slices.SortFunc(k8sServiceItems, displayNameSorter)
 
 		// Set even row for styling in mobile view
 		for i, item := range mobileItems {
@@ -419,6 +541,10 @@ func (s *Server) handleTemplate() func(w http.ResponseWriter, r *http.Request) {
 			"HealthItems":         healthItems,
 			"DockerItems":         dockerItems,
 			"PingItems":           pingItems,
+			"K8sEventsItems":      k8sEventsItems,
+			"K8sNodesItems":       k8sNodesItems,
+			"K8sServiceItems":     k8sServiceItems,
+			"K8sEnabled":          s.config.Kubernetes.Enabled,
 			"MobileItems":         mobileItems,
 			"ActivePage":          activeTemplate,
 			"UpdateAt":            time.Now().Format("2006-01-02 15:04:05Z"),
@@ -452,14 +578,13 @@ func (s *Server) writeJson(w http.ResponseWriter, data any) {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		log.Printf("writeJson %v: %v", reflect.TypeOf(data), err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(payload)
 	if err != nil {
 		log.Printf("writeJson %v: %v", reflect.TypeOf(data), err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -504,27 +629,38 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetConfig responds with the current server configuration as JSON.
+// Sensitive fields (database URL) are redacted in the response.
 // Route: GET /api/config
 func (s *Server) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.writeJson(w, s.config)
+
+	// Copy config and redact sensitive fields
+	redacted := *s.config
+	if redacted.Database.URL != "" {
+		redacted.Database.URL = "***"
+	}
+	s.writeJson(w, redacted)
 }
 
 // unmarshallBody reads and unmarshals the JSON request body into the provided data structure.
 // Returns true on success, or writes an error response and returns false on failure.
+// Request bodies are limited to 1MB to prevent abuse.
 func (s *Server) unmarshallBody(w http.ResponseWriter, r *http.Request, data any) bool {
+	const maxBodySize = 1 << 20 // 1MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("unmarshallBody %s: %v", r.URL, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "request body too large or unreadable", http.StatusBadRequest)
 		return false
 	}
 
 	err = json.Unmarshal(body, data)
 	if err != nil {
 		log.Printf("unmarshallBody %s: %v", r.URL, err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return false
 	}
 	return true
@@ -708,6 +844,12 @@ func (s *Server) handleDeleteMonitor(ctx context.Context) http.HandlerFunc {
 		case "docker":
 			// Use a dummy config so Name() is correct
 			m, _ = s.mapper.NewDocker(ctx, id, config.DockerConfig{Containers: "dummy", Threshold: 1})
+		case "k8sevents":
+			m, _ = s.mapper.NewK8sEvents(ctx, id, config.K8sEventsConfig{})
+		case "k8snodes":
+			m, _ = s.mapper.NewK8sNodes(ctx, id, config.K8sNodesConfig{})
+		case "k8sservice":
+			m, _ = s.mapper.NewK8sService(ctx, id, config.K8sServiceConfig{Threshold: 1})
 		default:
 			log.Printf("handleDeleteMonitor invalid type: %s", r.URL.String())
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -789,6 +931,105 @@ func (s *Server) handleAddDockerMonitor(ctx context.Context) http.HandlerFunc {
 		}
 
 		s.monitor.Add(ctx, d)
+
+		s.saveConfig(w)
+	}
+}
+
+// handleAddK8sEventsMonitor processes a request to add a new K8s events monitor.
+// Expects a JSON body describing the K8s events monitor to add.
+// Route: POST /api/config/k8sevents/{id}
+func (s *Server) handleAddK8sEventsMonitor(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		if !s.config.Kubernetes.Enabled {
+			http.Error(w, "Kubernetes monitoring is not enabled", http.StatusBadRequest)
+			return
+		}
+
+		id := r.PathValue("id")
+		var cfg config.K8sEventsConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		m, err := s.mapper.NewK8sEvents(ctx, id, cfg)
+		if err != nil {
+			log.Printf("handleAddK8sEventsMonitor %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.monitor.Add(ctx, m)
+
+		s.saveConfig(w)
+	}
+}
+
+// handleAddK8sNodesMonitor processes a request to add a new K8s nodes monitor.
+// Expects a JSON body describing the K8s nodes monitor to add.
+// Route: POST /api/config/k8snodes/{id}
+func (s *Server) handleAddK8sNodesMonitor(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		if !s.config.Kubernetes.Enabled {
+			http.Error(w, "Kubernetes monitoring is not enabled", http.StatusBadRequest)
+			return
+		}
+
+		id := r.PathValue("id")
+		var cfg config.K8sNodesConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		m, err := s.mapper.NewK8sNodes(ctx, id, cfg)
+		if err != nil {
+			log.Printf("handleAddK8sNodesMonitor %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.monitor.Add(ctx, m)
+
+		s.saveConfig(w)
+	}
+}
+
+// handleAddK8sServiceMonitor processes a request to add a new K8s service monitor.
+// Expects a JSON body describing the K8s service monitor to add.
+// Route: POST /api/config/k8sservice/{id}
+func (s *Server) handleAddK8sServiceMonitor(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		if !s.config.Kubernetes.Enabled {
+			http.Error(w, "Kubernetes monitoring is not enabled", http.StatusBadRequest)
+			return
+		}
+
+		id := r.PathValue("id")
+		var cfg config.K8sServiceConfig
+		ok := s.unmarshallBody(w, r, &cfg)
+		if !ok {
+			return
+		}
+
+		m, err := s.mapper.NewK8sService(ctx, id, cfg)
+		if err != nil {
+			log.Printf("handleAddK8sServiceMonitor %s: %v", r.URL.String(), err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		s.monitor.Add(ctx, m)
 
 		s.saveConfig(w)
 	}
@@ -933,6 +1174,36 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		}
 		s.monitor.Add(ctx, newDocker)
 		log.Printf("Added Docker %v", newDocker)
+	}
+
+	// Add K8s monitors if Kubernetes is enabled
+	if s.config.Kubernetes.Enabled {
+		for name, i := range cfg.K8sEvents {
+			m, err := s.mapper.NewK8sEvents(ctx, name, i)
+			if err != nil {
+				return err
+			}
+			s.monitor.Add(ctx, m)
+			log.Printf("Added K8s Events %v", m)
+		}
+
+		for name, i := range cfg.K8sNodes {
+			m, err := s.mapper.NewK8sNodes(ctx, name, i)
+			if err != nil {
+				return err
+			}
+			s.monitor.Add(ctx, m)
+			log.Printf("Added K8s Nodes %v", m)
+		}
+
+		for name, i := range cfg.K8sService {
+			m, err := s.mapper.NewK8sService(ctx, name, i)
+			if err != nil {
+				return err
+			}
+			s.monitor.Add(ctx, m)
+			log.Printf("Added K8s Service %v", m)
+		}
 	}
 
 	// Set the monitoring interval to trigger the initial checks.

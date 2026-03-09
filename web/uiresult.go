@@ -6,6 +6,9 @@ import (
 	"lmon/monitors/disk"
 	"lmon/monitors/docker"
 	"lmon/monitors/healthcheck"
+	"lmon/monitors/k8sevents"
+	"lmon/monitors/k8snodes"
+	"lmon/monitors/k8sservice"
 	"lmon/monitors/ping"
 	"lmon/monitors/system"
 )
@@ -103,6 +106,47 @@ func newUIResult(id string, item monitors.Result, c *config.Config, failureCount
 				icon = d.Icon
 				threshold = d.Threshold
 				alertThreshold = d.AlertThreshold
+				if alertThreshold <= 0 {
+					alertThreshold = 1
+				}
+				break
+			}
+		}
+	case k8sevents.Group:
+		typeLabel = "K8s Events"
+		icon = k8sevents.Icon // fallback to the default k8s events icon
+		for k, e := range c.Monitoring.K8sEvents {
+			if item.Group+"_"+k == id {
+				icon = e.Icon
+				threshold = e.Threshold
+				alertThreshold = e.AlertThreshold
+				if alertThreshold <= 0 {
+					alertThreshold = 1
+				}
+				break
+			}
+		}
+	case k8snodes.Group:
+		typeLabel = "K8s Nodes"
+		icon = k8snodes.Icon // fallback to the default k8s nodes icon
+		for k, n := range c.Monitoring.K8sNodes {
+			if item.Group+"_"+k == id {
+				icon = n.Icon
+				alertThreshold = n.AlertThreshold
+				if alertThreshold <= 0 {
+					alertThreshold = 1
+				}
+				break
+			}
+		}
+	case k8sservice.Group:
+		typeLabel = "K8s Service"
+		icon = k8sservice.Icon // fallback to the default k8s service icon
+		for k, svc := range c.Monitoring.K8sService {
+			if item.Group+"_"+k == id {
+				icon = svc.Icon
+				threshold = svc.Threshold
+				alertThreshold = svc.AlertThreshold
 				if alertThreshold <= 0 {
 					alertThreshold = 1
 				}

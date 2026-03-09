@@ -70,6 +70,37 @@
                 </div>
             </div>
 
+            {{ if .K8sEnabled }}
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">K8s Events</div>
+                        <div class="card-body" id="k8sevents-items">
+                            {{ template "itemList" .K8sEventsItems }}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">K8s Nodes</div>
+                        <div class="card-body" id="k8snodes-items">
+                            {{ template "itemList" .K8sNodesItems }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">K8s Services</div>
+                        <div class="card-body" id="k8sservice-items">
+                            {{ template "itemList" .K8sServiceItems }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {{ end }}
+
         </div>
 
 

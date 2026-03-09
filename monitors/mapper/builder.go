@@ -10,6 +10,9 @@ import (
 	"lmon/monitors/disk"
 	"lmon/monitors/docker"
 	"lmon/monitors/healthcheck"
+	"lmon/monitors/k8sevents"
+	"lmon/monitors/k8snodes"
+	"lmon/monitors/k8sservice"
 	"lmon/monitors/ping"
 	"lmon/monitors/system"
 )
@@ -20,13 +23,16 @@ type WebhookCallbackFunc func(msg string)
 // Implementations holds optional mock/test providers for each monitor type.
 // If a field is nil, the default production implementation is used.
 type Implementations struct {
-	Disk    *disk.MockDiskProvider               // Optional mock disk provider
-	Health  *healthcheck.MockHealthcheckProvider // Optional mock healthcheck provider
-	Cpu     *system.MockCpuProvider              // Optional mock CPU provider
-	Mem     *system.MockMemProvider              // Optional mock memory provider
-	Ping    *ping.MockPingProvider               // Optional mock ping provider for tests; nil uses DefaultPingProvider
-	Docker  *docker.MockDockerProvider           // Optional mock Docker provider
-	Webhook WebhookCallbackFunc                  // Optional webhook callback for testing
+	Disk       *disk.MockDiskProvider               // Optional mock disk provider
+	Health     *healthcheck.MockHealthcheckProvider // Optional mock healthcheck provider
+	Cpu        *system.MockCpuProvider              // Optional mock CPU provider
+	Mem        *system.MockMemProvider              // Optional mock memory provider
+	Ping       *ping.MockPingProvider               // Optional mock ping provider for tests; nil uses DefaultPingProvider
+	Docker     *docker.MockDockerProvider           // Optional mock Docker provider
+	K8sEvents  k8sevents.Provider                   // Optional K8s events provider (mock or real)
+	K8sNodes   k8snodes.Provider                    // Optional K8s nodes provider (mock or real)
+	K8sService k8sservice.Provider                  // Optional K8s service provider (mock or real)
+	Webhook    WebhookCallbackFunc                  // Optional webhook callback for testing
 }
 
 // Mapper constructs monitor implementations from configuration and optional providers.
@@ -91,4 +97,22 @@ func (d Mapper) NewDocker(_ context.Context, name string, cfg config.DockerConfi
 		impl = d.Impls.Docker
 	}
 	return docker.NewMonitor(name, cfg.Containers, cfg.Threshold, cfg.Icon, cfg.AlertThreshold, d.AllowedRestartContainers, impl)
+}
+
+// NewK8sEvents constructs a K8s events monitor using the provided configuration and optional provider.
+func (d Mapper) NewK8sEvents(_ context.Context, name string, cfg config.K8sEventsConfig) (k8sevents.Monitor, error) {
+	name, _ = config.SanitiseName(name)
+	return k8sevents.NewMonitor(name, cfg.Namespaces, cfg.Threshold, cfg.Window, cfg.Icon, cfg.AlertThreshold, d.Impls.K8sEvents), nil
+}
+
+// NewK8sNodes constructs a K8s nodes monitor using the provided configuration and optional provider.
+func (d Mapper) NewK8sNodes(_ context.Context, name string, cfg config.K8sNodesConfig) (k8snodes.Monitor, error) {
+	name, _ = config.SanitiseName(name)
+	return k8snodes.NewMonitor(name, cfg.Icon, cfg.AlertThreshold, d.Impls.K8sNodes), nil
+}
+
+// NewK8sService constructs a K8s service monitor using the provided configuration and optional provider.
+func (d Mapper) NewK8sService(_ context.Context, name string, cfg config.K8sServiceConfig) (k8sservice.Monitor, error) {
+	name, _ = config.SanitiseName(name)
+	return k8sservice.NewMonitor(name, cfg.Namespace, cfg.Service, cfg.Port, cfg.HealthPath, cfg.Threshold, cfg.Timeout, cfg.Icon, cfg.AlertThreshold, d.Impls.K8sService), nil
 }

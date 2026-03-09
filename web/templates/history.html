@@ -1,0 +1,70 @@
+{{ define "history.html" }}
+<!DOCTYPE html>
+<html lang="en">
+{{ template "header" . }}
+<body>
+{{ template "nav" . }}
+<div class="container mt-4">
+    <h2>Monitor History</h2>
+
+    {{ if not .DBAvailable }}
+    <div class="alert alert-info">
+        Database is not configured or unavailable. History requires a database connection.
+        <br>Set the <code>LMON_DATABASE_URL</code> environment variable or configure <code>database.url</code> in config.yaml.
+    </div>
+    {{ else }}
+
+    {{ if .Sparkline }}
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Status Sparkline (Last 24 Hours)</h5>
+            {{ .Sparkline }}
+        </div>
+    </div>
+    {{ end }}
+
+    {{ if .Snapshots }}
+    <div class="table-responsive">
+        <table class="table table-striped table-sm">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Node</th>
+                    <th>Monitor</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .Snapshots }}
+                <tr>
+                    <td>{{ .RecordedAt.Format "2006-01-02 15:04:05" }}</td>
+                    <td>{{ .Node }}</td>
+                    <td>{{ .MonitorID }}</td>
+                    <td>{{ .MonitorType }}</td>
+                    <td>
+                        {{ if eq .Status "Green" }}<span class="badge bg-success">Green</span>
+                        {{ else if eq .Status "Amber" }}<span class="badge bg-warning text-dark">Amber</span>
+                        {{ else if eq .Status "Red" }}<span class="badge bg-danger">Red</span>
+                        {{ else }}<span class="badge bg-secondary">{{ .Status }}</span>
+                        {{ end }}
+                    </td>
+                    <td>{{ .Message }}</td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+    </div>
+    {{ else }}
+    <div class="alert alert-secondary">
+        No history data available for the selected time range.
+    </div>
+    {{ end }}
+
+    {{ end }}
+</div>
+{{ template "footer" . }}
+</body>
+</html>
+{{ end }}

@@ -8,9 +8,17 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
+	"lmon/aggregator"
 	"lmon/common"
 	"lmon/config"
+	"lmon/db"
+	"lmon/k8s"
 	"lmon/monitors"
+	"lmon/monitors/k8sevents"
+	"lmon/monitors/k8snodes"
+	"lmon/monitors/k8sservice"
 	"lmon/monitors/mapper"
 	"lmon/web"
 )
@@ -38,17 +46,67 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Resolve operating mode
+	mode := config.ResolveMode()
+	log.Printf("Operating mode: %s", mode)
+
+	switch mode {
+	case config.ModeAggregator:
+		startAggregator(ctx, cfg, l)
+	default:
+		startNode(ctx, cfg, l)
+	}
+}
+
+// createK8sClientset creates a Kubernetes clientset if kubernetes is enabled.
+// Returns nil if kubernetes is not enabled or if creation fails (non-fatal).
+func createK8sClientset(cfg *config.Config) kubernetes.Interface {
+	if !cfg.Kubernetes.Enabled {
+		return nil
+	}
+	cs, err := k8s.NewClientset(cfg.Kubernetes.InCluster, cfg.Kubernetes.Kubeconfig)
+	if err != nil {
+		log.Printf("WARNING: Failed to create Kubernetes clientset: %v", err)
+		return nil
+	}
+	log.Printf("Kubernetes clientset created successfully")
+	return cs
+}
+
+// k8sMapperImpls returns mapper Implementations with real K8s providers if a clientset is available.
+func k8sMapperImpls(cs kubernetes.Interface) *mapper.Implementations {
+	if cs == nil {
+		return nil
+	}
+	return &mapper.Implementations{
+		K8sEvents:  k8sevents.NewK8sProvider(cs),
+		K8sNodes:   k8snodes.NewK8sProvider(cs),
+		K8sService: k8sservice.NewK8sProvider(cs),
+	}
+}
+
+func startNode(ctx context.Context, cfg *config.Config, l *config.Loader) {
 	// startup monitoring
 	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, 10*time.Second, nil)
 
-	// Create mapper with allowed restart containers
-	m := mapper.NewMapper(nil)
+	// Create K8s clientset and mapper with allowed restart containers
+	cs := createK8sClientset(cfg)
+	m := mapper.NewMapper(k8sMapperImpls(cs))
 	m.AllowedRestartContainers = cfg.Monitoring.AllowedRestartContainers
 
 	// start server
 	server, err := web.NewServerWithContext(ctx, cfg, l, mon, m)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Wire up database if configured
+	store, writer, retention := setupDatabase(ctx, cfg)
+	if store != nil {
+		server.SetStore(store)
+	}
+	if writer != nil {
+		server.SetWriter(writer)
 	}
 
 	// apply config
@@ -63,6 +121,120 @@ func main() {
 	<-ctx.Done()
 
 	_ = server.Stop()
+	if retention != nil {
+		retention.Stop()
+	}
+	if writer != nil {
+		writer.Close()
+	}
+	if store != nil {
+		_ = store.Close()
+	}
 
 	log.Println("Shutdown complete")
+}
+
+// setupDatabase creates the database store, buffered writer, and retention manager
+// if a database URL is configured. Returns nil values if no database is configured.
+func setupDatabase(ctx context.Context, cfg *config.Config) (db.Store, *db.BufferedWriter, *db.RetentionManager) {
+	if cfg.Database.URL == "" {
+		return nil, nil, nil
+	}
+
+	// NewPostgresStore handles connection failure gracefully (non-fatal, store.IsAvailable() == false).
+	store, _ := db.NewPostgresStore(ctx, cfg.Database.URL)
+
+	writeInterval := time.Duration(cfg.Database.WriteInterval) * time.Second
+	writer := db.NewBufferedWriter(store, cfg.Database.BatchSize, writeInterval)
+
+	retention := db.NewRetentionManager(
+		store,
+		cfg.Database.RetentionDays,
+		cfg.Database.BatchSize,
+		cfg.Database.PruneInterval,
+		cfg.Database.CompactAfter,
+		cfg.Database.CompactInterval,
+	)
+	retention.Start(ctx)
+
+	log.Printf("Database persistence enabled (retention=%dd, compact_after=%dm, compact_interval=%dm)",
+		cfg.Database.RetentionDays, cfg.Database.CompactAfter, cfg.Database.CompactInterval)
+
+	return store, writer, retention
+}
+
+func startAggregator(ctx context.Context, cfg *config.Config, l *config.Loader) {
+	log.Printf("Starting aggregator mode")
+
+	// startup monitoring service for local monitors (k8s events, nodes, etc.)
+	mon := monitors.NewService(ctx, time.Duration(cfg.Monitoring.Interval)*time.Second, 10*time.Second, nil)
+
+	// Create K8s clientset and mapper
+	cs := createK8sClientset(cfg)
+	m := mapper.NewMapper(k8sMapperImpls(cs))
+
+	// start server
+	server, err := web.NewServerWithContext(ctx, cfg, l, mon, m)
+	if err != nil {
+		log.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Wire up database if configured
+	store, writer, retention := setupDatabase(ctx, cfg)
+	if store != nil {
+		server.SetStore(store)
+	}
+	if writer != nil {
+		server.SetWriter(writer)
+	}
+
+	// apply config (will include k8s monitors if kubernetes.enabled)
+	err = server.SetConfig(ctx, cfg.Monitoring)
+	if err != nil {
+		log.Fatalf("Failed to set initial config: %v", err)
+	}
+
+	// Create aggregator provider.
+	var provider aggregator.Provider
+	if cs != nil {
+		lister := aggregator.NewK8sPodLister(cs, cfg.Kubernetes.Namespace)
+		provider = aggregator.NewK8sProvider(lister)
+		log.Printf("Aggregator using Kubernetes provider (namespace=%q, label=%s)",
+			cfg.Kubernetes.Namespace, cfg.Aggregator.NodeLabel)
+	} else {
+		log.Printf("Aggregator: no Kubernetes clientset; using mock provider (no node discovery)")
+		provider = aggregator.NewMockProvider(nil, nil)
+	}
+
+	agg := aggregator.NewAggregator(
+		provider,
+		cfg.Aggregator.NodeLabel,
+		cfg.Aggregator.NodePort,
+		cfg.Aggregator.NodeMetricsPath,
+		time.Duration(cfg.Aggregator.ScrapeInterval)*time.Second,
+		nil,
+	)
+
+	// Setup aggregator routes (overrides default dashboard with aggregator view)
+	server.SetupAggregatorRoutes(agg)
+
+	agg.Start(ctx)
+	server.Start(ctx)
+
+	// wait for interrupt
+	<-ctx.Done()
+
+	agg.Stop()
+	_ = server.Stop()
+	if retention != nil {
+		retention.Stop()
+	}
+	if writer != nil {
+		writer.Close()
+	}
+	if store != nil {
+		_ = store.Close()
+	}
+
+	log.Println("Aggregator shutdown complete")
 }

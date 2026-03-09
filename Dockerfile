@@ -44,6 +44,7 @@ EXPOSE 8080
 ENV LMON_WEB_HOST=0.0.0.0
 ENV LMON_WEB_PORT=8080
 ENV LMON_CONFIG_FILE=/etc/lmon/config.yaml
+ENV LMON_MODE=node
 
 # Note: To get accurate system-wide CPU and memory metrics, run the container with:
 # docker run --pid=host --privileged -v /proc:/proc:ro -v /:/hostroot:ro ...

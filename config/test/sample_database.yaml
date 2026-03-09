@@ -1,0 +1,26 @@
+database:
+    batch_size: 500
+    compact_after: 180
+    compact_interval: 15
+    prune_interval: 30
+    retention_days: 14
+    url: postgres://user:pass@localhost:5432/lmon
+    write_interval: 10
+monitoring:
+    interval: 60
+    system:
+        cpu:
+            alertthreshold: 1
+            icon: cpu
+            threshold: 90
+        memory:
+            alertthreshold: 1
+            icon: speedometer
+            threshold: 90
+        title: LMON Dashboard
+web:
+    host: 0.0.0.0
+    port: 8080
+webhook:
+    enabled: true
+    url: http://localhost:8080/testhook

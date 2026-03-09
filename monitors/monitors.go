@@ -295,11 +295,14 @@ func (s *Service) GetFailureCount(name string) int {
 // Save persists the current monitor configuration to the provided config struct.
 // It clears disk and healthcheck entries and saves all monitors' configs.
 func (s *Service) Save(cfg *config.Config) error {
-	// Remove all disks, healthchecks, ping, and docker monitors from config
+	// Remove all disks, healthchecks, ping, docker, and k8s monitors from config
 	cfg.Monitoring.Disk = make(map[string]config.DiskConfig)
 	cfg.Monitoring.Healthcheck = make(map[string]config.HealthcheckConfig)
 	cfg.Monitoring.Ping = make(map[string]config.PingConfig)
 	cfg.Monitoring.Docker = make(map[string]config.DockerConfig)
+	cfg.Monitoring.K8sEvents = make(map[string]config.K8sEventsConfig)
+	cfg.Monitoring.K8sNodes = make(map[string]config.K8sNodesConfig)
+	cfg.Monitoring.K8sService = make(map[string]config.K8sServiceConfig)
 
 	// Save all the monitors
 	s.monitors.Range(func(key string, m Monitor) bool {
