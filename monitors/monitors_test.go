@@ -464,3 +464,79 @@ func TestService_MaintenanceWindow_SuppressesWebhook(t *testing.T) {
 	// No push calls should have been made for the maintenance monitor
 	assert.Equal(t, int32(0), push.cnt.Load(), "no webhooks should fire during maintenance window")
 }
+
+// TestService_Save_AppliesMaintenanceToConfig verifies that Save() writes maintenance configs
+// back to the config struct for each monitor type prefix.
+func TestService_Save_AppliesMaintenanceToConfig(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, time.Second, time.Second, nil)
+	mc := &config.MaintenanceConfig{Cron: "0 */4 * * *", Duration: 60}
+
+	// Disk monitor — name prefix "disk_"
+	diskMon := NewMockMonitor("disk_root", "disk")
+	diskMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.Disk["root"] = config.DiskConfig{Path: "/", Threshold: 80}
+	}
+	svc.AddWithMaintenance(ctx, diskMon, mc)
+
+	// Health monitor — name prefix "health_"
+	healthMon := NewMockMonitor("health_api", "health")
+	healthMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.Healthcheck["api"] = config.HealthcheckConfig{URL: "http://localhost"}
+	}
+	svc.AddWithMaintenance(ctx, healthMon, mc)
+
+	// Ping monitor — name prefix "ping_"
+	pingMon := NewMockMonitor("ping_gw", "ping")
+	pingMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.Ping["gw"] = config.PingConfig{Address: "192.168.1.1"}
+	}
+	svc.AddWithMaintenance(ctx, pingMon, mc)
+
+	// Docker monitor — name prefix "docker_"
+	dockerMon := NewMockMonitor("docker_stack", "docker")
+	dockerMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.Docker["stack"] = config.DockerConfig{Containers: "web"}
+	}
+	svc.AddWithMaintenance(ctx, dockerMon, mc)
+
+	// System CPU — exact name "system_cpu"
+	cpuMon := NewMockMonitor("system_cpu", "system")
+	cpuMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.System.CPU = config.SystemItem{Threshold: 90}
+	}
+	svc.AddWithMaintenance(ctx, cpuMon, mc)
+
+	// System Memory — exact name "system_mem"
+	memMon := NewMockMonitor("system_mem", "system")
+	memMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.System.Memory = config.SystemItem{Threshold: 85}
+	}
+	svc.AddWithMaintenance(ctx, memMon, mc)
+
+	cfg := &config.Config{}
+	err := svc.Save(cfg)
+	require.NoError(t, err)
+
+	// Verify maintenance was applied to each config entry
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.Disk["root"].Maintenance.Cron, "disk maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.Disk["root"].Maintenance.Duration, "disk maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.Healthcheck["api"].Maintenance.Cron, "health maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.Healthcheck["api"].Maintenance.Duration, "health maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.Ping["gw"].Maintenance.Cron, "ping maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.Ping["gw"].Maintenance.Duration, "ping maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.Docker["stack"].Maintenance.Cron, "docker maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.Docker["stack"].Maintenance.Duration, "docker maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.System.CPU.Maintenance.Cron, "cpu maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.System.CPU.Maintenance.Duration, "cpu maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.System.Memory.Maintenance.Cron, "mem maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.System.Memory.Maintenance.Duration, "mem maintenance duration")
+}
