@@ -1,5 +1,5 @@
 # Use multi-stage build with cross-compilation
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 
 # Install CA certificates for downloads
 RUN apk add --no-cache ca-certificates && update-ca-certificates
