@@ -388,3 +388,79 @@ func TestService_Save_EmptyService(t *testing.T) {
 	assert.NotNil(t, cfg.Monitoring.Ping, "ping config map should be initialized")
 	assert.Empty(t, cfg.Monitoring.Ping, "ping config should be empty")
 }
+
+// TestService_MaintenanceWindow_SkipsCheck verifies that monitors in a maintenance window are not checked.
+func TestService_MaintenanceWindow_SkipsCheck(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
+
+	// Monitor with a maintenance window that is always active (every minute, 60s duration)
+	maint := NewMockMonitor("maint", "test")
+	mc := &config.MaintenanceConfig{
+		Cron:     "* * * * *",
+		Duration: 60,
+	}
+
+	// Monitor without maintenance
+	normal := NewMockMonitor("normal", "test")
+
+	svc.AddWithMaintenance(ctx, maint, mc)
+	svc.Add(ctx, normal)
+
+	// Wait for several check cycles
+	assert.Eventually(t, func() bool {
+		return normal.Checks.Load() >= 3
+	}, 200*time.Millisecond, 5*time.Millisecond, "normal monitor should be checked")
+
+	// The maintenance monitor should have zero checks (maintenance skips initial check and periodic checks)
+	assert.Equal(t, int32(0), maint.Checks.Load(), "monitor in maintenance window should not be checked")
+}
+
+// TestService_MaintenanceWindow_NilAllowsCheck verifies that a nil maintenance window does not skip checks.
+func TestService_MaintenanceWindow_NilAllowsCheck(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
+
+	mon := NewMockMonitor("test", "test")
+	// No maintenance window set — should check normally
+	svc.Add(ctx, mon)
+
+	assert.Eventually(t, func() bool {
+		return mon.Checks.Load() >= 3
+	}, 200*time.Millisecond, 5*time.Millisecond, "monitor without maintenance should be checked normally")
+}
+
+// TestService_MaintenanceWindow_SuppressesWebhook verifies that webhooks are not fired during maintenance.
+func TestService_MaintenanceWindow_SuppressesWebhook(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	push := NewMockPush()
+	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, push.Push)
+
+	// Monitor with always-active maintenance and a red status
+	maint := NewMockMonitor("maint", "test")
+	maint.SetStatuses([]MockStatus{
+		{Rag: RAGRed, Msg: "down"},
+		{Rag: RAGRed, Msg: "down"},
+		{Rag: RAGRed, Msg: "down"},
+	})
+
+	svc.AddWithMaintenance(ctx, maint, &config.MaintenanceConfig{
+		Cron:     "* * * * *",
+		Duration: 60,
+	})
+
+	// Wait for check cycles to pass
+	time.Sleep(50 * time.Millisecond)
+
+	// No push calls should have been made for the maintenance monitor
+	assert.Equal(t, int32(0), push.cnt.Load(), "no webhooks should fire during maintenance window")
+}

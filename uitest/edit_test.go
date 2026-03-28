@@ -2,6 +2,7 @@ package uitest
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -349,4 +350,103 @@ func TestEditPingMonitorViaUI(t *testing.T) {
 	pingChecked, err := page.Eval(`() => document.getElementById("monitor-type-ping").checked`)
 	requireNoErrorWithScreenshot(t, page, err, "get ping radio checked state")
 	assert.True(t, pingChecked.Value.Bool(), "Ping radio should be checked")
+}
+
+// TestAddDiskWithMaintenanceViaUI tests adding a disk monitor with a maintenance window,
+// then verifies the maintenance badge appears in the config list and edit populates the fields.
+func TestAddDiskWithMaintenanceViaUI(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s, _ := web.StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	browser := getBrowser(t)
+	defer closeBrowser(browser)
+	page, err := browser.Page(proto.TargetCreateTarget{URL: s.ServerUrl})
+	requireNoErrorWithScreenshot(t, page, err, "open page")
+	defer closePage(page)
+
+	// Navigate to config page
+	configLink, err := page.Element(`a.nav-link[href="/config"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find config tab")
+	err = configLink.Click(proto.InputMouseButtonLeft, 1)
+	requireNoErrorWithScreenshot(t, page, err, "click config tab")
+
+	// Wait for form
+	_, err = page.Timeout(1 * time.Second).Element(`#add-disk-form`)
+	requireNoErrorWithScreenshot(t, page, err, "wait for add-disk-form")
+
+	// Fill out disk form
+	nameEl, err := page.Element(`#disk-name`)
+	requireNoErrorWithScreenshot(t, page, err, "find disk-name input")
+	err = nameEl.Input("maint-test")
+	requireNoErrorWithScreenshot(t, page, err, "input disk-name")
+
+	pathEl, err := page.Element(`#disk-path`)
+	requireNoErrorWithScreenshot(t, page, err, "find disk-path input")
+	err = pathEl.Input("/")
+	requireNoErrorWithScreenshot(t, page, err, "input disk-path")
+
+	// Fill maintenance fields
+	cronEl, err := page.Element(`#disk-maint-cron`)
+	requireNoErrorWithScreenshot(t, page, err, "find maintenance cron input")
+	err = cronEl.Input("0 */4 * * *")
+	requireNoErrorWithScreenshot(t, page, err, "input maintenance cron")
+
+	durEl, err := page.Element(`#disk-maint-duration`)
+	requireNoErrorWithScreenshot(t, page, err, "find maintenance duration input")
+	err = durEl.Input("60")
+	requireNoErrorWithScreenshot(t, page, err, "input maintenance duration")
+
+	// Submit
+	submitEl, err := page.Element(`#add-disk-form button[type="submit"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find submit button")
+	err = submitEl.Click(proto.InputMouseButtonLeft, 1)
+	requireNoErrorWithScreenshot(t, page, err, "click submit")
+
+	// Wait for reload
+	err = page.Timeout(2 * time.Second).Reload()
+	requireNoErrorWithScreenshot(t, page, err, "wait for reload")
+
+	// Verify the maintenance badge is visible in the config list
+	assert.Eventually(t, func() bool {
+		items, err := page.Elements(`#disk-config-items .config-item`)
+		if err != nil {
+			return false
+		}
+		for _, item := range items {
+			text, err := item.Text()
+			if err != nil {
+				continue
+			}
+			if assert.ObjectsAreEqual("", "") { // always true, just use contains
+				if contains(text, "maint-test") && contains(text, "Maint:") && contains(text, "0 */4 * * *") {
+					return true
+				}
+			}
+		}
+		return false
+	}, 2*time.Second, 50*time.Millisecond, "maintenance badge should appear in config list")
+
+	// Click edit and verify maintenance fields are populated
+	editBtn, err := page.Element(`button.edit-disk-btn[data-id="maint-test"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find edit button")
+	err = editBtn.Click(proto.InputMouseButtonLeft, 1)
+	requireNoErrorWithScreenshot(t, page, err, "click edit button")
+
+	time.Sleep(500 * time.Millisecond)
+
+	cronVal, err := page.Eval(`() => document.getElementById("disk-maint-cron").value`)
+	requireNoErrorWithScreenshot(t, page, err, "get maint cron field value")
+	assert.Equal(t, "0 */4 * * *", cronVal.Value.String(), "Maintenance cron should be populated")
+
+	durVal, err := page.Eval(`() => document.getElementById("disk-maint-duration").value`)
+	requireNoErrorWithScreenshot(t, page, err, "get maint duration field value")
+	assert.Equal(t, "60", durVal.Value.String(), "Maintenance duration should be populated")
+}
+
+// contains is a simple string contains helper for use in Eventually assertions.
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || strings.Contains(s, substr))
 }

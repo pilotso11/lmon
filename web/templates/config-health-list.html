@@ -194,6 +194,20 @@
             </div>
         </div>
 
+        <!-- Maintenance Window (optional) -->
+        <div class="row align-items-center mb-2">
+            <label class="col-sm-4 col-form-label">Maintenance Window</label>
+            <div class="col-sm-8">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="monitor-maint-cron"
+                           placeholder="e.g. 0 */4 * * *" aria-label="Cron expression for maintenance window" />
+                    <input type="number" class="form-control" id="monitor-maint-duration"
+                           min="1" placeholder="Duration (s)" aria-label="Maintenance duration in seconds" />
+                </div>
+                <small class="form-text text-muted">Optional: pause monitoring on a cron schedule</small>
+            </div>
+        </div>
+
         <!-- Icon Field -->
         <div class="row align-items-center mb-2">
             <label for="monitor-icon-dropdown" class="col-sm-4 col-form-label"
@@ -244,6 +258,9 @@
                     >Restart: <code>{{ $health.RestartContainers }}</code></span
                 >
                 {{ end }}
+                {{ if $health.Maintenance.Cron }}
+                <span class="me-2 badge bg-info">Maint: {{ $health.Maintenance.Cron }} ({{ $health.Maintenance.Duration }}s)</span>
+                {{ end }}
                 <button
                     type="button"
                     class="edit-health-btn ms-auto p-0 btn btn-link me-2"
@@ -255,6 +272,8 @@
                     data-icon="{{ $health.Icon }}"
                     data-restart-containers="{{ $health.RestartContainers }}"
                     data-alert-threshold="{{ $health.AlertThreshold }}"
+                    data-maint-cron="{{ $health.Maintenance.Cron }}"
+                    data-maint-duration="{{ $health.Maintenance.Duration }}"
                     title="Edit"
                     aria-label="Edit health check {{ $id }} ({{ $health.URL }})"
                 >
@@ -302,6 +321,9 @@
                     >Alert: {{ $ping.AlertThreshold }}</span
                 >
                 {{ end }}
+                {{ if $ping.Maintenance.Cron }}
+                <span class="me-2 badge bg-info">Maint: {{ $ping.Maintenance.Cron }} ({{ $ping.Maintenance.Duration }}s)</span>
+                {{ end }}
                 <button
                     type="button"
                     class="edit-ping-btn ms-auto p-0 btn btn-link me-2"
@@ -312,6 +334,8 @@
                     data-amber-threshold="{{ $ping.AmberThreshold }}"
                     data-icon="{{ $ping.Icon }}"
                     data-alert-threshold="{{ $ping.AlertThreshold }}"
+                    data-maint-cron="{{ $ping.Maintenance.Cron }}"
+                    data-maint-duration="{{ $ping.Maintenance.Duration }}"
                     title="Edit"
                     aria-label="Edit ping monitor {{ $id }} ({{ $ping.Address }})"
                 >

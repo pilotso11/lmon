@@ -554,7 +554,7 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
-		s.monitor.Add(ctx, cpu)
+		s.monitor.AddWithMaintenance(ctx, cpu, config.MaintenancePtr(cfg.CPU.Maintenance))
 
 		// Apply mem config
 		mem, err := s.mapper.NewMem(ctx, cfg.Memory)
@@ -563,7 +563,7 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
-		s.monitor.Add(ctx, mem)
+		s.monitor.AddWithMaintenance(ctx, mem, config.MaintenancePtr(cfg.Memory.Maintenance))
 
 		s.saveConfig(w)
 	}
@@ -631,7 +631,7 @@ func (s *Server) handleAddDiskMonitor(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		s.monitor.Add(ctx, d)
+		s.monitor.AddWithMaintenance(ctx, d, config.MaintenancePtr(cfg.Maintenance))
 
 		s.saveConfig(w)
 	}
@@ -659,7 +659,7 @@ func (s *Server) handleAddHealthCheck(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		s.monitor.Add(ctx, d)
+		s.monitor.AddWithMaintenance(ctx, d, config.MaintenancePtr(cfg.Maintenance))
 
 		s.saveConfig(w)
 	}
@@ -760,7 +760,7 @@ func (s *Server) handleAddPingMonitor(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		s.monitor.Add(ctx, p)
+		s.monitor.AddWithMaintenance(ctx, p, config.MaintenancePtr(cfg.Maintenance))
 
 		s.saveConfig(w)
 	}
@@ -788,7 +788,7 @@ func (s *Server) handleAddDockerMonitor(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		s.monitor.Add(ctx, d)
+		s.monitor.AddWithMaintenance(ctx, d, config.MaintenancePtr(cfg.Maintenance))
 
 		s.saveConfig(w)
 	}
@@ -886,14 +886,14 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 	if err != nil {
 		return err
 	}
-	s.monitor.Add(ctx, cpu)
+	s.monitor.AddWithMaintenance(ctx, cpu, config.MaintenancePtr(cfg.System.CPU.Maintenance))
 	log.Printf("Set CPU %v", cpu)
 
 	mem, err := s.mapper.NewMem(ctx, cfg.System.Memory)
 	if err != nil {
 		return err
 	}
-	s.monitor.Add(ctx, mem)
+	s.monitor.AddWithMaintenance(ctx, mem, config.MaintenancePtr(cfg.System.Memory.Maintenance))
 	log.Printf("Set MEM %v", cpu)
 
 	for name, i := range cfg.Disk {
@@ -901,7 +901,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		if err != nil {
 			return err
 		}
-		s.monitor.Add(ctx, newDisk)
+		s.monitor.AddWithMaintenance(ctx, newDisk, config.MaintenancePtr(i.Maintenance))
 		log.Printf("Added Disk %v", newDisk)
 	}
 
@@ -910,7 +910,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		if err != nil {
 			return err
 		}
-		s.monitor.Add(ctx, newHealth)
+		s.monitor.AddWithMaintenance(ctx, newHealth, config.MaintenancePtr(i.Maintenance))
 		log.Printf("Added Healthcheck %v", newHealth)
 	}
 
@@ -922,7 +922,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		if err != nil {
 			return err
 		}
-		s.monitor.Add(ctx, newPing)
+		s.monitor.AddWithMaintenance(ctx, newPing, config.MaintenancePtr(i.Maintenance))
 		log.Printf("Added Ping %v", newPing)
 	}
 
@@ -931,7 +931,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		if err != nil {
 			return err
 		}
-		s.monitor.Add(ctx, newDocker)
+		s.monitor.AddWithMaintenance(ctx, newDocker, config.MaintenancePtr(i.Maintenance))
 		log.Printf("Added Docker %v", newDocker)
 	}
 

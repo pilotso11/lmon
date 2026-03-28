@@ -5,6 +5,37 @@
 
 import { showToast, fetchJson, handleFetchError } from "./utils.js";
 
+/**
+ * Validate a 5-field cron expression (minute hour dom month dow).
+ * Returns true if valid or empty (maintenance is optional).
+ */
+function isValidCron(expr) {
+  if (!expr) return true;
+  const fields = expr.trim().split(/\s+/);
+  if (fields.length !== 5) return false;
+  // Each field: number, *, */n, n-n, or comma-separated values
+  const fieldPattern = /^(\*|\d{1,2}(-\d{1,2})?(,\d{1,2}(-\d{1,2})?)*)(\/(\d{1,2}))?$/;
+  return fields.every((f) => f === "*" || fieldPattern.test(f));
+}
+
+/**
+ * Validate maintenance fields. Returns true if valid, shows toast and returns false otherwise.
+ */
+function validateMaintenance(cronId, durationId) {
+  const cron = document.getElementById(cronId).value.trim();
+  const duration = parseInt(document.getElementById(durationId).value) || 0;
+  if (!cron) return true; // no maintenance = valid
+  if (!isValidCron(cron)) {
+    showToast("Error", "Invalid cron expression. Use 5 fields: min hour dom month dow", "danger");
+    return false;
+  }
+  if (duration <= 0) {
+    showToast("Error", "Maintenance duration must be greater than 0", "danger");
+    return false;
+  }
+  return true;
+}
+
 // These will be set by the template engine as global variables
 // Example: const default_health_icon = "heart-pulse"
 // Example: const default_disk_icon = "hdd"
@@ -364,12 +395,16 @@ document.addEventListener("DOMContentLoaded", function () {
       const icon = this.getAttribute("data-icon");
       const threshold = this.getAttribute("data-threshold");
       const alertThreshold = this.getAttribute("data-alert-threshold");
-      
+      const maintCron = this.getAttribute("data-maint-cron") || "";
+      const maintDuration = this.getAttribute("data-maint-duration") || "";
+
       // Populate the form fields
       document.getElementById("disk-name").value = id;
       document.getElementById("disk-path").value = path;
       document.getElementById("disk-threshold").value = threshold;
       document.getElementById("disk-alert-threshold").value = alertThreshold;
+      document.getElementById("disk-maint-cron").value = maintCron;
+      document.getElementById("disk-maint-duration").value = maintDuration;
       
       // Update the icon dropdown
       const iconSelect = document.getElementById("disk-icon");
@@ -408,21 +443,25 @@ document.addEventListener("DOMContentLoaded", function () {
       const icon = this.getAttribute("data-icon");
       const restartContainers = this.getAttribute("data-restart-containers") || "";
       const alertThreshold = this.getAttribute("data-alert-threshold");
-      
+      const maintCron = this.getAttribute("data-maint-cron") || "";
+      const maintDuration = this.getAttribute("data-maint-duration") || "";
+
       // Switch to HTTP mode
       const httpRadio = document.getElementById("monitor-type-http");
       if (httpRadio) {
         httpRadio.checked = true;
         updateFormForType("http");
       }
-      
+
       // Populate the form fields
       document.getElementById("monitor-name").value = id;
       document.getElementById("monitor-target").value = url;
       document.getElementById("monitor-timeout").value = timeout;
       document.getElementById("monitor-respcode").value = respcode;
       document.getElementById("monitor-alert-threshold").value = alertThreshold;
-      
+      document.getElementById("monitor-maint-cron").value = maintCron;
+      document.getElementById("monitor-maint-duration").value = maintDuration;
+
       const restartContainersInput = document.getElementById("monitor-restart-containers");
       if (restartContainersInput) {
         restartContainersInput.value = restartContainers;
@@ -464,20 +503,24 @@ document.addEventListener("DOMContentLoaded", function () {
       const amberThreshold = this.getAttribute("data-amber-threshold");
       const icon = this.getAttribute("data-icon");
       const alertThreshold = this.getAttribute("data-alert-threshold");
-      
+      const maintCron = this.getAttribute("data-maint-cron") || "";
+      const maintDuration = this.getAttribute("data-maint-duration") || "";
+
       // Switch to Ping mode
       const pingRadio = document.getElementById("monitor-type-ping");
       if (pingRadio) {
         pingRadio.checked = true;
         updateFormForType("ping");
       }
-      
+
       // Populate the form fields
       document.getElementById("monitor-name").value = id;
       document.getElementById("monitor-target").value = address;
       document.getElementById("monitor-timeout").value = timeout;
       document.getElementById("monitor-amber-threshold").value = amberThreshold;
       document.getElementById("monitor-alert-threshold").value = alertThreshold;
+      document.getElementById("monitor-maint-cron").value = maintCron;
+      document.getElementById("monitor-maint-duration").value = maintDuration;
       
       // Update the icon dropdown
       const iconSelect = document.getElementById("monitor-icon-select");
@@ -514,12 +557,16 @@ document.addEventListener("DOMContentLoaded", function () {
       const icon = this.getAttribute("data-icon");
       const threshold = this.getAttribute("data-threshold");
       const alertThreshold = this.getAttribute("data-alert-threshold");
-      
+      const maintCron = this.getAttribute("data-maint-cron") || "";
+      const maintDuration = this.getAttribute("data-maint-duration") || "";
+
       // Populate the form fields
       document.getElementById("docker-name").value = id;
       document.getElementById("docker-containers").value = containers;
       document.getElementById("docker-threshold").value = threshold;
       document.getElementById("docker-alert-threshold").value = alertThreshold;
+      document.getElementById("docker-maint-cron").value = maintCron;
+      document.getElementById("docker-maint-duration").value = maintDuration;
       
       // Update the icon dropdown
       const iconSelect = document.getElementById("docker-icon");
@@ -590,12 +637,24 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
+      if (!validateMaintenance("disk-maint-cron", "disk-maint-duration")) return;
+
+      const diskMaintCron = document.getElementById("disk-maint-cron").value.trim();
+      const diskMaintDuration = parseInt(document.getElementById("disk-maint-duration").value) || 0;
+
       const diskConfig = {
         path: diskPath,
         icon: diskIcon,
         threshold: diskThreshold,
         alertthreshold: diskAlertThreshold,
       };
+
+      if (diskMaintCron) {
+        diskConfig.maintenance = {
+          cron: diskMaintCron,
+          duration: diskMaintDuration,
+        };
+      }
 
       try {
         await fetchJson(`/api/config/disk/${encodeURIComponent(diskName)}`, {
@@ -658,6 +717,11 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
+      if (!validateMaintenance("monitor-maint-cron", "monitor-maint-duration")) return;
+
+      const maintCron = document.getElementById("monitor-maint-cron").value.trim();
+      const maintDuration = parseInt(document.getElementById("monitor-maint-duration").value) || 0;
+
       try {
         if (monitorType === "ping") {
           const amberThresholdInput = document.getElementById(
@@ -671,16 +735,21 @@ document.addEventListener("DOMContentLoaded", function () {
           const alertThresholdInput = document.getElementById("monitor-alert-threshold");
           const alertThreshold = alertThresholdInput ? parseInt(alertThresholdInput.value) : 1;
 
+          const pingPayload = {
+            address: target,
+            timeout: timeout,
+            amberThreshold: amberThreshold,
+            alertThreshold: alertThreshold,
+            icon: icon,
+          };
+          if (maintCron) {
+            pingPayload.maintenance = { cron: maintCron, duration: maintDuration };
+          }
+
           await fetchJson(`/api/config/ping/${encodeURIComponent(name)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              address: target,
-              timeout: timeout,
-              amberThreshold: amberThreshold,
-              alertThreshold: alertThreshold,
-              icon: icon,
-            }),
+            body: JSON.stringify(pingPayload),
           });
 
           localStorage.setItem(
@@ -713,18 +782,23 @@ document.addEventListener("DOMContentLoaded", function () {
           const alertThresholdInput = document.getElementById("monitor-alert-threshold");
           const alertThreshold = alertThresholdInput ? parseInt(alertThresholdInput.value) : 1;
 
+          const healthPayload = {
+            url: target,
+            timeout: timeout,
+            respcode: respCode,
+            icon: icon,
+            restart_containers: restartContainers,
+            alertThreshold: alertThreshold,
+          };
+          if (maintCron) {
+            healthPayload.maintenance = { cron: maintCron, duration: maintDuration };
+          }
+
           // HTTP health check
           await fetchJson(`/api/config/health/${encodeURIComponent(name)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              url: target,
-              timeout: timeout,
-              respcode: respCode,
-              icon: icon,
-              restart_containers: restartContainers,
-              alertThreshold: alertThreshold,
-            }),
+            body: JSON.stringify(healthPayload),
           });
 
           localStorage.setItem(
@@ -777,12 +851,24 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
+      if (!validateMaintenance("docker-maint-cron", "docker-maint-duration")) return;
+
+      const dockerMaintCron = document.getElementById("docker-maint-cron").value.trim();
+      const dockerMaintDuration = parseInt(document.getElementById("docker-maint-duration").value) || 0;
+
       const dockerConfig = {
         containers: dockerContainers,
         icon: dockerIcon,
         threshold: dockerThreshold,
         alertThreshold: dockerAlertThreshold,
       };
+
+      if (dockerMaintCron) {
+        dockerConfig.maintenance = {
+          cron: dockerMaintCron,
+          duration: dockerMaintDuration,
+        };
+      }
 
       try {
         await fetchJson(

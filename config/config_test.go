@@ -137,7 +137,7 @@ func TestAddFolders(t *testing.T) {
 	cfg, err := loader.Load()
 	assert.NoError(t, err, "no error loading config")
 
-	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test", 0}
+	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test", 0, MaintenanceConfig{}}
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddDisk)
 }
 
@@ -179,7 +179,7 @@ func TestAddHealthcheck(t *testing.T) {
 	cfg, err := loader.Load()
 	assert.NoError(t, err, "no error loading config")
 
-	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 401, "test", "", 0}
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 401, "test", "", 0, MaintenanceConfig{}}
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddHealthcheck)
 }
 
@@ -198,7 +198,7 @@ func TestRemoveFolder(t *testing.T) {
 	// we already have the one to remove?
 	assert.Equal(t, 1, len(cfg.Monitoring.Disk))
 
-	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test", 0}
+	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test", 0, MaintenanceConfig{}}
 	delete(cfg.Monitoring.Disk, "root")
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddRemoveDisk)
@@ -244,7 +244,7 @@ func TestRemoveHealthCheck(t *testing.T) {
 	// we already have the one to edit?
 	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
 
-	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", "", 0}
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", "", 0, MaintenanceConfig{}}
 	delete(cfg.Monitoring.Healthcheck, "self")
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddRemoveHealthcheck)
@@ -265,7 +265,7 @@ func TestLoadChangeAndSave(t *testing.T) {
 	// we already have the one to edit?
 	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
 
-	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", "", 0}
+	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", "", 0, MaintenanceConfig{}}
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlEditHealthcheck)
 }

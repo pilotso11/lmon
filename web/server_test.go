@@ -605,6 +605,96 @@ func TestUnmarshallBody(t *testing.T) {
 	})
 }
 
+// TestAddDiskWithMaintenance verifies adding a disk monitor with a maintenance window via the API.
+func TestAddDiskWithMaintenance(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.DiskConfig{
+		Threshold:      80,
+		Icon:           "hdd",
+		Path:           ".",
+		AlertThreshold: 1,
+		Maintenance: config.MaintenanceConfig{
+			Cron:     "0 */4 * * *",
+			Duration: 60,
+		},
+	}
+	id := "maint-disk"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/disk/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	// Verify the config was saved with maintenance
+	d2, ok := s.config.Monitoring.Disk[id]
+	assert.True(t, ok, "disk entry exists")
+	assert.Equal(t, "0 */4 * * *", d2.Maintenance.Cron, "maintenance cron preserved")
+	assert.Equal(t, 60, d2.Maintenance.Duration, "maintenance duration preserved")
+
+	// Verify the config page HTML shows the maintenance badge
+	resp, htmlBody := GetTestRequest(ctx, t, s, "/config")
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, htmlBody, "0 */4 * * *", "config page should show maintenance cron")
+	assert.Contains(t, htmlBody, "Maint:", "config page should show maintenance badge")
+}
+
+// TestAddHealthcheckWithMaintenance verifies adding a healthcheck with maintenance via the API.
+func TestAddHealthcheckWithMaintenance(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.HealthcheckConfig{
+		URL:            "http://localhost:8080/healthz",
+		Timeout:        10,
+		RespCode:       200,
+		Icon:           "activity",
+		AlertThreshold: 1,
+		Maintenance: config.MaintenanceConfig{
+			Cron:     "30 3 * * *",
+			Duration: 300,
+		},
+	}
+	id := "maint-health"
+	resp, body := PostTestRequest(ctx, t, s, "/api/config/health/"+id, data)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "status code")
+	assert.Equal(t, "OK\n", body)
+
+	h, ok := s.config.Monitoring.Healthcheck[id]
+	assert.True(t, ok, "healthcheck entry exists")
+	assert.Equal(t, "30 3 * * *", h.Maintenance.Cron)
+	assert.Equal(t, 300, h.Maintenance.Duration)
+
+	// Verify in config page HTML
+	resp, htmlBody := GetTestRequest(ctx, t, s, "/config")
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, htmlBody, "30 3 * * *")
+}
+
+// TestAddDiskWithInvalidMaintenanceCron verifies the API rejects invalid maintenance cron expressions.
+func TestAddDiskWithInvalidMaintenanceCron(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, _ := StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	data := config.DiskConfig{
+		Threshold:      80,
+		Icon:           "hdd",
+		Path:           ".",
+		AlertThreshold: 1,
+		Maintenance: config.MaintenanceConfig{
+			Cron:     "bad-cron",
+			Duration: 60,
+		},
+	}
+	resp, _ := PostTestRequest(ctx, t, s, "/api/config/disk/invalid-maint", data)
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode, "should reject invalid cron")
+}
+
 // TestSetConfig tests the SetConfig function with various configurations
 func TestSetConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
@@ -695,6 +785,59 @@ func TestSetConfig(t *testing.T) {
 
 		err := s.SetConfig(ctx, cfg)
 		assert.NoError(t, err, "empty ping address is allowed, fails at check time")
+	})
+
+	t.Run("success_with_maintenance_window", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Disk: map[string]config.DiskConfig{
+				"root": {
+					Path:      "/",
+					Threshold: 90,
+					Maintenance: config.MaintenanceConfig{
+						Cron:     "0 */4 * * *",
+						Duration: 60,
+					},
+				},
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.NoError(t, err)
+
+		// Verify disk monitor was added
+		assert.Eventually(t, func() bool {
+			results := s.monitor.Results()
+			_, ok := results["disk_root"]
+			return ok
+		}, 500*time.Millisecond, 10*time.Millisecond, "disk_root should appear in results")
+	})
+
+	t.Run("error_invalid_maintenance_cron", func(t *testing.T) {
+		cfg := config.MonitoringConfig{
+			Interval: 30,
+			System: config.SystemConfig{
+				CPU:    config.SystemItem{Threshold: 80},
+				Memory: config.SystemItem{Threshold: 85},
+			},
+			Disk: map[string]config.DiskConfig{
+				"root": {
+					Path:      "/",
+					Threshold: 90,
+					Maintenance: config.MaintenanceConfig{
+						Cron:     "not-a-cron",
+						Duration: 60,
+					},
+				},
+			},
+		}
+
+		err := s.SetConfig(ctx, cfg)
+		assert.Error(t, err, "should fail with invalid maintenance cron")
 	})
 
 	t.Run("error_invalid_ping_config_missing_amber_threshold", func(t *testing.T) {
