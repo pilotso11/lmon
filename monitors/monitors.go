@@ -135,6 +135,8 @@ func (s *Service) Add(ctx context.Context, m Monitor) {
 func (s *Service) AddWithMaintenance(ctx context.Context, m Monitor, mc *config.MaintenanceConfig) {
 	if mc != nil {
 		s.maintenance.Store(m.Name(), mc)
+	} else {
+		s.maintenance.Delete(m.Name())
 	}
 	s.Add(ctx, m)
 }
@@ -349,43 +351,33 @@ func (s *Service) Save(cfg *config.Config) error {
 // applyMaintenanceToConfig sets the maintenance config on the appropriate config entry
 // by parsing the monitor name prefix (e.g., "disk_root" → cfg.Monitoring.Disk["root"]).
 func applyMaintenanceToConfig(cfg *config.Config, monitorName string, mc config.MaintenanceConfig) {
-	// Monitor names follow the pattern "group_name", e.g. "disk_root", "health_local"
-	for prefix, setter := range map[string]func(string){
-		"disk_": func(name string) {
-			if d, ok := cfg.Monitoring.Disk[name]; ok {
+	switch {
+	case monitorName == "system_cpu":
+		cfg.Monitoring.System.CPU.Maintenance = mc
+	case monitorName == "system_mem":
+		cfg.Monitoring.System.Memory.Maintenance = mc
+	default:
+		// Monitor names follow the pattern "group_name", e.g. "disk_root", "health_local"
+		if name, ok := strings.CutPrefix(monitorName, "disk_"); ok {
+			if d, found := cfg.Monitoring.Disk[name]; found {
 				d.Maintenance = mc
 				cfg.Monitoring.Disk[name] = d
 			}
-		},
-		"health_": func(name string) {
-			if h, ok := cfg.Monitoring.Healthcheck[name]; ok {
+		} else if name, ok := strings.CutPrefix(monitorName, "health_"); ok {
+			if h, found := cfg.Monitoring.Healthcheck[name]; found {
 				h.Maintenance = mc
 				cfg.Monitoring.Healthcheck[name] = h
 			}
-		},
-		"ping_": func(name string) {
-			if p, ok := cfg.Monitoring.Ping[name]; ok {
+		} else if name, ok := strings.CutPrefix(monitorName, "ping_"); ok {
+			if p, found := cfg.Monitoring.Ping[name]; found {
 				p.Maintenance = mc
 				cfg.Monitoring.Ping[name] = p
 			}
-		},
-		"docker_": func(name string) {
-			if d, ok := cfg.Monitoring.Docker[name]; ok {
+		} else if name, ok := strings.CutPrefix(monitorName, "docker_"); ok {
+			if d, found := cfg.Monitoring.Docker[name]; found {
 				d.Maintenance = mc
 				cfg.Monitoring.Docker[name] = d
 			}
-		},
-		"system_cpu": func(_ string) {
-			cfg.Monitoring.System.CPU.Maintenance = mc
-		},
-		"system_mem": func(_ string) {
-			cfg.Monitoring.System.Memory.Maintenance = mc
-		},
-	} {
-		if strings.HasPrefix(monitorName, prefix) {
-			name := strings.TrimPrefix(monitorName, prefix)
-			setter(name)
-			return
 		}
 	}
 }

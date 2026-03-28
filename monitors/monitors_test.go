@@ -540,3 +540,23 @@ func TestService_Save_AppliesMaintenanceToConfig(t *testing.T) {
 	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.System.Memory.Maintenance.Cron, "mem maintenance cron")
 	assert.Equal(t, 60, cfg.Monitoring.System.Memory.Maintenance.Duration, "mem maintenance duration")
 }
+
+// TestService_AddWithMaintenance_NilRemovesPrevious verifies that calling AddWithMaintenance
+// with a nil config removes any previously stored maintenance window for that monitor.
+func TestService_AddWithMaintenance_NilRemovesPrevious(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, time.Second, time.Second, nil)
+	mon := NewMockMonitor("test", "test")
+
+	// Add with maintenance
+	mc := &config.MaintenanceConfig{Cron: "* * * * *", Duration: 60}
+	svc.AddWithMaintenance(ctx, mon, mc)
+	assert.True(t, svc.isInMaintenance("test"), "should be in maintenance")
+
+	// Re-add with nil maintenance — should clear it
+	svc.AddWithMaintenance(ctx, mon, nil)
+	assert.False(t, svc.isInMaintenance("test"), "maintenance should be removed")
+}

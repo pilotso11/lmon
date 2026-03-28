@@ -420,10 +420,8 @@ func TestAddDiskWithMaintenanceViaUI(t *testing.T) {
 			if err != nil {
 				continue
 			}
-			if assert.ObjectsAreEqual("", "") { // always true, just use contains
-				if contains(text, "maint-test") && contains(text, "Maint:") && contains(text, "0 */4 * * *") {
-					return true
-				}
+			if contains(text, "maint-test") && contains(text, "Maint:") && contains(text, "0 */4 * * *") {
+				return true
 			}
 		}
 		return false
