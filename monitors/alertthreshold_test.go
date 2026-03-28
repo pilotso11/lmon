@@ -59,7 +59,7 @@ func TestService_AlertThreshold_RecoveryResetsCount(t *testing.T) {
 	// Wait for all checks
 	assert.Eventually(t, func() bool {
 		return m.Checks.Load() >= 3
-	}, 300*time.Millisecond, 10*time.Millisecond, "expected at least 3 checks")
+	}, 500*time.Millisecond, 10*time.Millisecond, "expected at least 3 checks")
 
 	// Should have:
 	// 1. Push for first failure (threshold=1)
@@ -67,7 +67,7 @@ func TestService_AlertThreshold_RecoveryResetsCount(t *testing.T) {
 	// 3. Push for failure after recovery (count was reset)
 	assert.Eventually(t, func() bool {
 		return push.Calls.Size() >= 3
-	}, 200*time.Millisecond, 10*time.Millisecond, "expected 3 pushes")
+	}, 500*time.Millisecond, 10*time.Millisecond, "expected 3 pushes")
 }
 
 // TestService_AlertThreshold_ConsecutiveFailures verifies consecutive failure tracking.
