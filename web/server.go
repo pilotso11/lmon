@@ -555,7 +555,8 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 			return
 		}
 
-		s.monitor.AddWithMaintenance(ctx, cpu, config.MaintenancePtr(cfg.CPU.Maintenance))
+		// Preserve existing maintenance windows — the system form doesn't include maintenance fields
+		s.monitor.Add(ctx, cpu)
 
 		// Apply mem config
 		mem, err := s.mapper.NewMem(ctx, cfg.Memory)
@@ -565,7 +566,8 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 			return
 		}
 
-		s.monitor.AddWithMaintenance(ctx, mem, config.MaintenancePtr(cfg.Memory.Maintenance))
+		// Preserve existing maintenance windows — the system form doesn't include maintenance fields
+		s.monitor.Add(ctx, mem)
 
 		s.saveConfig(w)
 	}
@@ -577,14 +579,16 @@ func (s *Server) saveConfig(w http.ResponseWriter) {
 	// Save config
 	err := s.monitor.Save(s.config)
 	if err != nil {
-		log.Printf("handleUpdateSystemConfig (save): %v", err)
+		log.Printf("saveConfig (monitor.Save): %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	err = s.loader.Save(s.config)
 	if err != nil {
-		log.Printf("handleUpdateSystemConfig (save): %v", err)
+		log.Printf("saveConfig (loader.Save): %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	// done
