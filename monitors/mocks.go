@@ -58,6 +58,7 @@ type MockMonitor struct {
 	Checks         atomic.Int32
 	mu             sync.Mutex // Protects status slice
 	alertThreshold int
+	SaveFunc       func(cfg *config.Config) // Optional custom save function for tests
 }
 
 // NewMockMonitor creates a new MockMonitor with the given name and group.
@@ -101,9 +102,11 @@ func (m *MockMonitor) Name() string {
 	return m.name
 }
 
-// Save implements Monitor. No-op for the mock monitor.
-func (m *MockMonitor) Save(_ *config.Config) {
-	// noop
+// Save implements Monitor. Calls SaveFunc if set, otherwise no-op.
+func (m *MockMonitor) Save(cfg *config.Config) {
+	if m.SaveFunc != nil {
+		m.SaveFunc(cfg)
+	}
 }
 
 // AlertThreshold implements Monitor. Returns the configured alert threshold for the mock monitor.

@@ -12,6 +12,9 @@ monitoring:
       path: /
       threshold: 80
       # alertthreshold: 1  # Optional: Number of consecutive failures before triggering alert (default: 1)
+      # maintenance:        # Optional: Scheduled maintenance window (pauses monitoring)
+      #   cron: "0 3 * * *" # Cron expression (5-field), e.g. daily at 3 AM
+      #   duration: 300     # Duration in seconds to pause monitoring
     home:
       icon: hdd
       path: /home
@@ -23,6 +26,9 @@ monitoring:
       timeout: 10
       url: https://google.com
       # alertthreshold: 2  # Optional: Number of consecutive failures before triggering alert (default: 1)
+      # maintenance:
+      #   cron: "0 */4 * * *"  # Every 4 hours
+      #   duration: 60          # 1 minute
     local:
       icon: heart-pulse
       timeout: 10

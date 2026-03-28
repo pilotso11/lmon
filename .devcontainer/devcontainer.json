@@ -1,0 +1,45 @@
+{
+    "name": "lmon",
+    "image": "pilotso11/fullstack-devc:latest",
+    "hostRequirements": {
+      "cpus": 2,
+      "memory": "4gb"
+    },
+    "forwardPorts": [8000],
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "golang.go",
+          "biomejs.biome",
+          "bradlc.vscode-tailwindcss",
+          "esbenp.prettier-vscode",
+          "ms-vscode-remote.remote-containers"
+        ],
+        "settings": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        }
+      }
+    },
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/developer/.claude,type=bind",
+    "source=${localEnv:HOME}/.config/gcloud,target=/home/developer/.config/gcloud,type=bind",
+    "source=${localEnv:HOME}/.config/gh,target=/home/developer/.config/gh,type=bind",
+    "source=${localEnv:HOME}/.ssh/id_rsa,target=/home/developer/.ssh/id_rsa,type=bind,readonly"
+  ],
+  
+  "postCreateCommand": "ssh-keyscan github.com >> /home/developer/.ssh/known_hosts 2>/dev/null && chown developer:developer /home/developer/.ssh/known_hosts",
+
+  "remoteEnv": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "true"
+  },
+
+    "features": {
+      "ghcr.io/devcontainers/features/common-utils:2": {
+        "installZsh": true,
+        "installOhMyZsh": true,
+        "upgradePackages": true
+      }
+    }
+  }
+  

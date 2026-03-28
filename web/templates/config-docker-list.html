@@ -78,6 +78,19 @@
                 >
             </div>
         </div>
+        <!-- Maintenance Window (optional) -->
+        <div class="row align-items-center mb-2">
+            <label class="col-sm-4 col-form-label">Maintenance Window</label>
+            <div class="col-sm-8">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="docker-maint-cron"
+                           placeholder="e.g. 0 */4 * * *" aria-label="Cron expression for maintenance window" />
+                    <input type="number" class="form-control" id="docker-maint-duration"
+                           min="1" placeholder="Duration (s)" aria-label="Maintenance duration in seconds" />
+                </div>
+                <small class="form-text text-muted">Optional: pause monitoring on a cron schedule</small>
+            </div>
+        </div>
         <div class="row align-items-center mb-2">
             <label for="docker-icon-dropdown" class="col-sm-4 col-form-label"
                 >Icon</label
@@ -117,6 +130,9 @@
                 {{ if gt $docker.AlertThreshold 1 }}
                 <span class="me-2">Alert: {{ $docker.AlertThreshold }}</span>
                 {{ end }}
+                {{ if $docker.Maintenance.Cron }}
+                <span class="me-2 badge bg-info">Maint: {{ $docker.Maintenance.Cron }} ({{ $docker.Maintenance.Duration }}s)</span>
+                {{ end }}
                 <button
                     type="button"
                     class="edit-docker-btn ms-auto p-0 btn btn-link me-2"
@@ -126,6 +142,8 @@
                     data-icon="{{ $docker.Icon }}"
                     data-threshold="{{ $docker.Threshold }}"
                     data-alert-threshold="{{ $docker.AlertThreshold }}"
+                    data-maint-cron="{{ $docker.Maintenance.Cron }}"
+                    data-maint-duration="{{ if $docker.Maintenance.Cron }}{{ $docker.Maintenance.Duration }}{{ end }}"
                     title="Edit"
                     aria-label="Edit docker monitor {{ $id }} with containers {{ $docker.Containers }}"
                 >
