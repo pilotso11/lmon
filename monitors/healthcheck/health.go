@@ -141,7 +141,7 @@ func NewHealthcheck(name string, urlRaw string, timeout int, respCode int, icon 
 	if alertThreshold <= 0 {
 		alertThreshold = 1
 	}
-	
+
 	return Healthcheck{
 		name:                     name,
 		url:                      parsedUrl,

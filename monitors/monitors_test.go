@@ -388,3 +388,175 @@ func TestService_Save_EmptyService(t *testing.T) {
 	assert.NotNil(t, cfg.Monitoring.Ping, "ping config map should be initialized")
 	assert.Empty(t, cfg.Monitoring.Ping, "ping config should be empty")
 }
+
+// TestService_MaintenanceWindow_SkipsCheck verifies that monitors in a maintenance window are not checked.
+func TestService_MaintenanceWindow_SkipsCheck(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
+
+	// Monitor with a maintenance window that is always active (every minute, 60s duration)
+	maint := NewMockMonitor("maint", "test")
+	mc := &config.MaintenanceConfig{
+		Cron:     "* * * * *",
+		Duration: 60,
+	}
+
+	// Monitor without maintenance
+	normal := NewMockMonitor("normal", "test")
+
+	svc.AddWithMaintenance(ctx, maint, mc)
+	svc.Add(ctx, normal)
+
+	// Wait for several check cycles
+	assert.Eventually(t, func() bool {
+		return normal.Checks.Load() >= 3
+	}, 200*time.Millisecond, 5*time.Millisecond, "normal monitor should be checked")
+
+	// The maintenance monitor should have zero checks (maintenance skips initial check and periodic checks)
+	assert.Equal(t, int32(0), maint.Checks.Load(), "monitor in maintenance window should not be checked")
+}
+
+// TestService_MaintenanceWindow_NilAllowsCheck verifies that a nil maintenance window does not skip checks.
+func TestService_MaintenanceWindow_NilAllowsCheck(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, nil)
+
+	mon := NewMockMonitor("test", "test")
+	// No maintenance window set — should check normally
+	svc.Add(ctx, mon)
+
+	assert.Eventually(t, func() bool {
+		return mon.Checks.Load() >= 3
+	}, 200*time.Millisecond, 5*time.Millisecond, "monitor without maintenance should be checked normally")
+}
+
+// TestService_MaintenanceWindow_SuppressesWebhook verifies that webhooks are not fired during maintenance.
+func TestService_MaintenanceWindow_SuppressesWebhook(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	push := NewMockPush()
+	svc := NewService(ctx, 10*time.Millisecond, time.Millisecond, push.Push)
+
+	// Monitor with always-active maintenance and a red status
+	maint := NewMockMonitor("maint", "test")
+	maint.SetStatuses([]MockStatus{
+		{Rag: RAGRed, Msg: "down"},
+		{Rag: RAGRed, Msg: "down"},
+		{Rag: RAGRed, Msg: "down"},
+	})
+
+	svc.AddWithMaintenance(ctx, maint, &config.MaintenanceConfig{
+		Cron:     "* * * * *",
+		Duration: 60,
+	})
+
+	// Wait for check cycles to pass
+	time.Sleep(50 * time.Millisecond)
+
+	// No push calls should have been made for the maintenance monitor
+	assert.Equal(t, int32(0), push.cnt.Load(), "no webhooks should fire during maintenance window")
+}
+
+// TestService_Save_AppliesMaintenanceToConfig verifies that Save() writes maintenance configs
+// back to the config struct for each monitor type prefix.
+func TestService_Save_AppliesMaintenanceToConfig(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, time.Second, time.Second, nil)
+	mc := &config.MaintenanceConfig{Cron: "0 */4 * * *", Duration: 60}
+
+	// Disk monitor — name prefix "disk_"
+	diskMon := NewMockMonitor("disk_root", "disk")
+	diskMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.Disk["root"] = config.DiskConfig{Path: "/", Threshold: 80}
+	}
+	svc.AddWithMaintenance(ctx, diskMon, mc)
+
+	// Health monitor — name prefix "health_"
+	healthMon := NewMockMonitor("health_api", "health")
+	healthMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.Healthcheck["api"] = config.HealthcheckConfig{URL: "http://localhost"}
+	}
+	svc.AddWithMaintenance(ctx, healthMon, mc)
+
+	// Ping monitor — name prefix "ping_"
+	pingMon := NewMockMonitor("ping_gw", "ping")
+	pingMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.Ping["gw"] = config.PingConfig{Address: "192.168.1.1"}
+	}
+	svc.AddWithMaintenance(ctx, pingMon, mc)
+
+	// Docker monitor — name prefix "docker_"
+	dockerMon := NewMockMonitor("docker_stack", "docker")
+	dockerMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.Docker["stack"] = config.DockerConfig{Containers: "web"}
+	}
+	svc.AddWithMaintenance(ctx, dockerMon, mc)
+
+	// System CPU — exact name "system_cpu"
+	cpuMon := NewMockMonitor("system_cpu", "system")
+	cpuMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.System.CPU = config.SystemItem{Threshold: 90}
+	}
+	svc.AddWithMaintenance(ctx, cpuMon, mc)
+
+	// System Memory — exact name "system_mem"
+	memMon := NewMockMonitor("system_mem", "system")
+	memMon.SaveFunc = func(cfg *config.Config) {
+		cfg.Monitoring.System.Memory = config.SystemItem{Threshold: 85}
+	}
+	svc.AddWithMaintenance(ctx, memMon, mc)
+
+	cfg := &config.Config{}
+	err := svc.Save(cfg)
+	require.NoError(t, err)
+
+	// Verify maintenance was applied to each config entry
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.Disk["root"].Maintenance.Cron, "disk maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.Disk["root"].Maintenance.Duration, "disk maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.Healthcheck["api"].Maintenance.Cron, "health maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.Healthcheck["api"].Maintenance.Duration, "health maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.Ping["gw"].Maintenance.Cron, "ping maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.Ping["gw"].Maintenance.Duration, "ping maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.Docker["stack"].Maintenance.Cron, "docker maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.Docker["stack"].Maintenance.Duration, "docker maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.System.CPU.Maintenance.Cron, "cpu maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.System.CPU.Maintenance.Duration, "cpu maintenance duration")
+
+	assert.Equal(t, "0 */4 * * *", cfg.Monitoring.System.Memory.Maintenance.Cron, "mem maintenance cron")
+	assert.Equal(t, 60, cfg.Monitoring.System.Memory.Maintenance.Duration, "mem maintenance duration")
+}
+
+// TestService_AddWithMaintenance_NilRemovesPrevious verifies that calling AddWithMaintenance
+// with a nil config removes any previously stored maintenance window for that monitor.
+func TestService_AddWithMaintenance_NilRemovesPrevious(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	svc := NewService(ctx, time.Second, time.Second, nil)
+	mon := NewMockMonitor("test", "test")
+
+	// Add with maintenance
+	mc := &config.MaintenanceConfig{Cron: "* * * * *", Duration: 60}
+	svc.AddWithMaintenance(ctx, mon, mc)
+	assert.True(t, svc.isInMaintenance("test"), "should be in maintenance")
+
+	// Re-add with nil maintenance — should clear it
+	svc.AddWithMaintenance(ctx, mon, nil)
+	assert.False(t, svc.isInMaintenance("test"), "maintenance should be removed")
+}

@@ -110,3 +110,98 @@ func TestMapper_NewDocker(t *testing.T) {
 	assert.NoError(t, err, "should not error")
 	assert.Equal(t, "docker_test", d.Name(), "should create docker monitor with correct name")
 }
+
+// invalidMaintenance is a MaintenanceConfig with an invalid cron expression used across maintenance error tests.
+var invalidMaintenance = config.MaintenanceConfig{Cron: "invalid", Duration: 60}
+
+// validMaintenance is a MaintenanceConfig with a valid cron expression used across maintenance success tests.
+var validMaintenance = config.MaintenanceConfig{Cron: "0 */4 * * *", Duration: 60}
+
+// TestNewDisk_InvalidMaintenance verifies that NewDisk returns an error when given an invalid maintenance cron.
+func TestNewDisk_InvalidMaintenance(t *testing.T) {
+	m := NewMapper(nil)
+	_, err := m.NewDisk(t.Context(), "test", config.DiskConfig{
+		Threshold:   50,
+		Path:        "/tmp",
+		Maintenance: invalidMaintenance,
+	})
+	assert.Error(t, err, "should return error for invalid maintenance cron")
+}
+
+// TestNewDisk_ValidMaintenance verifies that NewDisk succeeds when given a valid maintenance config.
+func TestNewDisk_ValidMaintenance(t *testing.T) {
+	m := NewMapper(nil)
+	d, err := m.NewDisk(t.Context(), "test", config.DiskConfig{
+		Threshold:   50,
+		Path:        "/tmp",
+		Maintenance: validMaintenance,
+	})
+	assert.NoError(t, err, "should not error for valid maintenance config")
+	assert.Equal(t, "disk_test", d.Name())
+}
+
+// TestNewHealthcheck_InvalidMaintenance verifies that NewHealthcheck returns an error when given an invalid maintenance cron.
+func TestNewHealthcheck_InvalidMaintenance(t *testing.T) {
+	m := NewMapper(nil)
+	_, err := m.NewHealthcheck(t.Context(), "test", config.HealthcheckConfig{
+		URL:         "http://localhost:8080",
+		Timeout:     10,
+		Maintenance: invalidMaintenance,
+	})
+	assert.Error(t, err, "should return error for invalid maintenance cron")
+}
+
+// TestNewHealthcheck_ValidMaintenance verifies that NewHealthcheck succeeds when given a valid maintenance config.
+func TestNewHealthcheck_ValidMaintenance(t *testing.T) {
+	m := NewMapper(nil)
+	h, err := m.NewHealthcheck(t.Context(), "test", config.HealthcheckConfig{
+		URL:         "http://localhost:8080",
+		Timeout:     10,
+		Maintenance: validMaintenance,
+	})
+	assert.NoError(t, err, "should not error for valid maintenance config")
+	assert.Equal(t, "health_test", h.Name())
+}
+
+// TestNewCpu_InvalidMaintenance verifies that NewCpu returns an error when given an invalid maintenance cron.
+func TestNewCpu_InvalidMaintenance(t *testing.T) {
+	m := NewMapper(nil)
+	_, err := m.NewCpu(t.Context(), config.SystemItem{
+		Threshold:   50,
+		Maintenance: invalidMaintenance,
+	})
+	assert.Error(t, err, "should return error for invalid maintenance cron")
+}
+
+// TestNewPing_InvalidMaintenance verifies that NewPing returns an error when given an invalid maintenance cron.
+func TestNewPing_InvalidMaintenance(t *testing.T) {
+	m := NewMapper(nil)
+	_, err := m.NewPing(t.Context(), "test", config.PingConfig{
+		Address:        "127.0.0.1",
+		Timeout:        1000,
+		AmberThreshold: 100,
+		Maintenance:    invalidMaintenance,
+	})
+	assert.Error(t, err, "should return error for invalid maintenance cron")
+}
+
+// TestNewMem_InvalidMaintenance verifies that NewMem returns an error when given an invalid maintenance cron.
+func TestNewMem_InvalidMaintenance(t *testing.T) {
+	m := NewMapper(nil)
+	_, err := m.NewMem(t.Context(), config.SystemItem{
+		Threshold:   50,
+		Maintenance: invalidMaintenance,
+	})
+	assert.Error(t, err, "should return error for invalid maintenance cron")
+}
+
+// TestNewDocker_InvalidMaintenance verifies that NewDocker returns an error when given an invalid maintenance cron.
+func TestNewDocker_InvalidMaintenance(t *testing.T) {
+	m := NewMapper(nil)
+	_, err := m.NewDocker(t.Context(), "test", config.DockerConfig{
+		Containers:  "web-app",
+		Threshold:   5,
+		Maintenance: invalidMaintenance,
+	})
+	assert.Error(t, err, "should return error for invalid maintenance cron")
+}

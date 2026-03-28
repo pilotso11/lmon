@@ -292,8 +292,7 @@ func TestPingMonitor_AmberThresholdBoundary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pm := NewPingMonitor("boundary-test", "127.0.0.1", 1000, "", tt.amberThreshold, 0,
-				NewMockPingProvider(tt.responseTime, nil))
+			pm := NewPingMonitor("boundary-test", "127.0.0.1", 1000, "", tt.amberThreshold, 0, NewMockPingProvider(tt.responseTime, nil))
 			result := pm.Check(context.Background())
 			assert.Equal(t, tt.expectedStatus, result.Status, "status should match expected")
 			assert.Equal(t, result.Value, fmt.Sprintf("%d ms", tt.responseTime))

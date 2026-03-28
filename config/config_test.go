@@ -48,6 +48,9 @@ var (
 
 	//go:embed test/bad.yaml
 	badYaml string
+
+	//go:embed test/changed_add_disk_maintenance.yaml
+	changedYamlAddDiskMaintenance string
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -137,7 +140,7 @@ func TestAddFolders(t *testing.T) {
 	cfg, err := loader.Load()
 	assert.NoError(t, err, "no error loading config")
 
-	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test", 0}
+	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test", 0, MaintenanceConfig{}}
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddDisk)
 }
 
@@ -179,7 +182,7 @@ func TestAddHealthcheck(t *testing.T) {
 	cfg, err := loader.Load()
 	assert.NoError(t, err, "no error loading config")
 
-	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 401, "test", "", 0}
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 401, "test", "", 0, MaintenanceConfig{}}
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddHealthcheck)
 }
 
@@ -198,7 +201,7 @@ func TestRemoveFolder(t *testing.T) {
 	// we already have the one to remove?
 	assert.Equal(t, 1, len(cfg.Monitoring.Disk))
 
-	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test", 0}
+	cfg.Monitoring.Disk["test"] = DiskConfig{75, "test", "/test", 0, MaintenanceConfig{}}
 	delete(cfg.Monitoring.Disk, "root")
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddRemoveDisk)
@@ -244,7 +247,7 @@ func TestRemoveHealthCheck(t *testing.T) {
 	// we already have the one to edit?
 	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
 
-	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", "", 0}
+	cfg.Monitoring.Healthcheck["test"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", "", 0, MaintenanceConfig{}}
 	delete(cfg.Monitoring.Healthcheck, "self")
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddRemoveHealthcheck)
@@ -265,7 +268,7 @@ func TestLoadChangeAndSave(t *testing.T) {
 	// we already have the one to edit?
 	assert.Equal(t, 1, len(cfg.Monitoring.Healthcheck))
 
-	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", "", 0}
+	cfg.Monitoring.Healthcheck["self"] = HealthcheckConfig{"http://localhost:8080/test", 10, 200, "test", "", 0, MaintenanceConfig{}}
 
 	saveAndCheckContent(t, loader, cfg, testFile, changedYamlEditHealthcheck)
 }
@@ -419,4 +422,144 @@ func Test_SanitiseName(t *testing.T) {
 			assert.Equalf(t, tt.want1, got1, "SanitiseName(%v)", tt.name)
 		})
 	}
+}
+
+func TestMaintenancePtr(t *testing.T) {
+	tests := []struct {
+		name        string
+		mc          MaintenanceConfig
+		expectNil   bool
+		expectCron  string
+		expectDuration int
+	}{
+		{
+			name:      "empty cron returns nil",
+			mc:        MaintenanceConfig{Cron: "", Duration: 0},
+			expectNil: true,
+		},
+		{
+			name:           "non-empty cron returns pointer",
+			mc:             MaintenanceConfig{Cron: "0 2 * * *", Duration: 3600},
+			expectNil:      false,
+			expectCron:     "0 2 * * *",
+			expectDuration: 3600,
+		},
+		{
+			name:           "non-empty cron with zero duration still returns pointer",
+			mc:             MaintenanceConfig{Cron: "*/5 * * * *", Duration: 0},
+			expectNil:      false,
+			expectCron:     "*/5 * * * *",
+			expectDuration: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MaintenancePtr(tt.mc)
+			if tt.expectNil {
+				assert.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			assert.Equal(t, tt.expectCron, got.Cron)
+			assert.Equal(t, tt.expectDuration, got.Duration)
+		})
+	}
+}
+
+func TestValidateMaintenanceConfig(t *testing.T) {
+	tests := []struct {
+		name      string
+		mc        MaintenanceConfig
+		expectErr bool
+		errContains string
+	}{
+		{
+			name:      "empty cron is valid",
+			mc:        MaintenanceConfig{Cron: "", Duration: 0},
+			expectErr: false,
+		},
+		{
+			name:      "valid cron and positive duration",
+			mc:        MaintenanceConfig{Cron: "0 2 * * *", Duration: 3600},
+			expectErr: false,
+		},
+		{
+			name:        "invalid cron returns error",
+			mc:          MaintenanceConfig{Cron: "not-a-cron", Duration: 3600},
+			expectErr:   true,
+			errContains: "invalid maintenance cron expression",
+		},
+		{
+			name:        "valid cron with zero duration returns error",
+			mc:          MaintenanceConfig{Cron: "0 2 * * *", Duration: 0},
+			expectErr:   true,
+			errContains: "maintenance duration must be > 0",
+		},
+		{
+			name:        "valid cron with negative duration returns error",
+			mc:          MaintenanceConfig{Cron: "0 2 * * *", Duration: -1},
+			expectErr:   true,
+			errContains: "maintenance duration must be > 0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateMaintenanceConfig(tt.mc)
+			if tt.expectErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSaveMaintenanceRoundTrip(t *testing.T) {
+	t.Run("disk monitor with maintenance is preserved after save and reload", func(t *testing.T) {
+		dir := t.TempDir()
+		testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+		loader := NewLoader("test.yaml", []string{dir})
+		cfg, err := loader.Load()
+		require.NoError(t, err, "no error loading config")
+
+		cfg.Monitoring.Disk["root"] = DiskConfig{
+			Threshold:   80,
+			Icon:        "storage",
+			Path:        "/",
+			Maintenance: MaintenanceConfig{Cron: "0 2 * * *", Duration: 3600},
+		}
+
+		saveAndCheckContent(t, loader, cfg, testFile, changedYamlAddDiskMaintenance)
+
+		// Reload and verify maintenance fields are preserved
+		loader2 := NewLoader("test.yaml", []string{dir})
+		reloaded, err := loader2.Load()
+		require.NoError(t, err, "no error reloading config")
+		root, ok := reloaded.Monitoring.Disk["root"]
+		require.True(t, ok, "disk monitor 'root' should exist after reload")
+		assert.Equal(t, "0 2 * * *", root.Maintenance.Cron, "maintenance cron preserved")
+		assert.Equal(t, 3600, root.Maintenance.Duration, "maintenance duration preserved")
+	})
+
+	t.Run("disk monitor without maintenance writes no maintenance keys", func(t *testing.T) {
+		dir := t.TempDir()
+		testFile := strings.Join([]string{dir, "test.yaml"}, string(os.PathSeparator))
+		loader := NewLoader("test.yaml", []string{dir})
+		cfg, err := loader.Load()
+		require.NoError(t, err, "no error loading config")
+
+		cfg.Monitoring.Disk["test"] = DiskConfig{
+			Threshold: 75,
+			Icon:      "test",
+			Path:      "/test",
+		}
+
+		err = loader.Save(cfg)
+		require.NoError(t, err, "saving config")
+
+		body, err := os.ReadFile(testFile)
+		require.NoError(t, err, "reading saved config")
+		assert.NotContains(t, string(body), "maintenance", "no maintenance key when not configured")
+	})
 }

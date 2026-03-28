@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -81,9 +82,10 @@ type PushFunc func(ctx context.Context, m Monitor, prev, result Result)
 type Service struct {
 	period         *common.AtomicDuration
 	timeout        *common.AtomicDuration
-	monitors       *xsync.Map[string, Monitor]      // Map of monitor names to Monitor instances
+	monitors       *xsync.Map[string, Monitor]                // Map of monitor names to Monitor instances
 	result         *xsync.Map[string, Result]
-	failureCount   *xsync.MapOf[string, *atomic.Int64] // Track consecutive failures per monitor (atomic to avoid races)
+	failureCount   *xsync.MapOf[string, *atomic.Int64]        // Track consecutive failures per monitor (atomic to avoid races)
+	maintenance    *xsync.Map[string, *config.MaintenanceConfig] // Optional maintenance windows per monitor
 	cancel         context.CancelFunc
 	push           PushFunc
 	wg             sync.WaitGroup
@@ -100,6 +102,7 @@ func NewService(ctx context.Context, period time.Duration, timeout time.Duration
 		monitors:     xsync.NewMap[string, Monitor](),
 		result:       xsync.NewMap[string, Result](),
 		failureCount: xsync.NewMapOf[string, *atomic.Int64](),
+		maintenance:  xsync.NewMap[string, *config.MaintenanceConfig](),
 		push:         push,
 	}
 	s.startMonitors(ctx)
@@ -118,11 +121,33 @@ func (s *Service) SetPush(push PushFunc) {
 func (s *Service) Add(ctx context.Context, m Monitor) {
 	s.monitors.Store(m.Name(), m)
 
-	// As Synchronously check
 	go func() {
+		if s.isInMaintenance(m.Name()) {
+			return
+		}
 		result := m.Check(ctx)
 		s.checkStoreAndPush(ctx, m, result)
 	}()
+}
+
+// AddWithMaintenance adds a monitor with an associated maintenance window configuration.
+// During the maintenance window, the monitor's checks, alerts, and DB recording are skipped.
+func (s *Service) AddWithMaintenance(ctx context.Context, m Monitor, mc *config.MaintenanceConfig) {
+	if mc != nil {
+		s.maintenance.Store(m.Name(), mc)
+	} else {
+		s.maintenance.Delete(m.Name())
+	}
+	s.Add(ctx, m)
+}
+
+// isInMaintenance checks whether the named monitor is currently in a maintenance window.
+func (s *Service) isInMaintenance(name string) bool {
+	mc, ok := s.maintenance.Load(name)
+	if !ok {
+		return false
+	}
+	return IsInMaintenanceWindow(mc, time.Now())
 }
 
 // Remove removes a monitor from the service by its name.
@@ -136,6 +161,7 @@ func (s *Service) Remove(m Monitor) error {
 	s.monitors.Delete(name)
 	s.result.Delete(name)         // Remove any pending result immediately
 	s.failureCount.Delete(name)   // Remove failure count
+	s.maintenance.Delete(name)    // Remove maintenance window
 	return nil
 }
 
@@ -209,8 +235,13 @@ func (s *Service) startMonitors(ctx context.Context) {
 
 // checkMonitors checks all monitors and updates the result map.
 // Each check runs in its own goroutine in parallel.
+// Monitors that are currently in a maintenance window are skipped entirely.
 func (s *Service) checkMonitors(ctx context.Context) {
+	now := time.Now()
 	s.monitors.Range(func(key string, m Monitor) bool {
+		if mc, ok := s.maintenance.Load(key); ok && IsInMaintenanceWindow(mc, now) {
+			return true // skip this monitor — in maintenance window
+		}
 		go func(ctx context.Context, m Monitor) {
 			result := m.Check(ctx)
 			result.DisplayName = m.DisplayName()
@@ -307,5 +338,49 @@ func (s *Service) Save(cfg *config.Config) error {
 		return true
 	})
 	cfg.Monitoring.Interval = int(s.period.Load() / time.Second)
+
+	// Apply maintenance windows from the service's maintenance map back to the saved config.
+	s.maintenance.Range(func(monitorName string, mc *config.MaintenanceConfig) bool {
+		if mc == nil {
+			return true
+		}
+		applyMaintenanceToConfig(cfg, monitorName, *mc)
+		return true
+	})
+
 	return nil
+}
+
+// applyMaintenanceToConfig sets the maintenance config on the appropriate config entry
+// by parsing the monitor name prefix (e.g., "disk_root" → cfg.Monitoring.Disk["root"]).
+func applyMaintenanceToConfig(cfg *config.Config, monitorName string, mc config.MaintenanceConfig) {
+	switch {
+	case monitorName == "system_cpu":
+		cfg.Monitoring.System.CPU.Maintenance = mc
+	case monitorName == "system_mem":
+		cfg.Monitoring.System.Memory.Maintenance = mc
+	default:
+		// Monitor names follow the pattern "group_name", e.g. "disk_root", "health_local"
+		if name, ok := strings.CutPrefix(monitorName, "disk_"); ok {
+			if d, found := cfg.Monitoring.Disk[name]; found {
+				d.Maintenance = mc
+				cfg.Monitoring.Disk[name] = d
+			}
+		} else if name, ok := strings.CutPrefix(monitorName, "health_"); ok {
+			if h, found := cfg.Monitoring.Healthcheck[name]; found {
+				h.Maintenance = mc
+				cfg.Monitoring.Healthcheck[name] = h
+			}
+		} else if name, ok := strings.CutPrefix(monitorName, "ping_"); ok {
+			if p, found := cfg.Monitoring.Ping[name]; found {
+				p.Maintenance = mc
+				cfg.Monitoring.Ping[name] = p
+			}
+		} else if name, ok := strings.CutPrefix(monitorName, "docker_"); ok {
+			if d, found := cfg.Monitoring.Docker[name]; found {
+				d.Maintenance = mc
+				cfg.Monitoring.Docker[name] = d
+			}
+		}
+	}
 }

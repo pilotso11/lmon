@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/robfig/cron/v3"
 	"github.com/spf13/viper"
 )
 
@@ -49,14 +50,16 @@ type DiskConfig struct {
 	Threshold      int
 	Icon           string
 	Path           string
-	AlertThreshold int // Number of consecutive failures before triggering alert (default: 1)
+	AlertThreshold int               // Number of consecutive failures before triggering alert (default: 1)
+	Maintenance    MaintenanceConfig // Optional scheduled maintenance window
 }
 
 // SystemItem represents system monitoring configuration.
 type SystemItem struct {
 	Threshold      int
 	Icon           string
-	AlertThreshold int // Number of consecutive failures before triggering alert (default: 1)
+	AlertThreshold int               // Number of consecutive failures before triggering alert (default: 1)
+	Maintenance    MaintenanceConfig // Optional scheduled maintenance window
 }
 
 // SystemConfig represents system monitoring configuration.
@@ -72,8 +75,9 @@ type HealthcheckConfig struct {
 	Timeout           int
 	RespCode          int
 	Icon              string
-	RestartContainers string `json:"restart_containers,omitempty"` // Optional: comma-separated list of containers to restart
-	AlertThreshold    int    // Number of consecutive failures before triggering alert (default: 1)
+	RestartContainers string            `json:"restart_containers,omitempty"` // Optional: comma-separated list of containers to restart
+	AlertThreshold    int               // Number of consecutive failures before triggering alert (default: 1)
+	Maintenance       MaintenanceConfig // Optional scheduled maintenance window
 }
 
 // PingConfig represents ping monitor configuration
@@ -81,16 +85,51 @@ type PingConfig struct {
 	Address        string
 	Timeout        int
 	Icon           string
-	AmberThreshold int // Response time in ms for amber status (required)
-	AlertThreshold int // Number of consecutive failures before triggering alert (default: 1)
+	AmberThreshold int               // Response time in ms for amber status (required)
+	AlertThreshold int               // Number of consecutive failures before triggering alert (default: 1)
+	Maintenance    MaintenanceConfig // Optional scheduled maintenance window
 }
 
 // DockerConfig represents Docker container monitoring configuration
 type DockerConfig struct {
-	Containers     string // Space or comma-separated list of container names/IDs
-	Threshold      int    // Max restart count threshold before alerting
+	Containers     string            // Space or comma-separated list of container names/IDs
+	Threshold      int               // Max restart count threshold before alerting
 	Icon           string
-	AlertThreshold int // Number of consecutive failures before triggering alert (default: 1)
+	AlertThreshold int               // Number of consecutive failures before triggering alert (default: 1)
+	Maintenance    MaintenanceConfig // Optional scheduled maintenance window
+}
+
+// MaintenanceConfig represents an optional scheduled maintenance window for a monitor.
+// When configured, monitoring is paused for the specified duration at each cron trigger.
+type MaintenanceConfig struct {
+	Cron     string // Cron expression (5-field), e.g. "0 */4 * * *"
+	Duration int    // Duration in seconds to pause monitoring
+}
+
+// MaintenancePtr returns a pointer to mc if a cron expression is configured, or nil otherwise.
+// This is a convenience for call sites that need to distinguish "no maintenance" from "has maintenance".
+func MaintenancePtr(mc MaintenanceConfig) *MaintenanceConfig {
+	if mc.Cron == "" {
+		return nil
+	}
+	return &mc
+}
+
+// ValidateMaintenanceConfig validates a MaintenanceConfig. Returns nil if the config
+// is empty (no maintenance window) or valid. Returns an error if the cron expression
+// is invalid or the duration is not positive.
+func ValidateMaintenanceConfig(mc MaintenanceConfig) error {
+	if mc.Cron == "" {
+		return nil
+	}
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	if _, err := parser.Parse(mc.Cron); err != nil {
+		return fmt.Errorf("invalid maintenance cron expression %q: %w", mc.Cron, err)
+	}
+	if mc.Duration <= 0 {
+		return fmt.Errorf("maintenance duration must be > 0 when cron is set")
+	}
+	return nil
 }
 
 // WebhookConfig represents webhook notification configuration
@@ -257,6 +296,8 @@ func (l *Loader) Save(config *Config) error {
 		memAlert = 1
 	}
 	l.v.Set("monitoring.system.memory.alertthreshold", memAlert)
+	l.saveMaintenance("monitoring.system.cpu", config.Monitoring.System.CPU.Maintenance)
+	l.saveMaintenance("monitoring.system.memory", config.Monitoring.System.Memory.Maintenance)
 
 	// Save the global allowed restart containers list
 	if len(config.Monitoring.AllowedRestartContainers) > 0 {
@@ -276,6 +317,7 @@ func (l *Loader) Save(config *Config) error {
 			alertThreshold = 1
 		}
 		l.v.Set(fmt.Sprintf("monitoring.disk.%s.alertthreshold", name), alertThreshold)
+		l.saveMaintenance(fmt.Sprintf("monitoring.disk.%s", name), disk.Maintenance)
 	}
 
 	for name, healthcheck := range config.Monitoring.Healthcheck {
@@ -292,6 +334,7 @@ func (l *Loader) Save(config *Config) error {
 			alertThreshold = 1
 		}
 		l.v.Set(fmt.Sprintf("monitoring.healthcheck.%s.alertthreshold", name), alertThreshold)
+		l.saveMaintenance(fmt.Sprintf("monitoring.healthcheck.%s", name), healthcheck.Maintenance)
 	}
 
 	for name, ping := range config.Monitoring.Ping {
@@ -305,6 +348,7 @@ func (l *Loader) Save(config *Config) error {
 			alertThreshold = 1
 		}
 		l.v.Set(fmt.Sprintf("monitoring.ping.%s.alertthreshold", name), alertThreshold)
+		l.saveMaintenance(fmt.Sprintf("monitoring.ping.%s", name), ping.Maintenance)
 	}
 
 	for name, docker := range config.Monitoring.Docker {
@@ -317,6 +361,7 @@ func (l *Loader) Save(config *Config) error {
 			alertThreshold = 1
 		}
 		l.v.Set(fmt.Sprintf("monitoring.docker.%s.alertthreshold", name), alertThreshold)
+		l.saveMaintenance(fmt.Sprintf("monitoring.docker.%s", name), docker.Maintenance)
 	}
 
 	// overwrite the config file or create it if it doesn't exist
@@ -330,6 +375,15 @@ func (l *Loader) Save(config *Config) error {
 		return fmt.Errorf("error saving config: %w", err)
 	}
 	return nil
+}
+
+// saveMaintenance persists maintenance window config under the given prefix key.
+// It only writes when a cron expression is configured.
+func (l *Loader) saveMaintenance(prefix string, mc MaintenanceConfig) {
+	if mc.Cron != "" {
+		l.v.Set(prefix+".maintenance.cron", mc.Cron)
+		l.v.Set(prefix+".maintenance.duration", mc.Duration)
+	}
 }
 
 func (l *Loader) FilePath() string {
