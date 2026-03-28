@@ -551,7 +551,8 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 		cpu, err := s.mapper.NewCpu(ctx, cfg.CPU)
 		if err != nil {
 			log.Printf("handleUpdateSystemConfig (cpu): %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		s.monitor.AddWithMaintenance(ctx, cpu, config.MaintenancePtr(cfg.CPU.Maintenance))
@@ -560,7 +561,8 @@ func (s *Server) handleUpdateSystemConfig(ctx context.Context) http.HandlerFunc 
 		mem, err := s.mapper.NewMem(ctx, cfg.Memory)
 		if err != nil {
 			log.Printf("handleUpdateSystemConfig (mem): %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		s.monitor.AddWithMaintenance(ctx, mem, config.MaintenancePtr(cfg.Memory.Maintenance))
@@ -894,7 +896,7 @@ func (s *Server) SetConfig(ctx context.Context, cfg config.MonitoringConfig) err
 		return err
 	}
 	s.monitor.AddWithMaintenance(ctx, mem, config.MaintenancePtr(cfg.System.Memory.Maintenance))
-	log.Printf("Set MEM %v", cpu)
+	log.Printf("Set MEM %v", mem)
 
 	for name, i := range cfg.Disk {
 		newDisk, err := s.mapper.NewDisk(ctx, name, i)

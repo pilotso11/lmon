@@ -341,6 +341,9 @@ func (s *Service) Save(cfg *config.Config) error {
 
 	// Apply maintenance windows from the service's maintenance map back to the saved config.
 	s.maintenance.Range(func(monitorName string, mc *config.MaintenanceConfig) bool {
+		if mc == nil {
+			return true
+		}
 		applyMaintenanceToConfig(cfg, monitorName, *mc)
 		return true
 	})

@@ -143,7 +143,7 @@
                     data-threshold="{{ $docker.Threshold }}"
                     data-alert-threshold="{{ $docker.AlertThreshold }}"
                     data-maint-cron="{{ $docker.Maintenance.Cron }}"
-                    data-maint-duration="{{ $docker.Maintenance.Duration }}"
+                    data-maint-duration="{{ if $docker.Maintenance.Cron }}{{ $docker.Maintenance.Duration }}{{ end }}"
                     title="Edit"
                     aria-label="Edit docker monitor {{ $id }} with containers {{ $docker.Containers }}"
                 >

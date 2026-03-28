@@ -273,7 +273,7 @@
                     data-restart-containers="{{ $health.RestartContainers }}"
                     data-alert-threshold="{{ $health.AlertThreshold }}"
                     data-maint-cron="{{ $health.Maintenance.Cron }}"
-                    data-maint-duration="{{ $health.Maintenance.Duration }}"
+                    data-maint-duration="{{ if $health.Maintenance.Cron }}{{ $health.Maintenance.Duration }}{{ end }}"
                     title="Edit"
                     aria-label="Edit health check {{ $id }} ({{ $health.URL }})"
                 >
@@ -335,7 +335,7 @@
                     data-icon="{{ $ping.Icon }}"
                     data-alert-threshold="{{ $ping.AlertThreshold }}"
                     data-maint-cron="{{ $ping.Maintenance.Cron }}"
-                    data-maint-duration="{{ $ping.Maintenance.Duration }}"
+                    data-maint-duration="{{ if $ping.Maintenance.Cron }}{{ $ping.Maintenance.Duration }}{{ end }}"
                     title="Edit"
                     aria-label="Edit ping monitor {{ $id }} ({{ $ping.Address }})"
                 >

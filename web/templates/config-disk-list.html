@@ -135,7 +135,7 @@
                     data-threshold="{{ $disk.Threshold }}"
                     data-alert-threshold="{{ $disk.AlertThreshold }}"
                     data-maint-cron="{{ $disk.Maintenance.Cron }}"
-                    data-maint-duration="{{ $disk.Maintenance.Duration }}"
+                    data-maint-duration="{{ if $disk.Maintenance.Cron }}{{ $disk.Maintenance.Duration }}{{ end }}"
                     title="Edit"
                     aria-label="Edit disk monitor {{ $id }} at path {{ $disk.Path }}"
                 >

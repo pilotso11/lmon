@@ -8,14 +8,12 @@ import { showToast, fetchJson, handleFetchError } from "./utils.js";
 /**
  * Validate a 5-field cron expression (minute hour dom month dow).
  * Returns true if valid or empty (maintenance is optional).
+ * This is a basic structural check; the server-side robfig/cron parser is authoritative.
  */
 function isValidCron(expr) {
   if (!expr) return true;
   const fields = expr.trim().split(/\s+/);
-  if (fields.length !== 5) return false;
-  // Each field: number, *, */n, n-n, or comma-separated values
-  const fieldPattern = /^(\*|\d{1,2}(-\d{1,2})?(,\d{1,2}(-\d{1,2})?)*)(\/(\d{1,2}))?$/;
-  return fields.every((f) => f === "*" || fieldPattern.test(f));
+  return fields.length === 5;
 }
 
 /**
