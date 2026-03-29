@@ -154,7 +154,7 @@
     background-color: #f8f9fa;
 }
 .config-item-maint {
-    margin-left: 44px;
+    margin-left: 44px; /* align under name: icon (24px) + item-icon me-2 margin (10px) + padding (10px) */
     margin-top: 4px;
 }
 .delete-btn {

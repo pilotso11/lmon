@@ -18,6 +18,9 @@ var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month 
 // Cron expressions are evaluated in UTC to avoid issues with DST transitions.
 // During a spring-forward transition, local-time evaluation can skip triggers
 // that fall in the missing hour, causing maintenance windows to be missed.
+// Maintenance cron expressions in configuration files and UI fields must
+// therefore be written in UTC; existing schedules that were specified in
+// local time should be converted to UTC to preserve their original behavior.
 func IsInMaintenanceWindow(cfg *config.MaintenanceConfig, now time.Time) bool {
 	if cfg == nil || cfg.Cron == "" || cfg.Duration <= 0 {
 		return false
