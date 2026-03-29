@@ -444,6 +444,125 @@ func TestAddDiskWithMaintenanceViaUI(t *testing.T) {
 	assert.Equal(t, "60", durVal.Value.String(), "Maintenance duration should be populated")
 }
 
+// TestAddHealthCheckWithMaintenanceLayout tests that adding a health check with a
+// maintenance window renders the maintenance badge on a separate line (in .config-item-maint)
+// rather than inline in the main flex row.
+func TestAddHealthCheckWithMaintenanceLayout(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s, _ := web.StartTestServer(ctx, t, "")
+	s.Start(ctx)
+
+	browser := getBrowser(t)
+	defer closeBrowser(browser)
+	page, err := browser.Page(proto.TargetCreateTarget{URL: s.ServerUrl})
+	requireNoErrorWithScreenshot(t, page, err, "open page")
+	defer closePage(page)
+
+	// Navigate to config page
+	configLink, err := page.Element(`a.nav-link[href="/config"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find config tab")
+	err = configLink.Click(proto.InputMouseButtonLeft, 1)
+	requireNoErrorWithScreenshot(t, page, err, "click config tab")
+
+	// Wait for monitor form
+	_, err = page.Timeout(1 * time.Second).Element(`#add-monitor-form`)
+	requireNoErrorWithScreenshot(t, page, err, "wait for add-monitor-form")
+
+	// Fill out health check form
+	nameEl, err := page.Element(`#monitor-name`)
+	requireNoErrorWithScreenshot(t, page, err, "find monitor-name input")
+	err = nameEl.Input("maint-layout-test")
+	requireNoErrorWithScreenshot(t, page, err, "input monitor-name")
+
+	urlEl, err := page.Element(`#monitor-target`)
+	requireNoErrorWithScreenshot(t, page, err, "find monitor-target input")
+	err = urlEl.Input("http://example.com/health")
+	requireNoErrorWithScreenshot(t, page, err, "input monitor-target")
+
+	// Fill maintenance fields
+	cronEl, err := page.Element(`#monitor-maint-cron`)
+	requireNoErrorWithScreenshot(t, page, err, "find maintenance cron input")
+	err = cronEl.Input("0 */4 * * *")
+	requireNoErrorWithScreenshot(t, page, err, "input maintenance cron")
+
+	durEl, err := page.Element(`#monitor-maint-duration`)
+	requireNoErrorWithScreenshot(t, page, err, "find maintenance duration input")
+	err = durEl.Input("120")
+	requireNoErrorWithScreenshot(t, page, err, "input maintenance duration")
+
+	// Submit
+	submitEl, err := page.Element(`#add-monitor-form button[type="submit"]`)
+	requireNoErrorWithScreenshot(t, page, err, "find submit button")
+	err = submitEl.Click(proto.InputMouseButtonLeft, 1)
+	requireNoErrorWithScreenshot(t, page, err, "click submit")
+
+	// Wait for reload
+	err = page.Timeout(2 * time.Second).Reload()
+	requireNoErrorWithScreenshot(t, page, err, "wait for reload")
+
+	// Verify the config item exists
+	assert.Eventually(t, func() bool {
+		items, err := page.Elements(`#health-config-items .config-item`)
+		if err != nil {
+			return false
+		}
+		for _, item := range items {
+			nameSpan, err := item.Element(`.config-item-name`)
+			if err != nil {
+				continue
+			}
+			nameText, err := nameSpan.Text()
+			if err != nil {
+				continue
+			}
+			if nameText == "maint-layout-test" {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 50*time.Millisecond, "wait for health check item in config list")
+
+	// Find the config item for our monitor
+	items, err := page.Elements(`#health-config-items .config-item`)
+	requireNoErrorWithScreenshot(t, page, err, "get health config items")
+
+	var found bool
+	for _, item := range items {
+		nameSpan, err := item.Element(`.config-item-name`)
+		if err != nil {
+			continue
+		}
+		nameText, err := nameSpan.Text()
+		if err != nil || nameText != "maint-layout-test" {
+			continue
+		}
+
+		// Verify the maintenance badge is in a .config-item-maint div (second line),
+		// not inline in the d-flex row
+		maintDiv, err := item.Element(`.config-item-maint`)
+		requireNoErrorWithScreenshot(t, page, err, "maintenance badge should be in .config-item-maint div")
+
+		maintText, err := maintDiv.Text()
+		requireNoErrorWithScreenshot(t, page, err, "get maintenance div text")
+		assert.Contains(t, maintText, "Maint:", "Maintenance badge should contain 'Maint:'")
+		assert.Contains(t, maintText, "0 */4 * * *", "Maintenance badge should contain cron expression")
+		assert.Contains(t, maintText, "120s", "Maintenance badge should contain duration")
+
+		// Verify the maintenance badge is NOT inside the d-flex row
+		flexRow, err := item.Element(`.d-flex`)
+		requireNoErrorWithScreenshot(t, page, err, "find flex row")
+		hasMaintInFlex, _, err := flexRow.Has(`.badge.bg-info`)
+		requireNoErrorWithScreenshot(t, page, err, "check for badge in flex row")
+		assert.False(t, hasMaintInFlex, "Maintenance badge should NOT be inside the flex row")
+
+		found = true
+		break
+	}
+	assert.True(t, found, "Should find the maint-layout-test config item")
+}
+
 // contains is a simple string contains helper for use in Eventually assertions.
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || strings.Contains(s, substr))

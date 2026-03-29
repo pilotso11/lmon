@@ -47,14 +47,17 @@ func TestServerHealth(t *testing.T) {
 }
 
 func getBrowser(t *testing.T) *rod.Browser {
-	var browser *rod.Browser
-	if os.Getenv("CI") != "" {
-		u, err := launcher.New().Set("no-sandbox").Launch()
-		require.NoError(t, err, "rod launch")
-		browser = rod.New().ControlURL(u).MustConnect()
-	} else {
-		browser = rod.New().MustConnect()
+	l := launcher.New()
+	if bin := os.Getenv("ROD_BROWSER"); bin != "" {
+		l = l.Bin(bin)
 	}
+	if os.Getenv("CI") != "" {
+		l = l.Set("no-sandbox")
+	}
+	l = l.Headless(true)
+	u, err := l.Launch()
+	require.NoError(t, err, "rod launch")
+	browser := rod.New().ControlURL(u).MustConnect()
 	return browser
 }
 
