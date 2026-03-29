@@ -153,6 +153,10 @@
 .config-item:hover {
     background-color: #f8f9fa;
 }
+.config-item-maint {
+    margin-left: 44px;
+    margin-top: 4px;
+}
 .delete-btn {
     color: var(--bs-danger, #dc3545) !important;
     cursor: pointer;

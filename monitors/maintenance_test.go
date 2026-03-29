@@ -94,3 +94,55 @@ func TestIsInMaintenanceWindow_MidnightCrossing(t *testing.T) {
 	now := time.Date(2026, 3, 29, 0, 0, 30, 0, time.UTC) // 30s after midnight
 	assert.True(t, IsInMaintenanceWindow(cfg, now))
 }
+
+func TestIsInMaintenanceWindow_DSTSpringForward_InWindow(t *testing.T) {
+	// Simulate BST spring-forward: clocks go from 1:00 GMT to 2:00 BST.
+	// Cron fires at 1:30 UTC. During spring-forward in Europe/London,
+	// 1:30 local doesn't exist (skipped from 1:00 to 2:00).
+	// With UTC evaluation, the trigger should still fire correctly.
+	london, err := time.LoadLocation("Europe/London")
+	assert.NoError(t, err)
+
+	cfg := &config.MaintenanceConfig{Cron: "30 1 * * *", Duration: 120}
+	// 2026-03-29 is BST spring-forward day in UK.
+	// At 1:31 UTC (which is 2:31 BST local), the window should be active
+	// because the cron triggered at 1:30 UTC with 120s duration.
+	now := time.Date(2026, 3, 29, 1, 31, 0, 0, london)
+	assert.True(t, IsInMaintenanceWindow(cfg, now))
+}
+
+func TestIsInMaintenanceWindow_DSTSpringForward_OutsideWindow(t *testing.T) {
+	london, err := time.LoadLocation("Europe/London")
+	assert.NoError(t, err)
+
+	cfg := &config.MaintenanceConfig{Cron: "30 1 * * *", Duration: 120}
+	// At 1:33 UTC (2:33 BST), 3 minutes after trigger, outside the 120s window.
+	now := time.Date(2026, 3, 29, 1, 33, 0, 0, london)
+	assert.False(t, IsInMaintenanceWindow(cfg, now))
+}
+
+func TestIsInMaintenanceWindow_DSTFallBack_InWindow(t *testing.T) {
+	// Simulate BST fall-back: clocks go from 2:00 BST back to 1:00 GMT.
+	// The hour 1:00-2:00 occurs twice. Cron at 1:30 UTC should still work.
+	london, err := time.LoadLocation("Europe/London")
+	assert.NoError(t, err)
+
+	cfg := &config.MaintenanceConfig{Cron: "30 1 * * *", Duration: 120}
+	// 2026-10-25 is BST fall-back day in UK.
+	// At 1:31 UTC (which is 1:31 GMT after fall-back), window should be active.
+	now := time.Date(2026, 10, 25, 1, 31, 0, 0, london)
+	assert.True(t, IsInMaintenanceWindow(cfg, now))
+}
+
+func TestIsInMaintenanceWindow_LocalTimeConvertedToUTC(t *testing.T) {
+	// Verify that a time passed in a non-UTC timezone is correctly
+	// converted to UTC for evaluation.
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	assert.NoError(t, err)
+
+	// Cron fires at 0:00 UTC. Tokyo is UTC+9, so 9:00 JST = 0:00 UTC.
+	cfg := &config.MaintenanceConfig{Cron: "0 0 * * *", Duration: 120}
+	// 9:01 JST = 0:01 UTC, should be in the 120s window.
+	now := time.Date(2026, 3, 28, 9, 1, 0, 0, tokyo)
+	assert.True(t, IsInMaintenanceWindow(cfg, now))
+}
