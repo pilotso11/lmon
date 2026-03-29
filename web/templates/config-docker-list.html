@@ -130,9 +130,6 @@
                 {{ if gt $docker.AlertThreshold 1 }}
                 <span class="me-2">Alert: {{ $docker.AlertThreshold }}</span>
                 {{ end }}
-                {{ if $docker.Maintenance.Cron }}
-                <span class="me-2 badge bg-info">Maint: {{ $docker.Maintenance.Cron }} ({{ $docker.Maintenance.Duration }}s)</span>
-                {{ end }}
                 <button
                     type="button"
                     class="edit-docker-btn ms-auto p-0 btn btn-link me-2"
@@ -162,6 +159,11 @@
                     <i class="bi bi-trash" aria-hidden="true"></i>
                 </button>
             </div>
+            {{ if $docker.Maintenance.Cron }}
+            <div class="config-item-maint">
+                <span class="badge bg-info">Maint: {{ $docker.Maintenance.Cron }} ({{ $docker.Maintenance.Duration }}s)</span>
+            </div>
+            {{ end }}
         </div>
         {{ end }} {{ else }}
         <div class="text-center text-muted">No Docker monitors configured.</div>

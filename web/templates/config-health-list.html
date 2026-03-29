@@ -258,9 +258,6 @@
                     >Restart: <code>{{ $health.RestartContainers }}</code></span
                 >
                 {{ end }}
-                {{ if $health.Maintenance.Cron }}
-                <span class="me-2 badge bg-info">Maint: {{ $health.Maintenance.Cron }} ({{ $health.Maintenance.Duration }}s)</span>
-                {{ end }}
                 <button
                     type="button"
                     class="edit-health-btn ms-auto p-0 btn btn-link me-2"
@@ -292,6 +289,11 @@
                     <i class="bi bi-trash" aria-hidden="true"></i>
                 </button>
             </div>
+            {{ if $health.Maintenance.Cron }}
+            <div class="config-item-maint">
+                <span class="badge bg-info">Maint: {{ $health.Maintenance.Cron }} ({{ $health.Maintenance.Duration }}s)</span>
+            </div>
+            {{ end }}
         </div>
         {{ end }} {{ else }}
         <div class="text-center text-muted">No health checks configured.</div>
@@ -320,9 +322,6 @@
                 <span class="me-2 config-item-alert"
                     >Alert: {{ $ping.AlertThreshold }}</span
                 >
-                {{ end }}
-                {{ if $ping.Maintenance.Cron }}
-                <span class="me-2 badge bg-info">Maint: {{ $ping.Maintenance.Cron }} ({{ $ping.Maintenance.Duration }}s)</span>
                 {{ end }}
                 <button
                     type="button"
@@ -354,6 +353,11 @@
                     <i class="bi bi-trash" aria-hidden="true"></i>
                 </button>
             </div>
+            {{ if $ping.Maintenance.Cron }}
+            <div class="config-item-maint">
+                <span class="badge bg-info">Maint: {{ $ping.Maintenance.Cron }} ({{ $ping.Maintenance.Duration }}s)</span>
+            </div>
+            {{ end }}
         </div>
         {{ end }} {{ else }}
         <div class="text-center text-muted">No ping monitors configured.</div>
