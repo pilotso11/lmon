@@ -6,8 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"lmon/web"
 )
@@ -502,14 +504,15 @@ func TestAddHealthCheckWithMaintenanceLayout(t *testing.T) {
 	err = page.Timeout(2 * time.Second).Reload()
 	requireNoErrorWithScreenshot(t, page, err, "wait for reload")
 
-	// Verify the config item exists
+	// Verify the config item exists and find it
+	var item *rod.Element
 	assert.Eventually(t, func() bool {
 		items, err := page.Elements(`#health-config-items .config-item`)
 		if err != nil {
 			return false
 		}
-		for _, item := range items {
-			nameSpan, err := item.Element(`.config-item-name`)
+		for _, i := range items {
+			nameSpan, err := i.Element(`.config-item-name`)
 			if err != nil {
 				continue
 			}
@@ -518,49 +521,31 @@ func TestAddHealthCheckWithMaintenanceLayout(t *testing.T) {
 				continue
 			}
 			if nameText == "maint-layout-test" {
+				item = i
 				return true
 			}
 		}
 		return false
 	}, 2*time.Second, 50*time.Millisecond, "wait for health check item in config list")
+	require.NotNil(t, item, "Should find the maint-layout-test config item")
 
-	// Find the config item for our monitor
-	items, err := page.Elements(`#health-config-items .config-item`)
-	requireNoErrorWithScreenshot(t, page, err, "get health config items")
+	// Verify the maintenance badge is in a .config-item-maint div (second line),
+	// not inline in the d-flex row
+	maintDiv, err := item.Element(`.config-item-maint`)
+	requireNoErrorWithScreenshot(t, page, err, "maintenance badge should be in .config-item-maint div")
 
-	var found bool
-	for _, item := range items {
-		nameSpan, err := item.Element(`.config-item-name`)
-		if err != nil {
-			continue
-		}
-		nameText, err := nameSpan.Text()
-		if err != nil || nameText != "maint-layout-test" {
-			continue
-		}
+	maintText, err := maintDiv.Text()
+	requireNoErrorWithScreenshot(t, page, err, "get maintenance div text")
+	assert.Contains(t, maintText, "Maint:", "Maintenance badge should contain 'Maint:'")
+	assert.Contains(t, maintText, "0 */4 * * *", "Maintenance badge should contain cron expression")
+	assert.Contains(t, maintText, "120s", "Maintenance badge should contain duration")
 
-		// Verify the maintenance badge is in a .config-item-maint div (second line),
-		// not inline in the d-flex row
-		maintDiv, err := item.Element(`.config-item-maint`)
-		requireNoErrorWithScreenshot(t, page, err, "maintenance badge should be in .config-item-maint div")
-
-		maintText, err := maintDiv.Text()
-		requireNoErrorWithScreenshot(t, page, err, "get maintenance div text")
-		assert.Contains(t, maintText, "Maint:", "Maintenance badge should contain 'Maint:'")
-		assert.Contains(t, maintText, "0 */4 * * *", "Maintenance badge should contain cron expression")
-		assert.Contains(t, maintText, "120s", "Maintenance badge should contain duration")
-
-		// Verify the maintenance badge is NOT inside the d-flex row
-		flexRow, err := item.Element(`.d-flex`)
-		requireNoErrorWithScreenshot(t, page, err, "find flex row")
-		hasMaintInFlex, _, err := flexRow.Has(`.badge.bg-info`)
-		requireNoErrorWithScreenshot(t, page, err, "check for badge in flex row")
-		assert.False(t, hasMaintInFlex, "Maintenance badge should NOT be inside the flex row")
-
-		found = true
-		break
-	}
-	assert.True(t, found, "Should find the maint-layout-test config item")
+	// Verify the maintenance badge is NOT inside the d-flex row
+	flexRow, err := item.Element(`.d-flex`)
+	requireNoErrorWithScreenshot(t, page, err, "find flex row")
+	hasMaintInFlex, _, err := flexRow.Has(`.badge.bg-info`)
+	requireNoErrorWithScreenshot(t, page, err, "check for badge in flex row")
+	assert.False(t, hasMaintInFlex, "Maintenance badge should NOT be inside the flex row")
 }
 
 // contains is a simple string contains helper for use in Eventually assertions.
