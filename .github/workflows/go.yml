@@ -1,5 +1,12 @@
 name: Go
 
+# The coverage-badge step commits + pushes README.md to the PR branch;
+# the default GITHUB_TOKEN needs contents write access or "Push coverage
+# badge" fails with `git exit code 128` whenever the badge changes.
+permissions:
+  contents: write
+  pull-requests: write
+
 on:
   push:
     branches: [ main ]
