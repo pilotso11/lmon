@@ -6,7 +6,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/go-rod/rod v0.116.2
 	github.com/prometheus-community/pro-bing v0.8.0
-	github.com/puzpuzpuz/xsync/v4 v4.4.0
+	github.com/puzpuzpuz/xsync/v4 v4.5.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/spf13/viper v1.21.0
