@@ -11,7 +11,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
-	go.uber.org/atomic v1.11.0
+	go.uber.org/atomic v1.12.0
 	go.uber.org/goleak v1.3.0
 )
 
